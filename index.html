@@ -3,20 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solar System Command</title>
-    <!-- NEW: Sci-fi font from Google Fonts -->
+    <title>Solar System Command (Definitive Edition)</title>
+    <!-- Sci-fi font from Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body {
-            margin: 0; background-color: #000; color: #fff;
-            font-family: 'Exo 2', sans-serif; /* NEW: Applying the new font */
-            overflow: hidden;
-        }
+        body { margin: 0; background-color: #000; color: #fff; font-family: 'Exo 2', sans-serif; overflow: hidden; }
         canvas { display: block; }
         
-        /* --- NEW STYLISH MENU --- */
         #side-menu {
             position: fixed; top: 0; left: 0; height: 100%; width: 340px;
             background: linear-gradient(to bottom, rgba(16, 24, 40, 0.9), rgba(10, 15, 25, 0.95));
@@ -41,40 +36,24 @@
         }
         .menu-section label { display: block; margin: 20px 0 8px 0; font-size: 0.9em; font-weight: 400; color: #ccc; }
         
-        /* Custom Stylish Slider */
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00bfff;
-            cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7);
-        }
-        input[type=range]::-moz-range-thumb {
-            height: 16px; width: 16px; border-radius: 50%; background: #00bfff;
-            cursor: pointer; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7);
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px;
-        }
-        input[type=range]::-moz-range-track {
-            width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px;
-        }
+        input[type=range]::-webkit-slider-thumb{ -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
+        input[type=range]::-moz-range-thumb { height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px; }
+        input[type=range]::-moz-range-track { width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px; }
         
-        /* Stylish Accordion Menu */
         .accordion-item .accordion-header {
             background: rgba(0, 30, 60, 0.3); color: #fff; border: 1px solid rgba(0, 191, 255, 0.1);
             border-left: 5px solid #555; padding: 12px 15px; border-radius: 4px; cursor: pointer;
             text-align: left; width: 100%; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center;
         }
-        .accordion-item .accordion-header:hover {
-            background: rgba(0, 191, 255, 0.1); border-color: rgba(0, 191, 255, 0.3);
-            box-shadow: 0 0 15px rgba(0, 191, 255, 0.2);
-        }
+        .accordion-item .accordion-header:hover { background: rgba(0, 191, 255, 0.1); border-color: rgba(0, 191, 255, 0.3); box-shadow: 0 0 15px rgba(0, 191, 255, 0.2); }
         .accordion-item .accordion-header .arrow { transition: transform 0.3s; color: #00bfff; }
         .accordion-item.active .accordion-header .arrow { transform: rotate(90deg); }
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out; padding-left: 20px; border-left: 1px solid #444; margin: 5px 0 0 8px; }
         .moon-button { background: transparent; color: #ccc; border: none; font-size: 0.9em; padding: 8px 10px; text-align: left; width: 100%; cursor: pointer; border-radius: 4px; display: block; }
         .moon-button:hover { background: rgba(0, 191, 255, 0.1); color: #fff; }
         
-        /* Stylish Info Panel */
         #info-panel-content { font-size: 0.9em; }
         #info-panel-content h3 { margin-bottom: 15px; color: #fdd835; font-size: 1.5em; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;}
         #info-panel-content p { margin: 8px 0; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
@@ -90,7 +69,7 @@
         <div id="menu-content">
             <div class="menu-section" id="info-section">
                 <h2>SYSTEM DATA</h2>
-                <div id="info-panel-content"><p>Select a celestial body to view its data.</p></div>
+                <div id="info-panel-content"><p>Select a celestial body to view data.</p></div>
             </div>
             <div class="menu-section" id="controls-section">
                 <h2>SIMULATION CONTROLS</h2>
@@ -112,13 +91,11 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- CORE SETUP & STATE ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 30000);
         const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#solar-system-canvas'), antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        
         const overviewPosition = new THREE.Vector3(0, 400, 1000);
         camera.position.copy(overviewPosition);
 
@@ -128,11 +105,9 @@
         let speedMultiplier = 1.0;
         let focusedBody = null;
         
-        // --- LIGHTING ---
         scene.add(new THREE.PointLight(0xffffff, 4500000));
         scene.add(new THREE.AmbientLight(0xffffff, 0.1));
         
-        // --- DATA ---
         const solarSystemData = [/* Data unchanged */
             { name: 'Sun', radius: 696340, color: 0xfff000 },
             { name: 'Mercury', radius: 2440, distance: 57.9, period: 88, color: 0x9f9f9f, inclination: 7.0, axialTilt: 0.03 },
@@ -156,23 +131,22 @@
             ]},
         ];
 
-        // --- SCALES & CONSTANTS ---
-        const MASTER_SCALE = 1 / 4000;
-        const LOG_DISTANCE_SCALE = 150;
-        const BASE_ORBIT_SPEED = 0.05; // SLOWED DOWN base speed
+        // --- HIERARCHICAL SCALING ---
+        const MASTER_BODY_SCALE = 1 / 2000; // For all body radii
+        const LOG_DISTANCE_SCALE = 150;     // For interplanetary distances
+        const MOON_SYSTEM_ORBIT_SCALE = 1 / 100000; // NEW TIGHTER SCALE for moon orbits
+        const BASE_ORBIT_SPEED = 0.05;
 
         const celestialBodies = [];
-        
-        // --- OBJECT CREATION ---
         const sunData = solarSystemData.find(d => d.name === 'Sun');
-        const sunVisualRadius = sunData.radius * MASTER_SCALE;
+        const sunVisualRadius = sunData.radius * MASTER_BODY_SCALE;
         const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(sunVisualRadius, 64, 32), new THREE.MeshBasicMaterial({ color: sunData.color }));
         celestialBodies.push({ mesh: sunMesh, data: sunData, pivot: sunMesh });
         scene.add(sunMesh);
 
         solarSystemData.forEach(data => {
             if (data.name === 'Sun') return;
-            const visualRadius = data.radius * MASTER_SCALE;
+            const visualRadius = data.radius * MASTER_BODY_SCALE;
             const mesh = new THREE.Mesh(new THREE.SphereGeometry(visualRadius, 32, 16), new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.9 }));
             const bodyObject = { mesh, data };
             celestialBodies.push(bodyObject);
@@ -195,7 +169,7 @@
             
             if (data.moons) {
                 data.moons.forEach(moonData => {
-                    const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moonData.radius * MASTER_SCALE, 16, 8), new THREE.MeshStandardMaterial({ color: moonData.color }));
+                    const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moonData.radius * MASTER_BODY_SCALE, 16, 8), new THREE.MeshStandardMaterial({ color: moonData.color }));
                     const moonObject = { mesh: moonMesh, data: moonData };
                     celestialBodies.push(moonObject);
 
@@ -203,7 +177,10 @@
                     moonOrbitalPlane.rotation.x = THREE.MathUtils.degToRad(moonData.inclination);
 
                     const moonPivot = new THREE.Object3D(); moonOrbitalPlane.add(moonPivot);
-                    const moonOrbitRadius = (moonData.distance * 1e6) * MASTER_SCALE; // Unified scale
+                    
+                    // --- THE DEFINITIVE FIX FOR MOON ORBITS ---
+                    const moonOrbitRadius = visualRadius + ((moonData.distance * 1e6) * MOON_SYSTEM_ORBIT_SCALE); // Planet radius + scaled moon distance
+                    
                     moonMesh.position.x = moonOrbitRadius;
                     moonPivot.add(moonMesh);
 
@@ -224,19 +201,15 @@
             ringMesh.rotation.x = Math.PI / 2; saturnObject.add(ringMesh);
         }
 
-        // --- UI & CAMERA ---
         const infoPanel = document.getElementById('info-panel-content');
-        
-        function updateInfoPanel(body) {
+        function updateInfoPanel(body) { /* Unchanged */
             const d = body.data; let html = `<h3>${d.name}</h3><p><span>Radius:</span> <span>${d.radius.toLocaleString()} km</span></p>`;
             if (d.axialTilt !== undefined) html += `<p><span>Axial Tilt:</span> <span>${d.axialTilt}°</span></p>`;
-            if (d.period) {
-                const parentName = solarSystemData.find(p => p.moons?.some(m => m.name === d.name))?.name || 'Sun';
+            if (d.period) { const parentName = solarSystemData.find(p => p.moons?.some(m => m.name === d.name))?.name || 'Sun';
                 html += `<p><span>Orbital Period:</span> <span>${d.period.toLocaleString()} days</span></p>`;
                 if(d.distance) html += `<p><span>Avg. Dist. from ${parentName}:</span> <span>${d.distance.toLocaleString()} million km</span></p>`;
                 if(d.inclination !== undefined) html += `<p><span>Orbital Inclination:</span> <span>${d.inclination}°</span></p>`;
-            }
-            infoPanel.innerHTML = html;
+            } infoPanel.innerHTML = html;
         }
 
         function focusOnBody(targetBody) { focusedBody = targetBody; updateInfoPanel(targetBody); }
@@ -246,44 +219,46 @@
                 TWEEN.removeAll();
                 new TWEEN.Tween(camera.position).to(overviewPosition, 1500).easing(TWEEN.Easing.Cubic.InOut).start();
                 new TWEEN.Tween(controls.target).to(new THREE.Vector3(0,0,0), 1500).easing(TWEEN.Easing.Cubic.InOut).start();
-                infoPanel.innerHTML = `<p>Select a celestial body to view its data.</p>`;
+                infoPanel.innerHTML = `<p>Select a celestial body to view data.</p>`;
             }
         }
         
         controls.addEventListener('start', () => unlockCamera(true));
 
         const navContainer = document.getElementById('navigation-buttons');
-        solarSystemData.forEach(planetData => {
+        solarSystemData.forEach(data => {
             const accordionItem = document.createElement('div'); accordionItem.className = 'accordion-item';
             const header = document.createElement('button'); header.className = 'accordion-header';
-            header.style.borderLeftColor = `#${new THREE.Color(planetData.color).getHexString()}`;
-            header.innerHTML = `<span>${planetData.name}</span><span class="arrow">${planetData.moons ? '▸' : ''}</span>`;
-            const content = document.createElement('div'); content.className = 'accordion-content';
-
+            header.style.borderLeftColor = `#${new THREE.Color(data.color).getHexString()}`;
+            header.innerHTML = `<span>${data.name}</span><span class="arrow">${data.moons ? '▸' : ''}</span>`;
+            
             header.onclick = () => {
-                const target = celestialBodies.find(b => b.data.name === planetData.name); focusOnBody(target);
-                if(planetData.moons) {
+                const target = celestialBodies.find(b => b.data.name === data.name);
+                focusOnBody(target);
+                if(data.moons) {
                     const isActive = accordionItem.classList.contains('active');
                     document.querySelectorAll('.accordion-item.active').forEach(item => { item.classList.remove('active'); item.querySelector('.accordion-content').style.maxHeight = '0'; });
-                    if (!isActive) { accordionItem.classList.add('active'); content.style.maxHeight = content.scrollHeight + "px"; }
+                    if (!isActive) { accordionItem.classList.add('active'); const content = accordionItem.querySelector('.accordion-content'); content.style.maxHeight = content.scrollHeight + "px"; }
                 } else { document.querySelectorAll('.accordion-item.active').forEach(item => { item.classList.remove('active'); item.querySelector('.accordion-content').style.maxHeight = '0'; }); }
             };
             
-            if (planetData.moons) {
-                planetData.moons.forEach(moonData => {
-                    const moonBtn = document.createElement('button'); moonBtn.className = 'moon-button';
-                    moonBtn.textContent = moonData.name;
+            accordionItem.appendChild(header);
+
+            if (data.moons) {
+                const content = document.createElement('div'); content.className = 'accordion-content';
+                data.moons.forEach(moonData => {
+                    const moonBtn = document.createElement('button'); moonBtn.className = 'moon-button'; moonBtn.textContent = moonData.name;
                     moonBtn.onclick = (e) => { e.stopPropagation(); const target = celestialBodies.find(b => b.data.name === moonData.name); focusOnBody(target); };
                     content.appendChild(moonBtn);
                 });
+                accordionItem.appendChild(content);
             }
-            accordionItem.appendChild(header); accordionItem.appendChild(content); navContainer.appendChild(accordionItem);
+            navContainer.appendChild(accordionItem);
         });
 
         const speedSlider = document.getElementById('speed-slider');
         function updateSpeed() {
             const sliderValue = parseFloat(speedSlider.value);
-            // NEW: Exponential speed scale for better control
             speedMultiplier = Math.pow(1.8, sliderValue) - 0.9;
             document.getElementById('speed-value').textContent = speedMultiplier.toFixed(1);
         }
@@ -292,14 +267,13 @@
         document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('side-menu').classList.toggle('collapsed'));
         window.addEventListener('resize', () => (camera.aspect = window.innerWidth / window.innerHeight, camera.updateProjectionMatrix(), renderer.setSize(window.innerWidth, window.innerHeight)));
 
-        // --- ANIMATION LOOP ---
         const clock = new THREE.Clock();
         function animate(time) {
             requestAnimationFrame(animate); const delta = clock.getDelta(); TWEEN.update(time);
 
-            celestialBodies.forEach(body => {
+            celestialBodies.forEach(body => { /* Animation logic is unchanged */
                 if (!body.data.period) return;
-                let selfRotSpeed = 0.5 * (focusedBody ? 0.2 : 1); // Slower self-rotation when focused
+                let selfRotSpeed = 0.5 * (focusedBody ? 0.2 : 1);
                 if(body.data.name === 'Venus') selfRotSpeed = -selfRotSpeed;
                 body.mesh.rotation.y += selfRotSpeed * delta;
                 let angleChange = (1 / body.data.period) * BASE_ORBIT_SPEED * 100 * delta * speedMultiplier;
