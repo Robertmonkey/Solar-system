@@ -3,32 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solar System Command (Definitive Edition)</title>
-    <!-- Sci-fi font from Google Fonts -->
+    <title>Solar System Explorer (Definitive Edition)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@21.0.0/dist/tween.umd.js"></script>
     <style>
         body { margin: 0; background-color: #000; color: #fff; font-family: 'Exo 2', sans-serif; overflow: hidden; }
         canvas { display: block; }
         
         #side-menu {
-            position: fixed; top: 0; left: 0; height: 100%; width: 340px;
+            position: fixed; top: 0; left: 0; height: 100%; width: 360px;
             background: linear-gradient(to bottom, rgba(16, 24, 40, 0.9), rgba(10, 15, 25, 0.95));
-            border-right: 1px solid rgba(0, 191, 255, 0.2);
-            transform: translateX(0); transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-            display: flex; flex-direction: column; z-index: 100; backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(0, 191, 255, 0.2); transform: translateX(0);
+            transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1); display: flex; flex-direction: column;
+            z-index: 100; backdrop-filter: blur(10px);
         }
-        #side-menu.collapsed { transform: translateX(-340px); }
+        #side-menu.collapsed { transform: translateX(-360px); }
         #menu-toggle {
             position: absolute; top: 50%; left: 100%; transform: translateY(-50%); width: 25px; height: 50px;
             background: inherit; border: 1px solid rgba(0, 191, 255, 0.2); border-left: none;
             border-top-right-radius: 8px; border-bottom-right-radius: 8px; cursor: pointer; display: flex;
             align-items: center; justify-content: center; color: #00bfff; font-size: 22px;
-            transition: background-color 0.2s;
         }
-        #menu-toggle:hover { background-color: rgba(0, 191, 255, 0.1); }
-        #menu-content { padding: 0 25px; overflow-y: auto; flex-grow: 1; }
+        #menu-content { padding: 0 25px; overflow-y: auto; flex-grow: 1; scrollbar-width: thin; scrollbar-color: #00bfff #101828; }
+        #menu-content::-webkit-scrollbar { width: 8px; }
+        #menu-content::-webkit-scrollbar-track { background: #101828; }
+        #menu-content::-webkit-scrollbar-thumb { background-color: #00bfff; border-radius: 4px; border: 2px solid #101828; }
         .menu-section { margin-bottom: 30px; padding-top: 25px; }
         .menu-section h2 {
             margin-top: 0; font-size: 1.3em; color: #00bfff; border-bottom: 1px solid rgba(0, 191, 255, 0.3);
@@ -36,263 +37,616 @@
         }
         .menu-section label { display: block; margin: 20px 0 8px 0; font-size: 0.9em; font-weight: 400; color: #ccc; }
         
-        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]{ -webkit-appearance: none; width: 100%; background: transparent; }
         input[type=range]::-webkit-slider-thumb{ -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
-        input[type=range]::-moz-range-thumb { height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px; }
-        input[type=range]::-moz-range-track { width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px; }
+        input[type=range]::-webkit-slider-runnable-track{ width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px; }
         
-        .accordion-item .accordion-header {
+        .accordion-item .accordion-header, .cosmic-button {
             background: rgba(0, 30, 60, 0.3); color: #fff; border: 1px solid rgba(0, 191, 255, 0.1);
             border-left: 5px solid #555; padding: 12px 15px; border-radius: 4px; cursor: pointer;
-            text-align: left; width: 100%; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center;
+            text-align: left; width: 100%; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; margin-top: 5px;
         }
-        .accordion-item .accordion-header:hover { background: rgba(0, 191, 255, 0.1); border-color: rgba(0, 191, 255, 0.3); box-shadow: 0 0 15px rgba(0, 191, 255, 0.2); }
+        .accordion-item .accordion-header:hover, .cosmic-button:hover { background: rgba(0, 191, 255, 0.1); border-color: rgba(0, 191, 255, 0.3); box-shadow: 0 0 15px rgba(0, 191, 255, 0.2);}
+        .accordion-item .accordion-header.active, .cosmic-button.active {
+            background: rgba(0, 191, 255, 0.2); border-color: rgba(0, 191, 255, 0.6); box-shadow: 0 0 15px rgba(0, 191, 255, 0.4);
+        }
+
         .accordion-item .accordion-header .arrow { transition: transform 0.3s; color: #00bfff; }
-        .accordion-item.active .accordion-header .arrow { transform: rotate(90deg); }
-        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out; padding-left: 20px; border-left: 1px solid #444; margin: 5px 0 0 8px; }
-        .moon-button { background: transparent; color: #ccc; border: none; font-size: 0.9em; padding: 8px 10px; text-align: left; width: 100%; cursor: pointer; border-radius: 4px; display: block; }
+        .accordion-item.active > .accordion-header .arrow { transform: rotate(90deg); }
+        .accordion-content { max-height: 0; overflow-y: hidden; transition: max-height 0.3s ease-in-out; padding-left: 20px; border-left: 1px solid #444; margin: 5px 0 0 8px; }
+        .moon-button { background: transparent; color: #ccc; border: none; font-size: 0.9em; padding: 8px 10px;text-align: left; width: 100%; cursor: pointer;border-radius: 4px; display: block; }
         .moon-button:hover { background: rgba(0, 191, 255, 0.1); color: #fff; }
+        .moon-button.active { background-color: rgba(0, 191, 255, 0.15); color: #fff; }
         
-        #info-panel-content { font-size: 0.9em; }
-        #info-panel-content h3 { margin-bottom: 15px; color: #fdd835; font-size: 1.5em; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;}
+        #info-panel-content h3 { margin-bottom: 15px; color: #fdd835; font-size: 1.5em; text-transform: uppercase; }
         #info-panel-content p { margin: 8px 0; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
-        #info-panel-content span:first-child { color: #aaa; font-weight: 300; }
-        #info-panel-content span:last-child { font-weight: 400; }
+        #info-panel-content span:first-child { color: #aaa; }
+        #fun-fact-panel {
+            margin-top: 20px; background: rgba(0,0,0,0.2); padding: 15px; border-left: 3px solid #fdd835;
+            min-height: 5em; font-style: italic; color: #eee; transition: opacity 0.5s;
+        }
+
+        .label {
+            color: #fff; font-family: 'Exo 2', sans-serif; font-size: 14px;
+            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            pointer-events: none; opacity: 0; transition: opacity 0.5s; text-align: center;
+        }
+        .label.visible { opacity: 1; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@21.0.0/dist/tween.umd.js"></script>
 </head>
 <body>
-
     <div id="side-menu">
         <div id="menu-toggle">&raquo;</div>
         <div id="menu-content">
             <div class="menu-section" id="info-section">
                 <h2>SYSTEM DATA</h2>
-                <div id="info-panel-content"><p>Select a celestial body to view data.</p></div>
+                <div id="info-panel-content"><p>Select a celestial body to view its data.</p></div>
+                <div id="fun-fact-panel" style="opacity: 0;"></div>
             </div>
             <div class="menu-section" id="controls-section">
                 <h2>SIMULATION CONTROLS</h2>
                 <label for="speed-slider">Time Acceleration: <span id="speed-value">1.0</span>x</label>
                 <input type="range" id="speed-slider" min="0" max="10" value="3.5" step="0.1">
+                 <label for="label-toggle">Show Labels:</label>
+                 <input type="checkbox" id="label-toggle" checked>
             </div>
             <div class="menu-section" id="navigation-section">
-                <h2>NAVIGATION</h2>
+                <h2>NAVIGATION TARGET</h2>
                 <div id="navigation-buttons"></div>
             </div>
         </div>
     </div>
-
     <canvas id="solar-system-canvas"></canvas>
-
-    <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/" } }</script>
     
+    <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/" } }</script>
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
+        // --- CORE SETUP & STATE ---
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 30000);
-        const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#solar-system-canvas'), antialias: true });
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1e9);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#solar-system-canvas'), antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        const overviewPosition = new THREE.Vector3(0, 400, 1000);
-        camera.position.copy(overviewPosition);
+        
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none'; // Allow clicks to pass through to the canvas
+        document.body.appendChild(labelRenderer.domElement);
 
+        const overviewPosition = new THREE.Vector3(0, 20000, 35000);
+        camera.position.copy(overviewPosition);
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
+        controls.minDistance = 0.01;
+        controls.maxDistance = 1e8;
 
         let speedMultiplier = 1.0;
         let focusedBody = null;
         
-        scene.add(new THREE.PointLight(0xffffff, 4500000));
-        scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+        // --- DATA ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.02)); 
         
-        const solarSystemData = [/* Data unchanged */
-            { name: 'Sun', radius: 696340, color: 0xfff000 },
-            { name: 'Mercury', radius: 2440, distance: 57.9, period: 88, color: 0x9f9f9f, inclination: 7.0, axialTilt: 0.03 },
-            { name: 'Venus', radius: 6052, distance: 108.2, period: 224.7, color: 0xdab36d, inclination: 3.4, axialTilt: 177.4 },
-            { name: 'Earth', radius: 6371, distance: 149.6, period: 365.2, color: 0x4f70a3, inclination: 0.0, axialTilt: 23.4, moons: [
-                { name: 'Moon', radius: 1737, distance: 0.384, period: 27.3, color: 0xcccccc, inclination: 5.1 }
+        const solarSystemData = [
+             { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: ["The Sun accounts for 99.86% of the mass in the solar system.", "Its surface is about 5,500°C; its core is over 15 million °C.", "A solar flare can release the energy of a billion megatons of TNT."] },
+             { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, funFacts: ["A day on Mercury is longer than its year.", "Temperatures swing from 427°C to -173°C.", "It has water ice in permanently shadowed craters."] },
+             { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, funFacts: ["Venus rotates backwards (retrograde rotation).", "It's the hottest planet in the solar system (~465°C).", "Atmospheric pressure is over 90 times that of Earth."] },
+             { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, funFacts: ["Earth is the only planet not named after a deity.", "It is the densest planet in the Solar System.", "The Earth's rotation is gradually slowing."], moons: [
+                 { name: 'Moon', radius: 1737, a: 0.384, e: 0.055, period: 27.3, color: 0xcccccc, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, funFacts: ["The Moon is drifting away from Earth by about 3.8 cm per year.", "It is the 5th largest moon in the solar system.", "The Moon has 'moonquakes' caused by the Earth's gravitational pull."] }
             ]},
-            { name: 'Mars', radius: 3390, distance: 227.9, period: 687, color: 0xc1440e, inclination: 1.8, axialTilt: 25.2, moons: [
-                { name: 'Phobos', radius: 11.2, distance: 0.0093, period: 0.3, color: 0x8f8f8f, inclination: 1.1 },
-                { name: 'Deimos', radius: 6.2, distance: 0.0234, period: 1.26, color: 0xafafaf, inclination: 0.9 }
+             { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, funFacts: ["Home to Olympus Mons, the largest volcano in the solar system.", "Its red color comes from iron oxide (rust).", "Has the largest dust storms, which can cover the entire planet."], moons: [
+                 { name: 'Phobos', radius: 11.2, a: 0.00937, e: 0.015, period: 0.3, color: 0x8f8f8f, inclination: 1.1, funFacts: ["Phobos is getting closer to Mars and will either crash into it or break up into a ring in about 50 million years.", "It is a 'captured' asteroid, not a naturally formed moon."]},
+                 { name: 'Deimos', radius: 6.2, a: 0.0234, e: 0.0002, period: 1.26, color: 0xafafaf, inclination: 0.9, funFacts: ["Deimos is one of the smallest known moons in the solar system.", "It is covered in a thick layer of fine dust, or regolith."] }
             ]},
-            { name: 'Jupiter', radius: 69911, distance: 778.6, period: 4331, color: 0xc8ab89, inclination: 1.3, axialTilt: 3.1, moons: [
-                { name: 'Io', radius: 1821, distance: 0.421, period: 1.77, color: 0xf3d649, inclination: 0.04 }, { name: 'Europa', radius: 1560, distance: 0.671, period: 3.55, color: 0x9f8f7f, inclination: 0.47 }, { name: 'Ganymede', radius: 2634, distance: 1.070, period: 7.15, color: 0x7b6e61, inclination: 0.2 }, { name: 'Callisto', radius: 2410, distance: 1.882, period: 16.7, color: 0x5b4f48, inclination: 0.2 }
+             { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, funFacts: ["All other planets could fit inside Jupiter.", "The Great Red Spot is a storm raging for hundreds of years.", "Has the shortest day of any planet (~10 hours)."], moons: [
+                 { name: 'Amalthea', radius: 83.5, a: 0.181, e: 0.003, period: 0.5, color: 0x9b593c, inclination: 0.37, funFacts: ["Amalthea is irregularly shaped and reddish, likely from sulfur from Io.", "It radiates more heat than it receives from the Sun."] },
+                 { name: 'Io', radius: 1821, a: 0.421, e: 0.004, period: 1.77, color: 0xf3d649, inclination: 0.05, funFacts: ["Io is the most volcanically active body in the solar system, with hundreds of volcanoes.", "Its surface is covered in sulfur in various colorful forms."] },
+                 { name: 'Europa', radius: 1560, a: 0.671, e: 0.009, period: 3.55, color: 0x8f7f70, inclination: 0.47, funFacts: ["Europa's icy surface may hide a global saltwater ocean underneath.", "Scientists believe this ocean could potentially harbor extraterrestrial life."] },
+                 { name: 'Ganymede', radius: 2634, a: 1.070, e: 0.001, period: 7.15, color: 0x9e9990, inclination: 0.20, funFacts: ["Ganymede is the largest moon in the solar system, bigger than the planet Mercury.", "It is the only moon known to have its own magnetic field."] },
+                 { name: 'Callisto', radius: 2410, a: 1.882, e: 0.007, period: 16.69, color: 0x5a5651, inclination: 0.20, funFacts: ["Callisto has the most heavily cratered surface of any object in the solar system.", "It is thought to have a 'dead' surface that hasn't changed much in 4 billion years."] },
+                 { name: 'Himalia', radius: 85, a: 11.46, e: 0.16, period: 250.6, inclination: 27.5, color: 0x8b8081, funFacts: ["Himalia is the largest irregular moon of Jupiter.", "It may be the remnant of a captured asteroid."] }
             ]},
-            { name: 'Saturn', radius: 58232, distance: 1433.5, period: 10747, color: 0xe3d9b1, inclination: 2.5, axialTilt: 26.7, moons: [
-                { name: 'Titan', radius: 2575, distance: 1.221, period: 15.9, color: 0xf5ad6f, inclination: 0.33 }
+             { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, funFacts: ["Its rings are made of billions of particles of ice and rock.", "Saturn is less dense than water; it would float in a large enough bathtub.", "Winds can reach 1,800 km/h."], moons: [
+                 { name: 'Mimas', radius: 198, a: 0.185, e: 0.02, period: 0.9, color: 0xb0b0b0, inclination: 1.5, funFacts: ["Mimas is famous for its massive impact crater, Herschel, which makes it resemble the Death Star.", "The crater is 130 km wide, almost one-third of the moon's own diameter."] },
+                 { name: 'Enceladus', radius: 252, a: 0.238, e: 0.005, period: 1.4, color: 0xe0e0e0, inclination: 0.02, funFacts: ["Enceladus has huge geysers at its south pole that spray water ice into space, forming Saturn's E-ring.", "It is one of the most promising places to search for life."] },
+                 { name: 'Tethys', radius: 533, a: 0.294, e: 0.0, period: 1.9, color: 0xd8d8d8, inclination: 1.1, funFacts: ["Tethys has a gigantic canyon, Ithaca Chasma, that runs three-quarters of the way around the moon.", "It's composed almost entirely of water ice."] },
+                 { name: 'Dione', radius: 561, a: 0.377, e: 0.002, period: 2.7, color: 0xc8c8c8, inclination: 0.02, funFacts: ["Dione has bright, wispy ice cliffs on its trailing hemisphere.", "It may have a subsurface ocean, much like Enceladus."] },
+                 { name: 'Rhea', radius: 764, a: 0.527, e: 0.001, period: 4.5, color: 0xb8b8b8, inclination: 0.3, funFacts: ["Rhea is the second-largest moon of Saturn.", "Scientists once thought Rhea might have its own faint ring system, a first for a moon."] },
+                 { name: 'Titan', radius: 2575, a: 1.221, e: 0.029, period: 15.9, color: 0xf5ad6f, inclination: 0.33, funFacts: ["Titan is the only moon with a thick, dense atmosphere.", "It has rivers, lakes, and seas of liquid methane and ethane on its surface."] },
+                 { name: 'Hyperion', radius: 135, a: 1.481, e: 0.1, period: 21.3, color: 0xa08c78, inclination: 0.43, funFacts: ["Hyperion is one of the largest irregularly shaped moons.", "It tumbles chaotically through its orbit, with no stable rotation axis."] },
+                 { name: 'Iapetus', radius: 735, a: 3.560, e: 0.028, period: 79.3, color: 0x909090, inclination: 15.4, funFacts: ["Iapetus is a 'two-faced' moon, with one bright hemisphere and one dark one.", "It also has a mysterious, massive equatorial ridge."] },
+                 { name: 'Phoebe', radius: 106.5, a: 12.952, e: 0.159, period: -550, color: 0x5a5a5a, inclination: 175.3, funFacts: ["Phoebe orbits Saturn in a retrograde (backwards) direction.", "It is thought to be a captured Kuiper Belt Object."] }
             ]},
-            { name: 'Uranus', radius: 25362, distance: 2872.5, period: 30589, color: 0xafdbd3, inclination: 0.8, axialTilt: 97.8 },
-            { name: 'Neptune', radius: 24622, distance: 4495.1, period: 59800, color: 0x3d5a9c, inclination: 1.8, axialTilt: 28.3, moons: [
-                { name: 'Triton', radius: 1353, distance: 0.354, period: 5.87, color: 0xceb4a7, inclination: 157.3 }
+             { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, funFacts: ["Uranus is tilted on its side, likely due to a massive collision in its past.", "Its seasons last for over 20 years each.", "It is the coldest planet in the solar system."], moons: [
+                 { name: 'Puck', radius: 81, a: 0.086, e: 0.0001, period: 0.76, color: 0x707070, inclination: 0.32, funFacts: ["Puck was the first inner moon of Uranus to be discovered by Voyager 2.", "Its surface is dark and covered with craters."] },
+                 { name: 'Miranda', radius: 236, a: 0.129, e: 0.001, period: 1.4, color: 0xc0c0c0, inclination: 4.2, funFacts: ["Miranda has one of the most bizarre and varied landscapes in the solar system.", "It features enormous canyons, terraced layers, and a patchwork of different surfaces."] },
+                 { name: 'Ariel', radius: 579, a: 0.191, e: 0.001, period: 2.5, color: 0xd0d0d0, inclination: 0.3, funFacts: ["Ariel has the brightest surface of Uranus's major moons.", "Its surface is marked by extensive fault valleys and canyons."] },
+                 { name: 'Umbriel', radius: 585, a: 0.266, e: 0.004, period: 4.1, color: 0x888888, inclination: 0.3, funFacts: ["Umbriel is the darkest of Uranus's large moons.", "Its most prominent feature is a bright, mysterious ring on its equator called the 'Wunda crater'."] },
+                 { name: 'Titania', radius: 788, a: 0.436, e: 0.002, period: 8.7, color: 0xb0a090, inclination: 0.1, funFacts: ["Titania is the largest moon of Uranus.", "It has a network of huge canyons and fault lines, suggesting past geological activity."] },
+                 { name: 'Oberon', radius: 761, a: 0.583, e: 0.001, period: 13.5, color: 0x908080, inclination: 0.1, funFacts: ["Oberon is the outermost large moon of Uranus.", "Its old, icy surface is heavily cratered and shows little sign of internal activity."] }
             ]},
+             { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, funFacts: ["Discovered by mathematical prediction before it was directly observed.", "Has the strongest winds in the solar system, reaching 2,100 km/h.", "A year on Neptune is almost 165 Earth years."] , moons: [
+                 { name: 'Proteus', radius: 210, a: 0.117, e: 0.0005, period: 1.1, color: 0x606060, inclination: 0.026, funFacts: ["Proteus is one of the darkest objects in the solar system, reflecting only 6% of the light that hits it.", "It is irregularly shaped, about as large as a body can be before gravity pulls it into a sphere."] },
+                 { name: 'Triton', radius: 1353, a: 0.354, e: 0.0, period: -5.9, color: 0xced4da, inclination: 157, funFacts: ["Triton is the only large moon in the solar system that orbits in the opposite direction of its planet's rotation (retrograde orbit).", "It has geysers that erupt nitrogen frost and is one of the coldest objects in the solar system."] },
+                 { name: 'Nereid', radius: 170, a: 5.513, e: 0.75, period: 360, color: 0xa0a0a0, inclination: 7.2, funFacts: ["Nereid has one of the most eccentric orbits of any moon in the solar system.", "Its distance from Neptune varies by a factor of 7."] }
+            ]},
+             { name: 'Ceres', type: 'Dwarf Planet', radius: 476, color: 0xaaaaaa, a: 413.7, e: 0.076, period: 1682, inclination: 10.6, axialTilt: 4, lonAscNode: 80.3, argPeri: 73.6, meanAnomalyEpoch: 149.3, funFacts: ["The largest object in the asteroid belt.", "The bright spots on its surface are salt deposits, likely from an ancient subsurface ocean.", "It is the only dwarf planet in the inner solar system."] },
+             { name: 'Pluto', type: 'Dwarf Planet', radius: 1188, color: 0xead9c2, a: 5906.4, e: 0.249, period: 90560, inclination: 17.2, axialTilt: 122.5, lonAscNode: 110.3, argPeri: 113.8, meanAnomalyEpoch: 14.5, funFacts: ["Its orbit is so eccentric it's sometimes closer to the Sun than Neptune.", "Features a massive, heart-shaped nitrogen glacier named Tombaugh Regio.", "Its largest moon, Charon, is so big they orbit a common point in space outside of Pluto."] , moons: [
+                 { name: 'Charon', radius: 606, a: 0.0195, e: 0.0, period: 6.4, color: 0xb5a99d, inclination: 0.00, funFacts: ["Charon is so large relative to Pluto (about half its diameter) that they are considered a binary system.", "It has a reddish north pole, thought to be caused by gases escaping from Pluto's atmosphere and freezing on Charon's surface."] },
+                 { name: 'Nix', radius: 22, a: 0.048, e: 0.002, period: 24.8, color: 0x909090, inclination: 0.13, funFacts: ["Nix and Hydra were discovered in 2005 from Hubble Space Telescope images.", "It has a reddish hue, possibly from tholins on its surface."] },
+                 { name: 'Hydra', radius: 26, a: 0.064, e: 0.005, period: 38.2, color: 0xa0a0a0, inclination: 0.24, funFacts: ["Hydra is Pluto's outermost known moon.", "It is thought to be covered in nearly pure water ice."] }
+            ]},
+             { name: 'Haumea', type: 'Dwarf Planet', radius: 620, color: 0xd1c7b7, a: 6452, e: 0.195, period: 103363, inclination: 28.2, axialTilt: 0, lonAscNode: 122.1, argPeri: 240.2, meanAnomalyEpoch: 201.7, funFacts: ["Haumea is one of the fastest rotating large objects in our solar system, spinning once every 4 hours.", "Its rapid spin has elongated it into a shape resembling a flattened football.", "It has its own ring system."] },
+             { name: 'Makemake', type: 'Dwarf Planet', radius: 715, color: 0xc18d66, a: 6847, e: 0.156, period: 112897, inclination: 29.0, axialTilt: 0, lonAscNode: 79.4, argPeri: 295.2, meanAnomalyEpoch: 359.8, funFacts: ["Makemake was discovered shortly after Easter in 2005, earning it the codename 'Easterbunny'.", "Its surface is covered with frozen methane, ethane, and nitrogen.", "It has a tiny, dark moon nicknamed MK2."] },
+             { name: 'Eris', type: 'Dwarf Planet', radius: 1163, color: 0xcec8c8, a: 10123, e: 0.436, period: 203830, inclination: 44.0, axialTilt: 0, lonAscNode: 35.9, argPeri: 151.9, meanAnomalyEpoch: 205.9, funFacts: ["The discovery of Eris, a body more massive than Pluto, directly led to the 2006 re-definition of a planet.", "It is the most distant dwarf planet from the Sun for most of its orbit.", "Its moon is named Dysnomia, the Greek goddess of lawlessness."] },
+             { name: 'Halley\'s Comet', type: 'Comet', radius: 5.5, a: 2667, e: 0.967, period: 27740, color: 0xffffff, inclination: 162.2, axialTilt: 0, lonAscNode: 58.4, argPeri: 111.3, meanAnomalyEpoch: 351.4, funFacts: ["The most famous comet, visible from Earth every 75-76 years.", "It is a 'periodic' comet and will next appear in mid-2061.", "Its tail always points away from the Sun due to solar wind."] }
+        ];
+        const probesData = [
+             { name: 'Voyager 1', distAU: 167.3, declination: 12.1, rightAscension: 267.0, funFacts: ["Launched in 1977, it is the most distant human-made object from Earth.", "It entered interstellar space in 2012.", "Carries a 'Golden Record' with sounds and images of Earth."] },
+             { name: 'Voyager 2', distAU: 139.3, declination: -55.5, rightAscension: 299.1, funFacts: ["The only spacecraft to have visited all four gas giants: Jupiter, Saturn, Uranus, and Neptune.", "It discovered 11 new moons around Uranus and 6 around Neptune.", "Entered interstellar space in 2018."] },
+             { name: 'Pioneer 10', distAU: 139.0, declination: 25.6, rightAscension: 75.8, funFacts: ["The first spacecraft to traverse the asteroid belt and make direct observations of Jupiter.", "Its last signal was received in 2003 and it is now silent.", "Carries a plaque with a pictorial message from humankind."] },
+             { name: 'New Horizons', distAU: 60.5, declination: -21.4, rightAscension: 290.0, funFacts: ["Performed the first-ever flyby of the Pluto system in 2015.", "Visited the Kuiper Belt Object 'Arrokoth' in 2019, the most distant object ever explored up close.", "Travels at over 58,000 km/h."] }
+        ];
+        const starData = [
+            { name: 'Proxima Centauri', distLY: 4.24, color: 0xff6a3d, ra: 222.9, dec: -62.6, funFacts: ["Our closest stellar neighbor.", "It's a red dwarf, much smaller and cooler than the Sun.", "Hosts at least one exoplanet, Proxima Centauri b."] },
+            { name: 'Alpha Centauri A', distLY: 4.37, color: 0xfff4e1, ra: 219.9, dec: -60.8, funFacts: ["A star very similar to our Sun in size and type.", "Part of a triple star system with Alpha Centauri B and Proxima Centauri."] },
+            { name: 'Alpha Centauri B', distLY: 4.37, color: 0xffd9a1, ra: 219.9, dec: -60.8, funFacts: ["A bit smaller and cooler than the Sun.", "Orbits its larger companion, Alpha Centauri A, every 80 years."] },
+            { name: 'Sirius', distLY: 8.6, color: 0xcad7ff, ra: 101.3, dec: -16.7, funFacts: ["The brightest star in the night sky, also known as the 'Dog Star'.", "It has a tiny, dense white dwarf companion star called Sirius B."] },
         ];
 
-        // --- HIERARCHICAL SCALING ---
-        const MASTER_BODY_SCALE = 1 / 2000; // For all body radii
-        const LOG_DISTANCE_SCALE = 150;     // For interplanetary distances
-        const MOON_SYSTEM_ORBIT_SCALE = 1 / 100000; // NEW TIGHTER SCALE for moon orbits
-        const BASE_ORBIT_SPEED = 0.05;
-
+        // --- SCALES AND CONSTANTS ---
+        const KM_IN_AU = 149.6e6;
+        const LY_IN_AU = 63241.1;
+        const UNIVERSE_SCALE = 10000;
+        const BODY_SCALE = UNIVERSE_SCALE / KM_IN_AU; 
+        // **** SPEED ADJUSTMENT **** // Reduced base speed for finer control
+        const BASE_ORBIT_SPEED = 5; 
         const celestialBodies = [];
+        const navButtons = new Map();
+        
+        function kmToVisualUnits(km) { return km * BODY_SCALE; }
+        
+        function getEllipsePath(data, parentVisualRadius) {
+            const points = [];
+            const isMoon = !!parentVisualRadius;
+            const a_km = data.a * 1e6;
+            const a = isMoon ? parentVisualRadius + kmToVisualUnits(a_km) : kmToVisualUnits(a_km);
+            const e = data.e;
+            const focusShift = a * e;
+            const b = a * Math.sqrt(1 - e*e);
+            const numPoints = 200;
+            for (let i = 0; i <= numPoints; i++) {
+                const angle = (i / numPoints) * 2 * Math.PI;
+                points.push(new THREE.Vector3(Math.cos(angle) * a - focusShift, 0, Math.sin(angle) * b));
+            }
+            return new THREE.BufferGeometry().setFromPoints(points);
+        }
+
+        // --- CELESTIAL BODY CREATION ---
         const sunData = solarSystemData.find(d => d.name === 'Sun');
-        const sunVisualRadius = sunData.radius * MASTER_BODY_SCALE;
+        const sunVisualRadius = sunData.radius * BODY_SCALE;
         const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(sunVisualRadius, 64, 32), new THREE.MeshBasicMaterial({ color: sunData.color }));
-        celestialBodies.push({ mesh: sunMesh, data: sunData, pivot: sunMesh });
+        const sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0); 
+        sunMesh.add(sunLight);
+        const sunObject = { mesh: sunMesh, data: sunData, isSun: true };
+        celestialBodies.push(sunObject);
         scene.add(sunMesh);
+        addLabel(sunObject);
 
         solarSystemData.forEach(data => {
             if (data.name === 'Sun') return;
-            const visualRadius = data.radius * MASTER_BODY_SCALE;
-            const mesh = new THREE.Mesh(new THREE.SphereGeometry(visualRadius, 32, 16), new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.9 }));
+            const visualRadius = data.radius * BODY_SCALE;
+            const isComet = data.type === 'Comet';
+            const mesh = isComet ? new THREE.Group() : new THREE.Mesh(new THREE.SphereGeometry(visualRadius, 32, 16), new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.9, metalness: 0.1 }));
             const bodyObject = { mesh, data };
             celestialBodies.push(bodyObject);
+            addLabel(bodyObject);
 
-            const orbitalPlane = new THREE.Object3D(); scene.add(orbitalPlane);
+            if (isComet) {
+                const head = new THREE.Mesh(new THREE.SphereGeometry(visualRadius, 16, 8), new THREE.MeshBasicMaterial({ color: data.color }));
+                const tail = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending }));
+                mesh.add(head); mesh.add(tail); bodyObject.tail = tail;
+            }
+
+            const orbitalSystem = new THREE.Object3D();
+            orbitalSystem.rotation.y = THREE.MathUtils.degToRad(data.lonAscNode || 0);
+            const orbitalPlane = new THREE.Object3D();
             orbitalPlane.rotation.x = THREE.MathUtils.degToRad(data.inclination);
+            orbitalSystem.add(orbitalPlane);
+            const ellipseContainer = new THREE.Object3D();
+            ellipseContainer.rotation.y = THREE.MathUtils.degToRad(data.argPeri || 0);
+            orbitalPlane.add(ellipseContainer);
+            scene.add(orbitalSystem);
+            ellipseContainer.add(mesh);
             
-            const pivot = new THREE.Object3D(); orbitalPlane.add(pivot);
-            const scaledDistance = sunVisualRadius + Math.log10(data.distance) * LOG_DISTANCE_SCALE;
-            mesh.position.x = scaledDistance;
-            pivot.add(mesh);
-            
-            bodyObject.pivot = pivot; bodyObject.currentAngle = Math.random() * 2 * Math.PI;
-            pivot.rotation.y = bodyObject.currentAngle;
+            bodyObject.currentMeanAnomaly = THREE.MathUtils.degToRad(data.meanAnomalyEpoch || Math.random() * 360);
+            mesh.rotation.y = Math.random() * 2 * Math.PI;
             mesh.rotation.z = THREE.MathUtils.degToRad(data.axialTilt);
 
-            const orbitColor = new THREE.Color(data.color).multiplyScalar(0.3);
-            const orbit = new THREE.Mesh(new THREE.TorusGeometry(scaledDistance, 0.25, 16, 200), new THREE.MeshBasicMaterial({ color: orbitColor, side: THREE.DoubleSide }));
-            orbit.rotation.x = Math.PI / 2; orbitalPlane.add(orbit);
-            
+            const orbitColor = data.type ? '#888' : new THREE.Color(data.color).multiplyScalar(0.3);
+            const orbit = new THREE.Line(getEllipsePath(data, 0), new THREE.LineBasicMaterial({ color: orbitColor, transparent: true, opacity: 0.4 }));
+            ellipseContainer.add(orbit);
+            bodyObject.orbit = orbit;
+
+            if (data.name === 'Saturn') {
+                const ringParticles = 20000;
+                const ringGeo = new THREE.BufferGeometry();
+                const positions = new Float32Array(ringParticles * 3);
+                const colors = new Float32Array(ringParticles * 3);
+                const baseColor = new THREE.Color(0.8, 0.7, 0.6);
+
+                for (let i = 0; i < ringParticles; i++) {
+                    let radius = THREE.MathUtils.randFloat(visualRadius * 1.5, visualRadius * 2.5);
+                    if(radius > visualRadius * 2.0 && radius < visualRadius * 2.1) { radius += 0.2 * visualRadius; }
+                    const theta = Math.random() * 2 * Math.PI;
+                    positions[i * 3] = Math.cos(theta) * radius;
+                    positions[i * 3 + 2] = Math.sin(theta) * radius;
+                    positions[i * 3 + 1] = THREE.MathUtils.randFloatSpread(visualRadius * 0.01);
+                    const colorVariation = Math.random() * 0.2 - 0.1;
+                    colors[i * 3] = baseColor.r + colorVariation;
+                    colors[i * 3 + 1] = baseColor.g + colorVariation;
+                    colors[i * 3 + 2] = baseColor.b + colorVariation;
+                }
+                ringGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                ringGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                const ringMat = new THREE.PointsMaterial({ size: 2, vertexColors: true, transparent: true, opacity: 0.6, sizeAttenuation: true });
+                const ringSystem = new THREE.Points(ringGeo, ringMat);
+                mesh.add(ringSystem);
+            }
+
             if (data.moons) {
                 data.moons.forEach(moonData => {
-                    const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moonData.radius * MASTER_BODY_SCALE, 16, 8), new THREE.MeshStandardMaterial({ color: moonData.color }));
-                    const moonObject = { mesh: moonMesh, data: moonData };
+                    const moonVisualRadius = moonData.radius * BODY_SCALE;
+                    const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moonVisualRadius, 16, 8), new THREE.MeshStandardMaterial({ color: moonData.color, roughness: 0.8 }));
+                    const moonObject = { mesh: moonMesh, data: moonData, isMoon: true, parentBody: bodyObject };
                     celestialBodies.push(moonObject);
+                    addLabel(moonObject, false);
 
-                    const moonOrbitalPlane = new THREE.Object3D(); mesh.add(moonOrbitalPlane);
+                    const moonOrbitalSystem = new THREE.Object3D();
+                    moonOrbitalSystem.rotation.y = THREE.MathUtils.degToRad(moonData.lonAscNode || Math.random() * 360);
+                    const moonOrbitalPlane = new THREE.Object3D();
                     moonOrbitalPlane.rotation.x = THREE.MathUtils.degToRad(moonData.inclination);
+                    mesh.add(moonOrbitalSystem);
+                    moonOrbitalSystem.add(moonOrbitalPlane);
+                    moonOrbitalPlane.add(moonMesh);
 
-                    const moonPivot = new THREE.Object3D(); moonOrbitalPlane.add(moonPivot);
-                    
-                    // --- THE DEFINITIVE FIX FOR MOON ORBITS ---
-                    const moonOrbitRadius = visualRadius + ((moonData.distance * 1e6) * MOON_SYSTEM_ORBIT_SCALE); // Planet radius + scaled moon distance
-                    
-                    moonMesh.position.x = moonOrbitRadius;
-                    moonPivot.add(moonMesh);
-
-                    const moonOrbit = new THREE.Mesh(new THREE.TorusGeometry(moonOrbitRadius, 0.05, 16, 100), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2 }));
-                    moonOrbit.rotation.x = Math.PI / 2; moonOrbitalPlane.add(moonOrbit);
-
-                    moonObject.pivot = moonPivot; moonObject.currentAngle = Math.random() * 2 * Math.PI;
-                    moonPivot.rotation.y = moonObject.currentAngle;
+                    moonObject.currentMeanAnomaly = THREE.MathUtils.degToRad(moonData.meanAnomalyEpoch || Math.random() * 360);
+                    const moonOrbit = new THREE.Line(getEllipsePath(moonData, visualRadius), new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.2 }));
+                    moonOrbitalPlane.add(moonOrbit);
                 });
             }
         });
         
-        const saturnObject = celestialBodies.find(b => b.data.name === 'Saturn')?.mesh;
-        if (saturnObject) {
-            const innerRadius = saturnObject.geometry.parameters.radius * 1.2;
-            const outerRadius = innerRadius * 2;
-            const ringMesh = new THREE.Mesh(new THREE.RingGeometry(innerRadius, outerRadius, 64), new THREE.MeshBasicMaterial({ color: 0x999977, side: THREE.DoubleSide, transparent: true, opacity: 0.6 }));
-            ringMesh.rotation.x = Math.PI / 2; saturnObject.add(ringMesh);
-        }
+        const createBelt = (count, color, minAU, maxAU, spreadY, minSize, maxSize) => {
+            const instancedMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: color, flatShading: true, roughness: 0.9 }), count);
+            const dummy = new THREE.Object3D();
+            const minRad = minAU * UNIVERSE_SCALE; const maxRad = maxAU * UNIVERSE_SCALE;
+            for (let i = 0; i < count; i++) {
+                const a = THREE.MathUtils.randFloat(minRad, maxRad);
+                const e = Math.random() * 0.15; const focusOffset = a * e; const b = a * Math.sqrt(1 - e*e);
+                const angle = Math.random() * 2 * Math.PI;
+                const ySpread = Math.pow(Math.random(), 2) * spreadY * (Math.random() < 0.5 ? -1 : 1);
+                dummy.position.set(Math.cos(angle) * a - focusOffset, ySpread, Math.sin(angle) * b);
+                dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                dummy.scale.setScalar(kmToVisualUnits(THREE.MathUtils.randFloat(minSize, maxSize)));
+                dummy.updateMatrix(); instancedMesh.setMatrixAt(i, dummy.matrix);
+            } return instancedMesh;
+        };
+        scene.add(createBelt(5000, 0x544434, 2.2, 3.2, 0.2 * UNIVERSE_SCALE, 50, 250)); // Asteroid Belt
+        scene.add(createBelt(8000, 0x344c54, 30, 50, 0.4 * UNIVERSE_SCALE, 100, 300)); // Kuiper Belt
 
+        probesData.forEach(probeData => {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2, 8), new THREE.MeshStandardMaterial({color: 0xcccccc}));
+            body.rotation.z = Math.PI / 2;
+            const dish = new THREE.Mesh(new THREE.CircleGeometry(1.2, 16), new THREE.MeshStandardMaterial({color: 0xffffff, side: THREE.DoubleSide}));
+            dish.position.x = -1; group.add(body, dish);
+            group.scale.setScalar(UNIVERSE_SCALE / 20);
+            const dist = probeData.distAU * UNIVERSE_SCALE;
+            const raRad = THREE.MathUtils.degToRad(probeData.rightAscension);
+            const decRad = THREE.MathUtils.degToRad(probeData.declination);
+            group.position.set( dist * Math.cos(decRad) * Math.cos(raRad), dist * Math.sin(decRad), dist * Math.cos(decRad) * Math.sin(raRad) );
+            group.lookAt(new THREE.Vector3(0,0,0)); scene.add(group);
+            const probeObject = {mesh: group, data: probeData, isProbe: true, velocity: group.position.clone().normalize().multiplyScalar(5 * UNIVERSE_SCALE)};
+            celestialBodies.push(probeObject);
+            addLabel(probeObject);
+        });
+
+        starData.forEach(star => {
+            const dist = star.distLY * LY_IN_AU * UNIVERSE_SCALE;
+            const raRad = THREE.MathUtils.degToRad(star.ra);
+            const decRad = THREE.MathUtils.degToRad(star.dec);
+            
+            const starMesh = new THREE.Mesh( new THREE.SphereGeometry(UNIVERSE_SCALE * 100, 16, 8), new THREE.MeshBasicMaterial({ color: star.color }) );
+            starMesh.position.set( dist * Math.cos(decRad) * Math.cos(raRad), dist * Math.sin(decRad), dist * Math.cos(decRad) * Math.sin(raRad) );
+            scene.add(starMesh);
+
+            const starObject = { mesh: starMesh, data: star, isStar: true };
+            celestialBodies.push(starObject);
+            addLabel(starObject, true, 2);
+        });
+
+        // --- UI & CAMERA ---
         const infoPanel = document.getElementById('info-panel-content');
-        function updateInfoPanel(body) { /* Unchanged */
-            const d = body.data; let html = `<h3>${d.name}</h3><p><span>Radius:</span> <span>${d.radius.toLocaleString()} km</span></p>`;
+        const funFactPanel = document.getElementById('fun-fact-panel');
+        let funFactInterval;
+        
+        function updateInfoPanel(body) {
+            const d = body.data; let html = `<h3>${d.name}</h3>`;
+            if (d.radius) html += `<p><span>Radius:</span> <span>${d.radius.toLocaleString()} km</span></p>`;
+            else if (d.distAU) html += `<p><span>Distance:</span> <span>${d.distAU.toLocaleString()} AU</span></p>`;
+            else if (d.distLY) html += `<p><span>Distance:</span> <span>${d.distLY.toLocaleString()} light-years</span></p>`;
             if (d.axialTilt !== undefined) html += `<p><span>Axial Tilt:</span> <span>${d.axialTilt}°</span></p>`;
-            if (d.period) { const parentName = solarSystemData.find(p => p.moons?.some(m => m.name === d.name))?.name || 'Sun';
-                html += `<p><span>Orbital Period:</span> <span>${d.period.toLocaleString()} days</span></p>`;
-                if(d.distance) html += `<p><span>Avg. Dist. from ${parentName}:</span> <span>${d.distance.toLocaleString()} million km</span></p>`;
+            if (d.period) {
+                const parentName = body.isMoon ? body.parentBody.data.name : 'Sun';
+                const period = d.period < 0 ? `${Math.abs(d.period)} (R)` : d.period.toLocaleString();
+                html += `<p><span>Orbital Period:</span> <span>${period} days</span></p>`;
+                if(d.a) html += `<p><span>Avg. Dist. from ${parentName}:</span> <span>${d.a.toLocaleString()} million km</span></p>`;
                 if(d.inclination !== undefined) html += `<p><span>Orbital Inclination:</span> <span>${d.inclination}°</span></p>`;
             } infoPanel.innerHTML = html;
         }
 
-        function focusOnBody(targetBody) { focusedBody = targetBody; updateInfoPanel(targetBody); }
-        function unlockCamera(isManual = false) {
-            if (focusedBody) focusedBody = null;
-            if (!isManual) {
-                TWEEN.removeAll();
-                new TWEEN.Tween(camera.position).to(overviewPosition, 1500).easing(TWEEN.Easing.Cubic.InOut).start();
-                new TWEEN.Tween(controls.target).to(new THREE.Vector3(0,0,0), 1500).easing(TWEEN.Easing.Cubic.InOut).start();
-                infoPanel.innerHTML = `<p>Select a celestial body to view data.</p>`;
+        function setActiveButton(targetBody) {
+            navButtons.forEach(btn => btn.classList.remove('active'));
+            if(targetBody) {
+                const btn = navButtons.get(targetBody.data.name);
+                if(btn) btn.classList.add('active');
             }
         }
-        
-        controls.addEventListener('start', () => unlockCamera(true));
 
+        function focusOnBody(targetBody) {
+            TWEEN.removeAll();
+            focusedBody = targetBody;
+            controls.autoRotate = false;
+            controls.enablePan = false;
+            setActiveButton(targetBody);
+            updateInfoPanel(targetBody);
+            
+            const targetPosition = new THREE.Vector3();
+            targetBody.mesh.getWorldPosition(targetPosition);
+            
+            let offsetDist;
+            if (targetBody.isSun) { offsetDist = sunVisualRadius * 4; }
+            else if (targetBody.isProbe) { offsetDist = targetBody.mesh.scale.x * 20; }
+            else if (targetBody.isStar) { offsetDist = UNIVERSE_SCALE * 500; } 
+            else { offsetDist = (targetBody.data.radius * BODY_SCALE) * 8; } 
+            offsetDist = Math.max(offsetDist, 0.5); 
+            
+            let cameraDirection = camera.position.clone().sub(controls.target).normalize();
+            if (cameraDirection.lengthSq() === 0) cameraDirection.set(0.5,0.5,1);
+            
+            const finalCamPos = targetPosition.clone().add(cameraDirection.multiplyScalar(offsetDist));
+            const travelTime = camera.position.distanceTo(finalCamPos) / (UNIVERSE_SCALE * 500) * 1000 + 1000;
+
+            new TWEEN.Tween(camera.position).to(finalCamPos, Math.min(travelTime, 4000)).easing(TWEEN.Easing.Cubic.InOut).start();
+            new TWEEN.Tween(controls.target).to(targetPosition, Math.min(travelTime, 4000)).easing(TWEEN.Easing.Cubic.InOut).start();
+
+            if(funFactInterval) clearInterval(funFactInterval); 
+            if (targetBody.data.funFacts && targetBody.data.funFacts.length > 0) {
+                funFactPanel.style.opacity = '1'; let factIndex = 0;
+                const updateFact = () => { funFactPanel.innerHTML = targetBody.data.funFacts[factIndex]; factIndex = (factIndex + 1) % targetBody.data.funFacts.length; };
+                updateFact(); funFactInterval = setInterval(updateFact, 8000);
+            } else { funFactPanel.style.opacity = '0'; funFactPanel.innerHTML = ''; }
+        }
+
+        function returnToOverview() {
+             TWEEN.removeAll();
+             focusedBody = null;
+             controls.autoRotate = true; 
+             controls.autoRotateSpeed = 0.05;
+             controls.enablePan = true;
+             setActiveButton(null);
+             infoPanel.innerHTML = `<p>Select a celestial body to view its data.</p>`;
+             funFactPanel.style.opacity = '0'; if(funFactInterval) clearInterval(funFactInterval);
+             
+             const travelTime = camera.position.distanceTo(overviewPosition) / (UNIVERSE_SCALE * 500) * 1000 + 1000;
+
+             new TWEEN.Tween(camera.position).to(overviewPosition, Math.min(travelTime, 3000)).easing(TWEEN.Easing.Cubic.InOut).start();
+             new TWEEN.Tween(controls.target).to({x:0,y:0,z:0}, Math.min(travelTime, 3000)).easing(TWEEN.Easing.Cubic.InOut).start();
+        }
+
+        // --- UI CONSTRUCTION ---
         const navContainer = document.getElementById('navigation-buttons');
-        solarSystemData.forEach(data => {
-            const accordionItem = document.createElement('div'); accordionItem.className = 'accordion-item';
-            const header = document.createElement('button'); header.className = 'accordion-header';
-            header.style.borderLeftColor = `#${new THREE.Color(data.color).getHexString()}`;
-            header.innerHTML = `<span>${data.name}</span><span class="arrow">${data.moons ? '▸' : ''}</span>`;
-            
-            header.onclick = () => {
-                const target = celestialBodies.find(b => b.data.name === data.name);
-                focusOnBody(target);
-                if(data.moons) {
-                    const isActive = accordionItem.classList.contains('active');
-                    document.querySelectorAll('.accordion-item.active').forEach(item => { item.classList.remove('active'); item.querySelector('.accordion-content').style.maxHeight = '0'; });
-                    if (!isActive) { accordionItem.classList.add('active'); const content = accordionItem.querySelector('.accordion-content'); content.style.maxHeight = content.scrollHeight + "px"; }
-                } else { document.querySelectorAll('.accordion-item.active').forEach(item => { item.classList.remove('active'); item.querySelector('.accordion-content').style.maxHeight = '0'; }); }
-            };
-            
-            accordionItem.appendChild(header);
+        const systemOverviewButton = document.createElement('button');
+        systemOverviewButton.className = 'cosmic-button';
+        systemOverviewButton.textContent = 'System Overview';
+        systemOverviewButton.style.borderLeftColor = '#fff';
+        systemOverviewButton.onclick = returnToOverview;
+        navContainer.appendChild(systemOverviewButton);
+        
+        const sunNavButton = document.createElement('button');
+        sunNavButton.className = 'cosmic-button';
+        sunNavButton.textContent = 'Sun';
+        sunNavButton.style.borderLeftColor = `#${new THREE.Color(sunData.color).getHexString()}`;
+        sunNavButton.onclick = () => {
+            const target = celestialBodies.find(b => b.isSun);
+            if(focusedBody === target) returnToOverview();
+            else focusOnBody(target);
+        };
+        navContainer.appendChild(sunNavButton);
+        navButtons.set('Sun', sunNavButton);
 
-            if (data.moons) {
-                const content = document.createElement('div'); content.className = 'accordion-content';
-                data.moons.forEach(moonData => {
-                    const moonBtn = document.createElement('button'); moonBtn.className = 'moon-button'; moonBtn.textContent = moonData.name;
-                    moonBtn.onclick = (e) => { e.stopPropagation(); const target = celestialBodies.find(b => b.data.name === moonData.name); focusOnBody(target); };
-                    content.appendChild(moonBtn);
-                });
-                accordionItem.appendChild(content);
-            }
-            navContainer.appendChild(accordionItem);
-        });
+        const groupedData = { 
+            'Planets': solarSystemData.filter(d => !d.type && d.name !== 'Sun'),
+            'Dwarf Planets': solarSystemData.filter(d => d.type === 'Dwarf Planet'),
+            'Comets': solarSystemData.filter(d => d.type === 'Comet'),
+            'Deep Space Probes': probesData,
+            'Nearby Stars': starData,
+        };
 
+        for (const [groupName, items] of Object.entries(groupedData)) {
+            const groupHeader = document.createElement('h3');
+            groupHeader.textContent = groupName;
+            groupHeader.style.color = '#ccc'; groupHeader.style.fontWeight = '300'; groupHeader.style.marginTop = '20px';
+            navContainer.appendChild(groupHeader);
+            
+            items.forEach(itemData => {
+                 const isNavForProbe = !!itemData.distAU;
+                 const isNavForStar = !!itemData.distLY;
+                 let color;
+                 if (isNavForProbe) color = '#cccccc';
+                 else if (isNavForStar) color = itemData.color;
+                 else color = itemData.color;
+
+                const accordionItem = document.createElement('div'); accordionItem.className = 'accordion-item';
+                const header = document.createElement('button'); header.className = 'accordion-header';
+                header.style.borderLeftColor = `#${new THREE.Color(color).getHexString()}`;
+                header.innerHTML = `<span>${itemData.name}</span><span class="arrow">${itemData.moons ? '▸' : ''}</span>`;
+                navButtons.set(itemData.name, header);
+                accordionItem.appendChild(header);
+                
+                header.onclick = () => {
+                    const target = celestialBodies.find(b => b.data.name === itemData.name);
+                    if (focusedBody === target) { returnToOverview(); return; }
+                    
+                    focusOnBody(target);
+                    if (itemData.moons) {
+                        const isActive = accordionItem.classList.contains('active');
+                        document.querySelectorAll('.accordion-item.active').forEach(item => { if(item !== accordionItem) { item.classList.remove('active'); item.querySelector('.accordion-content').style.maxHeight = '0'; } });
+                        accordionItem.classList.toggle('active');
+                        const content = accordionItem.querySelector('.accordion-content');
+                        content.style.maxHeight = accordionItem.classList.contains('active') ? content.scrollHeight + "px" : '0';
+                    } else {
+                         document.querySelectorAll('.accordion-item.active').forEach(item => { if(item !== accordionItem) item.classList.remove('active'); if(item.querySelector('.accordion-content')) { item.querySelector('.accordion-content').style.maxHeight = '0'; } });
+                    }
+                };
+
+                if (itemData.moons) {
+                    const content = document.createElement('div'); content.className = 'accordion-content';
+                    itemData.moons.forEach(moonData => {
+                        const moonBtn = document.createElement('button'); moonBtn.className = 'moon-button'; moonBtn.textContent = moonData.name;
+                        navButtons.set(moonData.name, moonBtn);
+                        moonBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            const target = celestialBodies.find(b => b.data.name === moonData.name);
+                            if (focusedBody === target) { returnToOverview(); } else { focusOnBody(target); }
+                            if(!accordionItem.classList.contains('active')) { header.click(); }
+                        };
+                        content.appendChild(moonBtn);
+                    });
+                    accordionItem.appendChild(content);
+                }
+                navContainer.appendChild(accordionItem);
+            });
+        }
+        
         const speedSlider = document.getElementById('speed-slider');
         function updateSpeed() {
             const sliderValue = parseFloat(speedSlider.value);
-            speedMultiplier = Math.pow(1.8, sliderValue) - 0.9;
+            speedMultiplier = Math.pow(3, sliderValue) - 0.9;
             document.getElementById('speed-value').textContent = speedMultiplier.toFixed(1);
         }
         speedSlider.addEventListener('input', updateSpeed); updateSpeed();
-
         document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('side-menu').classList.toggle('collapsed'));
-        window.addEventListener('resize', () => (camera.aspect = window.innerWidth / window.innerHeight, camera.updateProjectionMatrix(), renderer.setSize(window.innerWidth, window.innerHeight)));
+        document.getElementById('label-toggle').addEventListener('change', (e) => { labelRenderer.domElement.style.display = e.target.checked ? 'block' : 'none'; });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); labelRenderer.setSize(window.innerWidth, window.innerHeight); });
 
+        celestialBodies.forEach(body => {
+            if (body.data.period) {
+                const parentVisualRadius = body.isMoon ? (body.parentBody.data.radius * BODY_SCALE) : 0;
+                const a_km = body.data.a * 1e6;
+                const a = body.isMoon ? parentVisualRadius + kmToVisualUnits(a_km) : kmToVisualUnits(a_km);
+                const b = a * Math.sqrt(1 - body.data.e**2);
+                body.orbitalParams = { a, b, focusShift: a * body.data.e };
+
+                let E = body.currentMeanAnomaly;
+                for (let i = 0; i < 5; i++) { 
+                    E = E - (E - body.data.e * Math.sin(E) - body.currentMeanAnomaly) / (1 - body.data.e * Math.cos(E));
+                }
+                body.mesh.position.x = a * Math.cos(E) - body.orbitalParams.focusShift;
+                body.mesh.position.z = b * Math.sin(E);
+            }
+        });
+        
+        returnToOverview(); 
+
+        // --- ANIMATION LOOP ---
         const clock = new THREE.Clock();
         function animate(time) {
-            requestAnimationFrame(animate); const delta = clock.getDelta(); TWEEN.update(time);
-
-            celestialBodies.forEach(body => { /* Animation logic is unchanged */
-                if (!body.data.period) return;
-                let selfRotSpeed = 0.5 * (focusedBody ? 0.2 : 1);
-                if(body.data.name === 'Venus') selfRotSpeed = -selfRotSpeed;
-                body.mesh.rotation.y += selfRotSpeed * delta;
-                let angleChange = (1 / body.data.period) * BASE_ORBIT_SPEED * 100 * delta * speedMultiplier;
-                if (body.data.name === 'Triton') angleChange = -angleChange;
-                body.currentAngle += angleChange; body.pivot.rotation.y = body.currentAngle;
-            });
-
-            if (focusedBody) {
-                const targetPosition = new THREE.Vector3(); focusedBody.mesh.getWorldPosition(targetPosition);
-                const size = focusedBody.mesh.geometry.parameters.radius;
-                const offsetDistance = Math.max(size * 10, size + 1);
-                const offsetDirection = new THREE.Vector3(0.5, 0.5, 1).normalize();
-                const desiredCameraPosition = targetPosition.clone().add(offsetDirection.multiplyScalar(offsetDistance));
-                camera.position.lerp(desiredCameraPosition, 0.1);
-                controls.target.lerp(targetPosition, 0.1);
-            }
+            requestAnimationFrame(animate); 
+            TWEEN.update(time);
+            const delta = clock.getDelta();
+            const timeFactor = delta * speedMultiplier * BASE_ORBIT_SPEED;
             
-            controls.update(); renderer.render(scene, camera);
+            celestialBodies.forEach(body => {
+                if(body.mesh && body.data.axialTilt) { body.mesh.rotation.y += delta * 0.1; }
+                if (body.data.period && body.orbitalParams) {
+                    const n = (2 * Math.PI) / Math.abs(body.data.period);
+                    body.currentMeanAnomaly += n * timeFactor;
+                    body.currentMeanAnomaly %= (2 * Math.PI);
+                    
+                    let E = body.currentMeanAnomaly;
+                    for (let i = 0; i < 5; i++) { 
+                        E = E - (E - body.data.e * Math.sin(E) - body.currentMeanAnomaly) / (1 - body.data.e * Math.cos(E));
+                    }
+                    const { a, b, focusShift } = body.orbitalParams;
+                    body.mesh.position.x = a * Math.cos(E) - focusShift;
+                    body.mesh.position.z = b * Math.sin(E);
+                }
+                if(body.isProbe) { body.mesh.position.add(body.velocity.clone().multiplyScalar(delta * speedMultiplier)); }
+                if (body.tail) { 
+                    const sunPos = new THREE.Vector3(); sunMesh.getWorldPosition(sunPos);
+                    const cometPos = new THREE.Vector3(); body.mesh.getWorldPosition(cometPos);
+                    const distToSun = cometPos.distanceTo(sunPos);
+                    const tailLength = Math.max(1, Math.min(kmToVisualUnits(50e6), kmToVisualUnits(5e9) / distToSun));
+                    body.tail.scale.set(tailLength,1,1);
+                    const tailDirection = cometPos.clone().sub(sunPos).normalize();
+                    body.tail.parent.worldToLocal(tailDirection.add(cometPos)); body.tail.lookAt(tailDirection);
+                }
+                if(body.label){
+                    const distToCamera = body.mesh.getWorldPosition(new THREE.Vector3()).distanceTo(camera.position);
+                    let isVisible = (focusedBody === body);
+                    if (!focusedBody) { // Overview visibility logic
+                         isVisible = isVisible || (body.isSun) ||
+                            (!body.isMoon && !body.isProbe && !body.isStar && distToCamera < UNIVERSE_SCALE * 30) ||
+                            (body.isProbe && distToCamera < UNIVERSE_SCALE * 20) ||
+                            (body.isMoon && distToCamera < kmToVisualUnits(15e6)) ||
+                            (body.isStar && distToCamera < (body.data.distLY * LY_IN_AU * UNIVERSE_SCALE * 1.5));
+                    } else { // Focused visibility logic
+                        isVisible = isVisible || (focusedBody.isStar && body.isSun);
+                    }
+                    body.label.element.classList.toggle('visible', isVisible);
+                }
+            });
+            
+            if (focusedBody && TWEEN.getAll().length === 0) {
+                const targetPosition = new THREE.Vector3();
+                focusedBody.mesh.getWorldPosition(targetPosition);
+                const offset = camera.position.clone().sub(controls.target);
+                controls.target.copy(targetPosition);
+                camera.position.copy(controls.target).add(offset);
+            }
+
+            controls.update(); 
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
         }
+        
+        function addLabel(body, initiallyVisible = true, scale = 1) {
+            const labelDiv = document.createElement('div'); labelDiv.className = 'label';
+            if(initiallyVisible) labelDiv.classList.add('visible');
+            labelDiv.textContent = body.data.name;
+            labelDiv.style.fontSize = `${14 * scale}px`;
+
+            const label = new CSS2DObject(labelDiv);
+
+            let yOffset;
+            if (body.isStar) {
+                yOffset = UNIVERSE_SCALE * 150;
+            } else {
+                 const visualRadius = body.isSun ? sunVisualRadius : (body.data.radius || 1) * BODY_SCALE;
+                 yOffset = visualRadius * 1.5 + (10 * scale);
+            }
+           
+            label.position.set(0, yOffset, 0);
+            body.mesh.add(label);
+            body.label = label;
+        }
+
         animate();
     </script>
 </body>
