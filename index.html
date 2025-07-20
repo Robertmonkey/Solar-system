@@ -38,7 +38,7 @@
         .menu-section label { display: block; margin: 20px 0 8px 0; font-size: 0.9em; font-weight: 400; color: #ccc; }
         
         input[type=range]{ -webkit-appearance: none; width: 100%; background: transparent; }
-        input[type=range]::-webkit-slider-thumb{ -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
+        input[type=range]::-webkit-slider-thumb]{ -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
         input[type=range]::-webkit-slider-runnable-track{ width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px; }
         
         .accordion-item .accordion-header, .cosmic-button {
@@ -50,7 +50,7 @@
         .accordion-item .accordion-header.active, .cosmic-button.active {
             background: rgba(0, 191, 255, 0.2); border-color: rgba(0, 191, 255, 0.6); box-shadow: 0 0 15px rgba(0, 191, 255, 0.4);
         }
-
+        
         .accordion-item .accordion-header .arrow { transition: transform 0.3s; color: #00bfff; }
         .accordion-item.active > .accordion-header .arrow { transform: rotate(90deg); }
         .accordion-content { max-height: 0; overflow-y: hidden; transition: max-height 0.3s ease-in-out; padding-left: 20px; border-left: 1px solid #444; margin: 5px 0 0 8px; }
@@ -86,12 +86,10 @@
             <div class="menu-section" id="controls-section">
                 <h2>SIMULATION CONTROLS</h2>
                 <label for="speed-slider">Time Scale: <span id="speed-value">1.0</span>x</label>
-                <!-- Exponential time scale: slider values correspond to powers of ten (e.g. -3 → 0.001x, 0 → 1x, 3 → 1000x). -->
                 <input type="range" id="speed-slider" min="-4" max="4" value="0" step="0.05">
                 <label for="label-toggle">Show Labels:</label>
                  <input type="checkbox" id="label-toggle" checked>
                  <label style="display:block; margin-top:15px;">Flight Mode:</label>
-                 <!-- Button to toggle between orbiting and free‑flight controls.  When pressed, the user can freely fly around the solar system using WASD/arrow keys. -->
                  <button id="fly-toggle" class="cosmic-button" style="width:100%; margin-top:5px;">Enter Free Flight (WASD)</button>
             </div>
             <div class="menu-section" id="navigation-section">
@@ -105,8 +103,8 @@
     <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/" } }</script>
     <script type="module">
         import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { FlyControls } from 'three/addons/controls/FlyControls.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { FlyControls } from 'three/addons/controls/FlyControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
         // --- TEXTURE LOADER AND PLANET TEXTURE DEFINITIONS ---
@@ -342,9 +340,7 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
         }
         const starGeometry = new THREE.BufferGeometry();
         starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 5, sizeAttenuation: false });
-        const starField = new THREE.Points(starGeometry, starMaterial);
-        scene.add(starField);
+        
         // Set movement speed for fly controls relative to the scale of the universe.  A
         // higher value allows the user to traverse interplanetary distances more
         // comfortably in fly mode.
@@ -352,6 +348,49 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
         // Global containers for dynamic solar flares and rotating ring particle systems.
         let solarFlareSystem;
         const dynamicRings = [];
+
+        // Generate a radial star texture and an array of typical star colours
+        function generateStarTexture() {
+            const size = 64;
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(0.5, 'rgba(255,255,255,0.6)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            return new THREE.CanvasTexture(canvas);
+        }
+        const starTexture = generateStarTexture();
+        const spectralColours = [
+            new THREE.Color(0xa0c8ff), // blue‑white
+            new THREE.Color(0xffe5b3), // yellow‑white
+            new THREE.Color(0xffcba4), // orange
+            new THREE.Color(0xff9d7e)  // red
+        ];
+
+        // assign per‑vertex colours so each star has a different hue
+        const colourArray = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            const c = spectralColours[Math.floor(Math.random() * spectralColours.length)];
+            colourArray[i * 3]     = c.r;
+            colourArray[i * 3 + 1] = c.g;
+            colourArray[i * 3 + 2] = c.b;
+        }
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(colourArray, 3));
+        const starMaterial = new THREE.PointsMaterial({
+            map: starTexture,
+            size: 20,
+            sizeAttenuation: true,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            vertexColors: true,
+            depthWrite: false
+        });
+        const starField = new THREE.Points(starGeometry, starMaterial);
+        scene.add(starField);
 
         /**
          * Construct a dynamic particle system to simulate solar flares.  Each
@@ -382,7 +421,15 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
             }
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            const mat = new THREE.PointsMaterial({ color: 0xffaa66, size: radius * 0.05, sizeAttenuation: true, transparent: true, opacity: 0.8 });
+            const mat = new THREE.PointsMaterial({
+                map: starTexture,
+                color: 0xff8844,
+                size: radius * 0.1,
+                sizeAttenuation: true,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
             const points = new THREE.Points(geo, mat);
             // Attach to the Sun so it follows its movement and rotation
             solarFlareSystem = { points, velocities, radius };
@@ -401,48 +448,64 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
          * @returns {THREE.Group} A group containing the assembled spacecraft.
          */
         function createProbeModel(name) {
-            // Default sizes approximating the Voyager probes.  Units are in
-            // arbitrary local units; the group is later scaled by UNIVERSE_SCALE.
-            let dishRadius = 0.15;
-            let bodyLength = 0.4;
-            // Adjust sizes for other spacecraft classes
-            if (name === 'Pioneer 10') {
-                dishRadius = 0.18;
-                bodyLength = 0.5;
-            } else if (name === 'New Horizons') {
-                dishRadius = 0.12;
-                bodyLength = 0.35;
-            }
             const group = new THREE.Group();
-            // Main bus: a horizontal cylinder
-            const busGeom = new THREE.CylinderGeometry(0.05, 0.05, bodyLength, 12);
-            const busMat  = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.2 });
-            const bus = new THREE.Mesh(busGeom, busMat);
-            bus.rotation.z = Math.PI / 2;
-            group.add(bus);
-            // High‑gain antenna: a flat dish represented by a circle
-            const dishGeom = new THREE.CircleGeometry(dishRadius, 32);
-            const dishMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.3 });
-            const dish = new THREE.Mesh(dishGeom, dishMat);
-            dish.position.x = -bodyLength * 0.75;
-            group.add(dish);
-            // Instrument boom along the y‑axis (magnetometer & other sensors)
-            const boomGeom1 = new THREE.CylinderGeometry(0.005, 0.005, bodyLength * 2.0, 8);
-            const boomMat  = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.5, metalness: 0.1 });
-            const boom1 = new THREE.Mesh(boomGeom1, boomMat);
-            boom1.position.x = 0;
-            boom1.rotation.z = Math.PI / 2;
-            group.add(boom1);
-            // Instrument boom along the z‑axis
-            const boom2 = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, bodyLength * 1.5, 8), boomMat);
-            boom2.rotation.y = Math.PI / 2;
-            group.add(boom2);
-            // Thruster module at the rear of the bus
-            const thrusterGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.1, 8);
-            const thrusterMat  = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.4 });
-            const thruster = new THREE.Mesh(thrusterGeom, thrusterMat);
-            thruster.position.x = bodyLength * 0.75;
-            group.add(thruster);
+            // Differentiate spacecraft by name
+            if (name.includes('Voyager')) {
+                // Voyager: dark grey bus, large dish, long boom and gold record
+                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 16),
+                                            new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6, metalness: 0.2 }));
+                bus.rotation.z = Math.PI / 2;
+                group.add(bus);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.18, 64),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.3;
+                group.add(dish);
+                const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 1.2, 8),
+                                            new THREE.MeshStandardMaterial({ color: 0xaaaaaa }));
+                boom.rotation.z = Math.PI / 2;
+                group.add(boom);
+                const record = new THREE.Mesh(new THREE.CircleGeometry(0.05, 32),
+                                              new THREE.MeshStandardMaterial({ color: 0xd4af37, emissive: 0x664400 }));
+                record.position.set(0.05, 0, 0.08);
+                group.add(record);
+            } else if (name.includes('Pioneer')) {
+                // Pioneer: smaller dish and two RTG paddle boxes
+                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 12),
+                                            new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.6 }));
+                bus.rotation.z = Math.PI / 2;
+                group.add(bus);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.16, 48),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.25;
+                group.add(dish);
+                // two rectangular RTG paddles
+                const paddleGeom = new THREE.BoxGeometry(0.02, 0.02, 0.4);
+                const paddleMat  = new THREE.MeshStandardMaterial({ color: 0x444444 });
+                const paddle1 = new THREE.Mesh(paddleGeom, paddleMat);
+                paddle1.position.set(0, 0.06, 0);
+                const paddle2 = paddle1.clone();
+                paddle2.position.set(0, -0.06, 0);
+                group.add(paddle1, paddle2);
+            } else if (name.includes('New Horizons')) {
+                // New Horizons: triangular bus and small dish
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.15),
+                                            new THREE.MeshStandardMaterial({ color: 0xb5b5b5, roughness: 0.7 }));
+                group.add(body);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.12, 32),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.2;
+                group.add(dish);
+            } else {
+                // fallback generic probe
+                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 12),
+                                            new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.2 }));
+                bus.rotation.z = Math.PI / 2;
+                group.add(bus);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.15, 32),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.3;
+                group.add(dish);
+            }
             return group;
         }
         
@@ -933,6 +996,15 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
             // Update button label
             const btn = document.getElementById('fly-toggle');
             if (btn) btn.textContent = isFlyMode ? 'Exit Free Flight (WASD)' : 'Enter Free Flight (WASD)';
+            
+            // Pointer lock for smoother look control
+            if (isFlyMode) {
+                flyControls.dragToLook = false;
+                renderer.domElement.requestPointerLock();
+            } else {
+                flyControls.dragToLook = true;
+                if (document.exitPointerLock) document.exitPointerLock();
+            }
         }
         document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('side-menu').classList.toggle('collapsed'));
         document.getElementById('label-toggle').addEventListener('change', (e) => { labelRenderer.domElement.style.display = e.target.checked ? 'block' : 'none'; });
@@ -1024,7 +1096,9 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
             // Update appropriate controls depending on current mode.  FlyControls
             // uses an internal clock step; OrbitControls use simple damping.
             if (isFlyMode) {
-                flyControls.update(delta * speedMultiplier);
+                // scale flight speed with current speed multiplier
+                flyControls.movementSpeed = UNIVERSE_SCALE * 5 * speedMultiplier;
+                flyControls.update(delta);
             } else {
                 controls.update();
             }
