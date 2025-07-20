@@ -87,8 +87,11 @@
                 <h2>SIMULATION CONTROLS</h2>
                 <label for="speed-slider">Time Acceleration: <span id="speed-value">1.0</span>x</label>
                 <input type="range" id="speed-slider" min="0" max="10" value="3.5" step="0.1">
-                 <label for="label-toggle">Show Labels:</label>
+                <label for="label-toggle">Show Labels:</label>
                  <input type="checkbox" id="label-toggle" checked>
+                 <label style="display:block; margin-top:15px;">Flight Mode:</label>
+                 <!-- Button to toggle between orbiting and free‑flight controls.  When pressed, the user can freely fly around the solar system using WASD/arrow keys. -->
+                 <button id="fly-toggle" class="cosmic-button" style="width:100%; margin-top:5px;">Enter Fly Mode</button>
             </div>
             <div class="menu-section" id="navigation-section">
                 <h2>NAVIGATION TARGET</h2>
@@ -102,6 +105,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { FlyControls } from 'three/addons/controls/FlyControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
         // --- TEXTURE LOADER AND PLANET TEXTURE DEFINITIONS ---
@@ -130,7 +134,11 @@
                 ring: textureLoader.load('textures/saturn_ring_alpha.png')
             },
             Uranus:  { map: textureLoader.load('textures/uranus.jpg') },
-            Neptune: { map: textureLoader.load('textures/neptune.jpg') }
+            Neptune: { map: textureLoader.load('textures/neptune.jpg') },
+            // The Moon is treated like a planet in this texture map so that
+            // its surface can be rendered realistically.  The texture is an
+            // equirectangular projection based on NASA elevation and imagery data【284792914588661†L133-L145】.
+            Moon:    { map: textureLoader.load('textures/moon.jpg') }
         };
 
         // --- CORE SETUP & STATE ---
@@ -153,6 +161,18 @@
         controls.enableDamping = true;
         controls.minDistance = 0.01;
         controls.maxDistance = 1e8;
+
+        // FlyControls enable a first‑person flight experience.  When enabled,
+        // the user can freely navigate the three‑dimensional space using
+        // keyboard input.  The movement speed is scaled relative to
+        // UNIVERSE_SCALE so that traversal across astronomical distances is
+        // comfortable.
+        const flyControls = new FlyControls(camera, renderer.domElement);
+        flyControls.movementSpeed = UNIVERSE_SCALE * 5;
+        flyControls.rollSpeed = 0.3;
+        flyControls.dragToLook = true;
+        flyControls.enabled = false;
+        let isFlyMode = false;
 
         let speedMultiplier = 1.0;
         let focusedBody = null;
@@ -238,6 +258,61 @@
         const navButtons = new Map();
         
         function kmToVisualUnits(km) { return km * BODY_SCALE; }
+
+        /**
+         * Create a simple yet more realistic model for deep‑space probes.  This
+         * function constructs a small spacecraft using cylinders and discs to
+         * represent the spacecraft bus, high‑gain antenna, instrument booms and
+         * thrusters.  Different probes can adjust dish size and body length.
+         *
+         * @param {string} name Name of the probe; influences geometry scaling.
+         * @returns {THREE.Group} A group containing the assembled spacecraft.
+         */
+        function createProbeModel(name) {
+            // Default sizes approximating the Voyager probes.  Units are in
+            // arbitrary local units; the group is later scaled by UNIVERSE_SCALE.
+            let dishRadius = 0.15;
+            let bodyLength = 0.4;
+            // Adjust sizes for other spacecraft classes
+            if (name === 'Pioneer 10') {
+                dishRadius = 0.18;
+                bodyLength = 0.5;
+            } else if (name === 'New Horizons') {
+                dishRadius = 0.12;
+                bodyLength = 0.35;
+            }
+            const group = new THREE.Group();
+            // Main bus: a horizontal cylinder
+            const busGeom = new THREE.CylinderGeometry(0.05, 0.05, bodyLength, 12);
+            const busMat  = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.2 });
+            const bus = new THREE.Mesh(busGeom, busMat);
+            bus.rotation.z = Math.PI / 2;
+            group.add(bus);
+            // High‑gain antenna: a flat dish represented by a circle
+            const dishGeom = new THREE.CircleGeometry(dishRadius, 32);
+            const dishMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.3 });
+            const dish = new THREE.Mesh(dishGeom, dishMat);
+            dish.position.x = -bodyLength * 0.75;
+            group.add(dish);
+            // Instrument boom along the y‑axis (magnetometer & other sensors)
+            const boomGeom1 = new THREE.CylinderGeometry(0.005, 0.005, bodyLength * 2.0, 8);
+            const boomMat  = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.5, metalness: 0.1 });
+            const boom1 = new THREE.Mesh(boomGeom1, boomMat);
+            boom1.position.x = 0;
+            boom1.rotation.z = Math.PI / 2;
+            group.add(boom1);
+            // Instrument boom along the z‑axis
+            const boom2 = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, bodyLength * 1.5, 8), boomMat);
+            boom2.rotation.y = Math.PI / 2;
+            group.add(boom2);
+            // Thruster module at the rear of the bus
+            const thrusterGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.1, 8);
+            const thrusterMat  = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.4 });
+            const thruster = new THREE.Mesh(thrusterGeom, thrusterMat);
+            thruster.position.x = bodyLength * 0.75;
+            group.add(thruster);
+            return group;
+        }
         
         function getEllipsePath(data, parentVisualRadius) {
             const points = [];
@@ -341,25 +416,50 @@
             bodyObject.orbit = orbit;
 
             if (data.name === 'Saturn') {
-                // Saturn’s ring: use a textured ring geometry instead of scattered particles.
-                const innerRadius = visualRadius * 1.2;
-                const outerRadius = visualRadius * 2.5;
-                const ringGeo = new THREE.RingGeometry(innerRadius, outerRadius, 256, 1);
-                const ringMat = new THREE.MeshBasicMaterial({
-                    map: planetTextures.Saturn.ring,
-                    transparent: true,
-                    side: THREE.DoubleSide,
-                    color: 0xffffff
+                // Build Saturn’s rings using multiple concentric slices and
+                // slight vertical offsets to give the impression of thickness and
+                // varying optical depth.  Each slice uses the same radial
+                // texture derived from NASA data【984056278223721†L130-L166】, but a
+                // different opacity and radial extent.
+                const ringConfigs = [
+                    { inner: visualRadius * 1.20, outer: visualRadius * 1.50, opacity: 0.6 },
+                    { inner: visualRadius * 1.50, outer: visualRadius * 2.00, opacity: 0.8 },
+                    { inner: visualRadius * 2.00, outer: visualRadius * 2.30, opacity: 0.5 },
+                    { inner: visualRadius * 2.30, outer: visualRadius * 2.80, opacity: 0.3 }
+                ];
+                ringConfigs.forEach(config => {
+                    // create three layers for each ring slice to simulate thickness
+                    for (let layer = -1; layer <= 1; layer++) {
+                        const ringGeo = new THREE.RingGeometry(config.inner, config.outer, 256, 1);
+                        const ringMat = new THREE.MeshBasicMaterial({
+                            map: planetTextures.Saturn.ring,
+                            transparent: true,
+                            side: THREE.DoubleSide,
+                            opacity: config.opacity
+                        });
+                        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                        ringMesh.rotation.x = Math.PI / 2;
+                        ringMesh.position.y = layer * visualRadius * 0.02;
+                        mesh.add(ringMesh);
+                    }
                 });
-                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-                ringMesh.rotation.x = Math.PI / 2;
-                mesh.add(ringMesh);
             }
 
             if (data.moons) {
                 data.moons.forEach(moonData => {
                     const moonVisualRadius = moonData.radius * BODY_SCALE;
-                    const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moonVisualRadius, 16, 8), new THREE.MeshStandardMaterial({ color: moonData.color, roughness: 0.8 }));
+                    // Apply a texture to the Moon if one is available.  Other
+                    // moons fall back to a simple coloured material.  The Moon
+                    // texture is derived from NASA elevation and imagery data【284792914588661†L133-L145】.
+                    const moonMaterial = new THREE.MeshStandardMaterial({ roughness: 0.8 });
+                    const moonTex = planetTextures[moonData.name];
+                    if (moonTex && moonTex.map) {
+                        moonMaterial.map = moonTex.map;
+                        moonMaterial.color = new THREE.Color(0xffffff);
+                    } else {
+                        moonMaterial.color = new THREE.Color(moonData.color);
+                    }
+                    const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moonVisualRadius, 16, 8), moonMaterial);
                     const moonObject = { mesh: moonMesh, data: moonData, isMoon: true, parentBody: bodyObject };
                     celestialBodies.push(moonObject);
                     addLabel(moonObject, false);
@@ -398,18 +498,32 @@
         scene.add(createBelt(8000, 0x344c54, 30, 50, 0.4 * UNIVERSE_SCALE, 100, 300)); // Kuiper Belt
 
         probesData.forEach(probeData => {
-            const group = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2, 8), new THREE.MeshStandardMaterial({color: 0xcccccc}));
-            body.rotation.z = Math.PI / 2;
-            const dish = new THREE.Mesh(new THREE.CircleGeometry(1.2, 16), new THREE.MeshStandardMaterial({color: 0xffffff, side: THREE.DoubleSide}));
-            dish.position.x = -1; group.add(body, dish);
-            group.scale.setScalar(UNIVERSE_SCALE / 20);
+            // Build a more realistic spacecraft using the helper.  The model is
+            // later scaled to an appropriate size for our universe.  Probes are
+            // placed according to right ascension and declination, then given a
+            // velocity vector pointing radially outward.
+            const probeGroup = createProbeModel(probeData.name);
+            // Scale the probe; adjust factor to maintain visibility without
+            // disrupting true distance scaling.
+            probeGroup.scale.setScalar(UNIVERSE_SCALE / 15);
             const dist = probeData.distAU * UNIVERSE_SCALE;
             const raRad = THREE.MathUtils.degToRad(probeData.rightAscension);
             const decRad = THREE.MathUtils.degToRad(probeData.declination);
-            group.position.set( dist * Math.cos(decRad) * Math.cos(raRad), dist * Math.sin(decRad), dist * Math.cos(decRad) * Math.sin(raRad) );
-            group.lookAt(new THREE.Vector3(0,0,0)); scene.add(group);
-            const probeObject = {mesh: group, data: probeData, isProbe: true, velocity: group.position.clone().normalize().multiplyScalar(5 * UNIVERSE_SCALE)};
+            probeGroup.position.set(
+                dist * Math.cos(decRad) * Math.cos(raRad),
+                dist * Math.sin(decRad),
+                dist * Math.cos(decRad) * Math.sin(raRad)
+            );
+            // Orient the probe so its high‑gain dish points back toward the Sun.
+            probeGroup.lookAt(new THREE.Vector3(0, 0, 0));
+            scene.add(probeGroup);
+            const probeObject = {
+                mesh: probeGroup,
+                data: probeData,
+                isProbe: true,
+                // simple velocity vector along the radial direction, scaled down
+                velocity: probeGroup.position.clone().normalize().multiplyScalar(5 * UNIVERSE_SCALE)
+            };
             celestialBodies.push(probeObject);
             addLabel(probeObject);
         });
@@ -457,6 +571,8 @@
         }
 
         function focusOnBody(targetBody) {
+            // If the user is currently in fly mode, switch back to orbit mode
+            if (isFlyMode) toggleFlyMode();
             TWEEN.removeAll();
             focusedBody = targetBody;
             controls.autoRotate = false;
@@ -492,6 +608,8 @@
         }
 
         function returnToOverview() {
+             // Exit fly mode when returning to overview
+             if (isFlyMode) toggleFlyMode();
              TWEEN.removeAll();
              focusedBody = null;
              controls.autoRotate = true; 
@@ -599,8 +717,28 @@
             document.getElementById('speed-value').textContent = speedMultiplier.toFixed(1);
         }
         speedSlider.addEventListener('input', updateSpeed); updateSpeed();
+        // Toggle between orbiting and free‑flight (fly) controls.  When fly mode
+        // is activated, OrbitControls are disabled and FlyControls are enabled.
+        function toggleFlyMode() {
+            isFlyMode = !isFlyMode;
+            flyControls.enabled = isFlyMode;
+            controls.enabled = !isFlyMode;
+            // In fly mode we disable the automatic rotation and panning in OrbitControls
+            controls.autoRotate = !isFlyMode;
+            controls.enablePan = !isFlyMode;
+            // Update button label
+            const btn = document.getElementById('fly-toggle');
+            if (btn) btn.textContent = isFlyMode ? 'Exit Fly Mode' : 'Enter Fly Mode';
+        }
         document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('side-menu').classList.toggle('collapsed'));
         document.getElementById('label-toggle').addEventListener('change', (e) => { labelRenderer.domElement.style.display = e.target.checked ? 'block' : 'none'; });
+        // Bind the fly mode toggle button
+        const flyToggleButton = document.getElementById('fly-toggle');
+        if (flyToggleButton) {
+            flyToggleButton.addEventListener('click', () => {
+                toggleFlyMode();
+            });
+        }
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); labelRenderer.setSize(window.innerWidth, window.innerHeight); });
 
         celestialBodies.forEach(body => {
@@ -679,7 +817,13 @@
                 camera.position.copy(controls.target).add(offset);
             }
 
-            controls.update(); 
+            // Update appropriate controls depending on current mode.  FlyControls
+            // uses an internal clock step; OrbitControls use simple damping.
+            if (isFlyMode) {
+                flyControls.update(delta * speedMultiplier);
+            } else {
+                controls.update();
+            }
             renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
         }
