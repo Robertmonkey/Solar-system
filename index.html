@@ -179,6 +179,18 @@
         
         // --- DATA ---
         scene.add(new THREE.AmbientLight(0xffffff, 0.02)); 
+
+        // --- BACKGROUND STARFIELD ---
+        // Surround the solar system with a large inverted sphere textured with
+        // a Milky Way star field.  The texture is an equirectangular map
+        // derived from NASA data and licensed under CC‑BY‑4.0【66222392126166†L133-L146】.
+        const starFieldGeo = new THREE.SphereGeometry(UNIVERSE_SCALE * 5000, 64, 32);
+        const starFieldMat = new THREE.MeshBasicMaterial({
+            map: textureLoader.load('textures/stars_milky_way.jpg'),
+            side: THREE.BackSide
+        });
+        const starField = new THREE.Mesh(starFieldGeo, starFieldMat);
+        scene.add(starField);
         
         const solarSystemData = [
              { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: ["The Sun accounts for 99.86% of the mass in the solar system.", "Its surface is about 5,500°C; its core is over 15 million °C.", "A solar flare can release the energy of a billion megatons of TNT."] },
@@ -443,6 +455,56 @@
                         mesh.add(ringMesh);
                     }
                 });
+            } else if (data.name === 'Jupiter') {
+                // Jupiter’s ring is faint and narrow.  Represent it with a single
+                // translucent ring slice without texture.  The ring is about
+                // 92,000 km wide with very low optical depth.
+                const inner = visualRadius * 1.05;
+                const outer = visualRadius * 1.15;
+                const ringGeo = new THREE.RingGeometry(inner, outer, 64, 1);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, side: THREE.DoubleSide });
+                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                ringMesh.rotation.x = Math.PI / 2;
+                mesh.add(ringMesh);
+            } else if (data.name === 'Uranus') {
+                // Uranus has several narrow rings; approximate them with two
+                // slices.  We adjust opacity higher than Jupiter’s since
+                // Uranian rings are darker.
+                const uranusRings = [
+                    { inner: visualRadius * 1.5, outer: visualRadius * 1.6 },
+                    { inner: visualRadius * 1.7, outer: visualRadius * 1.8 }
+                ];
+                uranusRings.forEach(cfg => {
+                    const ringGeo = new THREE.RingGeometry(cfg.inner, cfg.outer, 64, 1);
+                    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, side: THREE.DoubleSide });
+                    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                    ringMesh.rotation.x = Math.PI / 2;
+                    mesh.add(ringMesh);
+                });
+            } else if (data.name === 'Neptune') {
+                // Neptune’s rings are dusty and faint; represent them with
+                // two low‑opacity slices.
+                const neptuneRings = [
+                    { inner: visualRadius * 1.4, outer: visualRadius * 1.5 },
+                    { inner: visualRadius * 1.6, outer: visualRadius * 1.7 }
+                ];
+                neptuneRings.forEach(cfg => {
+                    const ringGeo = new THREE.RingGeometry(cfg.inner, cfg.outer, 64, 1);
+                    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.05, side: THREE.DoubleSide });
+                    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                    ringMesh.rotation.x = Math.PI / 2;
+                    mesh.add(ringMesh);
+                });
+            } else if (data.name === 'Haumea') {
+                // The dwarf planet Haumea has a narrow ring discovered in 2017.
+                // Approximate it with a tiny semi‑transparent ring.
+                const inner = visualRadius * 2.0;
+                const outer = visualRadius * 2.2;
+                const ringGeo = new THREE.RingGeometry(inner, outer, 32, 1);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, side: THREE.DoubleSide });
+                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                ringMesh.rotation.x = Math.PI / 2;
+                mesh.add(ringMesh);
             }
 
             if (data.moons) {
