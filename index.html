@@ -38,7 +38,7 @@
         .menu-section label { display: block; margin: 20px 0 8px 0; font-size: 0.9em; font-weight: 400; color: #ccc; }
         
         input[type=range]{ -webkit-appearance: none; width: 100%; background: transparent; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
+        input[type=range]::-webkit-slider-thumb]{ -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #00bfff; cursor: pointer; margin-top: -6px; box-shadow: 0 0 10px rgba(0, 191, 255, 0.7); }
         input[type=range]::-webkit-slider-runnable-track{ width: 100%; height: 4px; cursor: pointer; background: rgba(0, 191, 255, 0.2); border-radius: 5px; }
         
         .accordion-item .accordion-header, .cosmic-button {
@@ -76,7 +76,7 @@
 </head>
 <body>
     <div id="side-menu">
-        <div id="menu-toggle">»</div>
+        <div id="menu-toggle">&raquo;</div>
         <div id="menu-content">
             <div class="menu-section" id="info-section">
                 <h2>SYSTEM DATA</h2>
@@ -85,16 +85,12 @@
             </div>
             <div class="menu-section" id="controls-section">
                 <h2>SIMULATION CONTROLS</h2>
-                <div id="sim-time">Sim Time: Loading...</div>
                 <label for="speed-slider">Time Scale: <span id="speed-value">1.0</span>x</label>
                 <input type="range" id="speed-slider" min="-4" max="4" value="0" step="0.05">
                 <label for="label-toggle">Show Labels:</label>
-                <input type="checkbox" id="label-toggle" checked>
-                <label for="orbits-toggle">Show Orbits:</label>
-                <input type="checkbox" id="orbits-toggle" checked>
-                <label style="display:block; margin-top:15px;">Flight Mode:</label>
-                <button id="fly-toggle" class="cosmic-button" style="width:100%; margin-top:5px;">Enter Free Flight (WASD)</button>
-                <button id="pause-toggle" class="cosmic-button" style="width:100%; margin-top:5px;">Pause</button>
+                 <input type="checkbox" id="label-toggle" checked>
+                 <label style="display:block; margin-top:15px;">Flight Mode:</label>
+                 <button id="fly-toggle" class="cosmic-button" style="width:100%; margin-top:5px;">Enter Free Flight (WASD)</button>
             </div>
             <div class="menu-section" id="navigation-section">
                 <h2>NAVIGATION TARGET</h2>
@@ -110,24 +106,27 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { FlyControls } from 'three/addons/controls/FlyControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
         // --- TEXTURE LOADER AND PLANET TEXTURE DEFINITIONS ---
+        // Load high‑resolution textures for each planet. These textures are based on
+        // NASA elevation and imagery data and provided by SolarSystemScope under
+        // a CC‑BY‑4.0 licence. See the repository documentation for attribution.
         const textureLoader = new THREE.TextureLoader();
         const planetTextures = {
             Mercury: { map: textureLoader.load('textures/mercury.jpg') },
             Venus: {
+                // Surface of Venus; you can optionally load an atmosphere texture and
+                // render it as a semi‑transparent layer similar to Earth’s clouds.
                 map: textureLoader.load('textures/venus_surface.jpg'),
                 atmosphere: textureLoader.load('textures/venus_atmosphere.jpg')
             },
             Earth: {
                 map: textureLoader.load('textures/earth_daymap.jpg'),
+                // Use a satellite‑based city‑lights texture for emissive lighting on the night side.  The
+                // previous nightMap (a dark map) was replaced by earth_lights.png to show city lights.
                 nightMap: textureLoader.load('textures/earth_lights.png'),
                 clouds: textureLoader.load('textures/earth_clouds.jpg'),
-                specular: textureLoader.load('textures/earth_specular_map.tif'),
-                atmos: textureLoader.load('textures/earth_atmos.jpg')
+                specular: textureLoader.load('textures/earth_specular_map.tif')
             },
             Mars:    { map: textureLoader.load('textures/mars.jpg') },
             Jupiter: { map: textureLoader.load('textures/jupiter.jpg') },
@@ -137,6 +136,9 @@
             },
             Uranus:  { map: textureLoader.load('textures/uranus.jpg') },
             Neptune: { map: textureLoader.load('textures/neptune.jpg') },
+            // The Moon is treated like a planet in this texture map so that
+            // its surface can be rendered realistically.  The texture is an
+            // equirectangular projection based on NASA elevation and imagery data【284792914588661†L133-L145】.
             Moon:    { map: textureLoader.load('textures/moon.jpg') }
         };
 
@@ -146,19 +148,12 @@
         const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#solar-system-canvas'), antialias: true, powerPreference: "high-performance", logarithmicDepthBuffer: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.toneMapping = THREE.ReinhardToneMapping;
-        renderer.toneMappingExposure = 1;
-
-        const composer = new EffectComposer(renderer);
-        composer.addPass(new RenderPass(scene, camera));
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
-        composer.addPass(bloomPass);
-
+        
         const labelRenderer = new CSS2DRenderer();
         labelRenderer.setSize(window.innerWidth, window.innerHeight);
         labelRenderer.domElement.style.position = 'absolute';
         labelRenderer.domElement.style.top = '0px';
-        labelRenderer.domElement.style.pointerEvents = 'none';
+        labelRenderer.domElement.style.pointerEvents = 'none'; // Allow clicks to pass through to the canvas
         document.body.appendChild(labelRenderer.domElement);
 
         const overviewPosition = new THREE.Vector3(0, 20000, 35000);
@@ -168,52 +163,59 @@
         controls.minDistance = 0.01;
         controls.maxDistance = 1e8;
 
+        // FlyControls enable a first‑person flight experience.  When enabled,
+        // the user can freely navigate the three‑dimensional space using
+        // keyboard input.  The movement speed is scaled relative to
+        // UNIVERSE_SCALE so that traversal across astronomical distances is
+        // comfortable.
+        // FlyControls provide a first‑person navigation mode.  The movement
+        // speed is assigned after UNIVERSE_SCALE is defined further below.
         const flyControls = new FlyControls(camera, renderer.domElement);
         flyControls.rollSpeed = 0.3;
         flyControls.dragToLook = true;
         flyControls.enabled = false;
         let isFlyMode = false;
-        let boost = 1;
 
         let speedMultiplier = 1.0;
         let focusedBody = null;
-        let isPaused = false;
         
         // --- DATA ---
         scene.add(new THREE.AmbientLight(0xffffff, 0.02)); 
 
+        // The star field is defined later, after UNIVERSE_SCALE is known.  See below.
+        
         const solarSystemData = [
-             { name: 'Sun', radius: 696340, color: 0xfff000, rotation_period: 25, funFacts: [
+             { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: [
                  "The Sun contains more than 99.8% of the mass of the solar system.",
                  "Its diameter is about 109 times that of Earth.",
                  "The core is over 27 million degrees Fahrenheit while the surface is about 10,000 °F.",
                  "It formed around 4.6 billion years ago and will expand into a red giant in roughly five billion years.",
                  "Its gravitational pull keeps all planets, asteroids and comets bound in their orbits."
              ] },
-             { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, rotation_period: 58.6, funFacts: [
+             { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, funFacts: [
                  "Mercury is the smallest and closest planet to the Sun.",
                  "A single day on Mercury (sunrise to sunrise) lasts 176 Earth days while a year is 88 days.",
                  "It is the second‑densest planet after Earth despite its small size.",
                  "Mercury has a global magnetic field about one percent as strong as Earth’s.",
                  "Temperatures swing from 427 °C in sunlight to –173 °C in darkness, yet water ice exists in permanently shadowed craters at its poles."
              ] },
-             { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, rotation_period: -243, funFacts: [
+             { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, funFacts: [
                  "A day on Venus (243 Earth days) is longer than its 225‑day year.",
                  "It rotates backwards (retrograde) compared to most planets.",
                  "It is the hottest planet in the solar system at roughly 465 °C due to a runaway greenhouse effect.",
                  "Surface pressure on Venus is more than 90 times Earth’s atmospheric pressure.",
                  "Often called Earth’s sister planet because of its similar size and mass."
              ] },
-             { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, rotation_period: 1, funFacts: [
+             { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, funFacts: [
                  "Earth is the only planet not named after a mythological deity.",
                  "It is the densest planet in the solar system.",
                  "Earth’s rotation is gradually slowing by about 17 milliseconds per century.",
-                 "Roughly 70 percent of its surface is covered by water.",
+                 "Roughly 70 percent of its surface is covered by water.",
                  "Its magnetic field shields the surface from harmful solar wind and cosmic radiation."
              ], moons: [
-                 { name: 'Moon', radius: 1737, a: 0.384, e: 0.055, period: 27.3, color: 0xcccccc, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, rotation_period: 27.3, funFacts: ["The Moon is drifting away from Earth by about 3.8 cm per year.", "It is the 5th largest moon in the solar system.", "The Moon has 'moonquakes' caused by the Earth's gravitational pull."] }
+                 { name: 'Moon', radius: 1737, a: 0.384, e: 0.055, period: 27.3, color: 0xcccccc, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, funFacts: ["The Moon is drifting away from Earth by about 3.8 cm per year.", "It is the 5th largest moon in the solar system.", "The Moon has 'moonquakes' caused by the Earth's gravitational pull."] }
             ]},
-             { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, rotation_period: 1.025, funFacts: [
+             { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, funFacts: [
                  "Home to Olympus Mons, the tallest volcano and mountain in the solar system.",
                  "Its red colour comes from iron oxide (rust) in the soil and rocks.",
                  "Mars has the largest dust storms in the solar system, sometimes covering the entire planet.",
@@ -223,7 +225,7 @@
                  { name: 'Phobos', radius: 11.2, a: 0.00937, e: 0.015, period: 0.3, color: 0x8f8f8f, inclination: 1.1, funFacts: ["Phobos is getting closer to Mars and will either crash into it or break up into a ring in about 50 million years.", "It is a 'captured' asteroid, not a naturally formed moon."]},
                  { name: 'Deimos', radius: 6.2, a: 0.0234, e: 0.0002, period: 1.26, color: 0xafafaf, inclination: 0.9, funFacts: ["Deimos is one of the smallest known moons in the solar system.", "It is covered in a thick layer of fine dust, or regolith."] }
             ]},
-             { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, rotation_period: 0.41, funFacts: [
+             { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, funFacts: [
                  "Jupiter is the largest planet—more than twice as massive as all the other planets combined.",
                  "The Great Red Spot is a colossal storm that has raged for centuries.",
                  "It has the shortest day of any planet, rotating once every 10 hours.",
@@ -237,7 +239,7 @@
                  { name: 'Callisto', radius: 2410, a: 1.882, e: 0.007, period: 16.69, color: 0x5a5651, inclination: 0.20, funFacts: ["Callisto has the most heavily cratered surface of any object in the solar system.", "It is thought to have a 'dead' surface that hasn't changed much in 4 billion years."] },
                  { name: 'Himalia', radius: 85, a: 11.46, e: 0.16, period: 250.6, inclination: 27.5, color: 0x8b8081, funFacts: ["Himalia is the largest irregular moon of Jupiter.", "It may be the remnant of a captured asteroid."] }
             ]},
-             { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, rotation_period: 0.44, funFacts: [
+             { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, funFacts: [
                  "Saturn’s rings are made of billions of particles of ice and rock and are only about 10 metres thick on average.",
                  "The planet is less dense than water and would float in a bathtub large enough to hold it.",
                  "Winds on Saturn can reach speeds of around 1,800 kilometres per hour.",
@@ -254,7 +256,7 @@
                  { name: 'Iapetus', radius: 735, a: 3.560, e: 0.028, period: 79.3, color: 0x909090, inclination: 15.4, funFacts: ["Iapetus is a 'two-faced' moon, with one bright hemisphere and one dark one.", "It also has a mysterious, massive equatorial ridge."] },
                  { name: 'Phoebe', radius: 106.5, a: 12.952, e: 0.159, period: -550, color: 0x5a5a5a, inclination: 175.3, funFacts: ["Phoebe orbits Saturn in a retrograde (backwards) direction.", "It is thought to be a captured Kuiper Belt Object."] }
             ]},
-             { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, rotation_period: -0.718, funFacts: [
+             { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, funFacts: [
                  "Uranus is tilted on its side by about 98°, likely the result of a giant impact in its distant past.",
                  "Its seasons each last more than 20 Earth years because it takes 84 years to orbit the Sun.",
                  "It is the coldest planet in the solar system, with temperatures dropping below −200 °C.",
@@ -268,7 +270,7 @@
                  { name: 'Titania', radius: 788, a: 0.436, e: 0.002, period: 8.7, color: 0xb0a090, inclination: 0.1, funFacts: ["Titania is the largest moon of Uranus.", "It has a network of huge canyons and fault lines, suggesting past geological activity."] },
                  { name: 'Oberon', radius: 761, a: 0.583, e: 0.001, period: 13.5, color: 0x908080, inclination: 0.1, funFacts: ["Oberon is the outermost large moon of Uranus.", "Its old, icy surface is heavily cratered and shows little sign of internal activity."] }
             ]},
-             { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, rotation_period: 0.671, funFacts: [
+             { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, funFacts: [
                  "Neptune was predicted by mathematicians before it was observed through a telescope.",
                  "It has the strongest winds in the solar system, topping 2,100 kilometres per hour.",
                  "A Neptunian year lasts nearly 165 Earth years.",
@@ -306,21 +308,27 @@
         // --- SCALES AND CONSTANTS ---
         const KM_IN_AU = 149.6e6;
         const LY_IN_AU = 63241.1;
+        // Scale used to convert astronomical distances to visual units.  Keep this
+        // constant defined early so other components (e.g. starfield) can
+        // reference it safely.
         const UNIVERSE_SCALE = 10000;
         const BODY_SCALE = UNIVERSE_SCALE / KM_IN_AU; 
+        // **** SPEED ADJUSTMENT **** // Reduced base speed for finer control
         const BASE_ORBIT_SPEED = 5; 
         const celestialBodies = [];
         const navButtons = new Map();
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        let simulatedDays = 0;
-        const epoch = new Date('2000-01-01T00:00:00Z');
 
-        // Create a random star field and Milky Way background
+        // Create a random star field to serve as the distant backdrop.  We avoid
+        // using a low‑resolution texture by distributing thousands of points on
+        // a large sphere.  Because the points are rendered with a constant
+        // screen size, they remain visible even when the camera travels far
+        // from the origin.  The sphere radius is scaled with UNIVERSE_SCALE so
+        // that the user never leaves the star field.
         const starCount = 8000;
         const starDistance = UNIVERSE_SCALE * 10000;
         const starPositions = new Float32Array(starCount * 3);
         for (let i = 0; i < starCount; i++) {
+            // Generate random points uniformly on the sphere using spherical coordinates
             const u = Math.random();
             const v = Math.random();
             const theta = 2 * Math.PI * u;
@@ -333,47 +341,15 @@
         const starGeometry = new THREE.BufferGeometry();
         starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
         
-        // Milky Way background
-        const backgroundSphere = new THREE.Mesh(
-            new THREE.SphereGeometry(starDistance, 64, 32),
-            new THREE.MeshBasicMaterial({
-                map: textureLoader.load('textures/stars_milky_way.jpg'),
-                side: THREE.BackSide
-            })
-        );
-        scene.add(backgroundSphere);
-
-        // assign per‑vertex colours so each star has a different hue
-        const colourArray = new Float32Array(starCount * 3);
-        const spectralColours = [
-            new THREE.Color(0xa0c8ff), // blue‑white
-            new THREE.Color(0xffe5b3), // yellow‑white
-            new THREE.Color(0xffcba4), // orange
-            new THREE.Color(0xff9d7e)  // red
-        ];
-        for (let i = 0; i < starCount; i++) {
-            const c = spectralColours[Math.floor(Math.random() * spectralColours.length)];
-            colourArray[i * 3]     = c.r;
-            colourArray[i * 3 + 1] = c.g;
-            colourArray[i * 3 + 2] = c.b;
-        }
-        starGeometry.setAttribute('color', new THREE.BufferAttribute(colourArray, 3));
-        const starMaterial = new THREE.PointsMaterial({
-            map: generateStarTexture(),
-            size: 20,
-            sizeAttenuation: true,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            vertexColors: true,
-            depthWrite: false
-        });
-        const starField = new THREE.Points(starGeometry, starMaterial);
-        scene.add(starField);
-
+        // Set movement speed for fly controls relative to the scale of the universe.  A
+        // higher value allows the user to traverse interplanetary distances more
+        // comfortably in fly mode.
         flyControls.movementSpeed = UNIVERSE_SCALE * 5;
+        // Global containers for dynamic solar flares and rotating ring particle systems.
         let solarFlareSystem;
         const dynamicRings = [];
 
+        // Generate a radial star texture and an array of typical star colours
         function generateStarTexture() {
             const size = 64;
             const canvas = document.createElement('canvas');
@@ -387,24 +363,66 @@
             ctx.fillRect(0, 0, size, size);
             return new THREE.CanvasTexture(canvas);
         }
+        const starTexture = generateStarTexture();
+        const spectralColours = [
+            new THREE.Color(0xa0c8ff), // blue‑white
+            new THREE.Color(0xffe5b3), // yellow‑white
+            new THREE.Color(0xffcba4), // orange
+            new THREE.Color(0xff9d7e)  // red
+        ];
 
+        // assign per‑vertex colours so each star has a different hue
+        const colourArray = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            const c = spectralColours[Math.floor(Math.random() * spectralColours.length)];
+            colourArray[i * 3]     = c.r;
+            colourArray[i * 3 + 1] = c.g;
+            colourArray[i * 3 + 2] = c.b;
+        }
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(colourArray, 3));
+        const starMaterial = new THREE.PointsMaterial({
+            map: starTexture,
+            size: 20,
+            sizeAttenuation: true,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            vertexColors: true,
+            depthWrite: false
+        });
+        const starField = new THREE.Points(starGeometry, starMaterial);
+        scene.add(starField);
+
+        /**
+         * Construct a dynamic particle system to simulate solar flares.  Each
+         * particle starts near the Sun’s surface, moves radially outward, and
+         * is reset when it travels beyond twice the Sun’s radius.  The cloud
+         * of points gives the impression of constantly erupting flares without
+         * relying on billboard sprites, eliminating the square texture artifacts
+         * seen previously.  The function refers to `sunVisualRadius` and
+         * `sunMesh`, which are defined later in this script; the function is
+         * invoked after those variables exist.
+         */
         function createSolarFlares() {
             const count = 600;
             const radius = sunVisualRadius;
             const positions = new Float32Array(count * 3);
             const velocities = [];
             for (let i = 0; i < count; i++) {
+                // Random unit vector determines the direction of the flare
                 const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
                 const startDist = radius * (1 + 0.05 * Math.random());
                 positions[3 * i]     = dir.x * startDist;
                 positions[3 * i + 1] = dir.y * startDist;
                 positions[3 * i + 2] = dir.z * startDist;
+                // Speed is proportional to the Sun’s radius to keep the motion
+                // scale appropriate.  Each particle gets its own speed and
+                // direction so that the flares have varied trajectories.
                 velocities.push({ dir: dir.clone(), speed: radius * 0.5 * (0.2 + Math.random() * 0.5) });
             }
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             const mat = new THREE.PointsMaterial({
-                map: generateStarTexture(),
+                map: starTexture,
                 color: 0xff8844,
                 size: radius * 0.1,
                 sizeAttenuation: true,
@@ -413,12 +431,84 @@
                 depthWrite: false
             });
             const points = new THREE.Points(geo, mat);
+            // Attach to the Sun so it follows its movement and rotation
             solarFlareSystem = { points, velocities, radius };
             sunMesh.add(points);
         }
         
         function kmToVisualUnits(km) { return km * BODY_SCALE; }
 
+        /**
+         * Create a simple yet more realistic model for deep‑space probes.  This
+         * function constructs a small spacecraft using cylinders and discs to
+         * represent the spacecraft bus, high‑gain antenna, instrument booms and
+         * thrusters.  Different probes can adjust dish size and body length.
+         *
+         * @param {string} name Name of the probe; influences geometry scaling.
+         * @returns {THREE.Group} A group containing the assembled spacecraft.
+         */
+        function createProbeModel(name) {
+            const group = new THREE.Group();
+            // Differentiate spacecraft by name
+            if (name.includes('Voyager')) {
+                // Voyager: dark grey bus, large dish, long boom and gold record
+                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 16),
+                                            new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6, metalness: 0.2 }));
+                bus.rotation.z = Math.PI / 2;
+                group.add(bus);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.18, 64),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.3;
+                group.add(dish);
+                const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 1.2, 8),
+                                            new THREE.MeshStandardMaterial({ color: 0xaaaaaa }));
+                boom.rotation.z = Math.PI / 2;
+                group.add(boom);
+                const record = new THREE.Mesh(new THREE.CircleGeometry(0.05, 32),
+                                              new THREE.MeshStandardMaterial({ color: 0xd4af37, emissive: 0x664400 }));
+                record.position.set(0.05, 0, 0.08);
+                group.add(record);
+            } else if (name.includes('Pioneer')) {
+                // Pioneer: smaller dish and two RTG paddle boxes
+                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 12),
+                                            new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.6 }));
+                bus.rotation.z = Math.PI / 2;
+                group.add(bus);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.16, 48),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.25;
+                group.add(dish);
+                // two rectangular RTG paddles
+                const paddleGeom = new THREE.BoxGeometry(0.02, 0.02, 0.4);
+                const paddleMat  = new THREE.MeshStandardMaterial({ color: 0x444444 });
+                const paddle1 = new THREE.Mesh(paddleGeom, paddleMat);
+                paddle1.position.set(0, 0.06, 0);
+                const paddle2 = paddle1.clone();
+                paddle2.position.set(0, -0.06, 0);
+                group.add(paddle1, paddle2);
+            } else if (name.includes('New Horizons')) {
+                // New Horizons: triangular bus and small dish
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.15),
+                                            new THREE.MeshStandardMaterial({ color: 0xb5b5b5, roughness: 0.7 }));
+                group.add(body);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.12, 32),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.2;
+                group.add(dish);
+            } else {
+                // fallback generic probe
+                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 12),
+                                            new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.2 }));
+                bus.rotation.z = Math.PI / 2;
+                group.add(bus);
+                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.15, 32),
+                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+                dish.position.x = -0.3;
+                group.add(dish);
+            }
+            return group;
+        }
+        
         function getEllipsePath(data, parentVisualRadius) {
             const points = [];
             const isMoon = !!parentVisualRadius;
@@ -438,32 +528,44 @@
         // --- CELESTIAL BODY CREATION ---
         const sunData = solarSystemData.find(d => d.name === 'Sun');
         const sunVisualRadius = sunData.radius * BODY_SCALE;
+        // Use a high‑resolution texture for the Sun’s photosphere.  The
+        // Solarsystemscope 2k sun map is based on NASA imagery and licensed
+        // under CC‑BY‑4.0【584546275592072†L134-L147】.  The Sun emits its own light,
+        // so we employ a basic material with emissive color.  A PointLight
+        // represents the Sun’s illumination for the rest of the scene.
         const sunTexture = textureLoader.load('textures/sun.jpg');
         const sunMaterial = new THREE.MeshBasicMaterial({ map: sunTexture, color: 0xffffff });
         const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(sunVisualRadius, 64, 32), sunMaterial);
         const sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0);
         sunMesh.add(sunLight);
+        // Generate dynamic solar flares after the Sun is created.  This
+        // function constructs a cloud of points that emanate from the Sun
+        // and drift outward.  When a point travels too far it is reset to
+        // near the Sun’s surface with a new direction and speed.  See the
+        // createSolarFlares() definition below.
         createSolarFlares();
         const sunObject = { mesh: sunMesh, data: sunData, isSun: true };
         celestialBodies.push(sunObject);
         scene.add(sunMesh);
         addLabel(sunObject);
-        sunMesh.userData = { body: sunObject };
 
         solarSystemData.forEach(data => {
             if (data.name === 'Sun') return;
             const visualRadius = data.radius * BODY_SCALE;
             const isComet = data.type === 'Comet';
+            // Build a mesh or group for this body. Comets use a Group so that tails can be attached.
             let mesh;
             if (isComet) {
                 mesh = new THREE.Group();
             } else if (data.name === 'Earth') {
+                // Earth: use high‑resolution textures with emissive night lights and clouds.
                 const earthGeo = new THREE.SphereGeometry(visualRadius, 64, 32);
                 const earthMat = new THREE.MeshPhongMaterial({
                     map: planetTextures.Earth.map,
                     specularMap: planetTextures.Earth.specular,
                     specular: new THREE.Color(0x333333),
                     shininess: 10,
+                    // Use a satellite‑based lights map for emissive illumination on the night side.
                     emissiveMap: planetTextures.Earth.nightMap,
                     emissive: new THREE.Color(0xffffff),
                     emissiveIntensity: 1.2
@@ -477,36 +579,11 @@
                     depthWrite: false
                 });
                 const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
-                const atmosGeo = new THREE.SphereGeometry(visualRadius * 1.015, 64, 32);
-                const atmosMat = new THREE.MeshBasicMaterial({
-                    map: planetTextures.Earth.atmos,
-                    transparent: true,
-                    opacity: 0.3,
-                    blending: THREE.AdditiveBlending
-                });
-                const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
                 mesh = new THREE.Group();
                 mesh.add(earthMesh);
                 mesh.add(cloudMesh);
-                mesh.add(atmosMesh);
-            } else if (data.name === 'Venus') {
-                const venusGeo = new THREE.SphereGeometry(visualRadius, 64, 32);
-                const venusMat = new THREE.MeshPhongMaterial({
-                    map: planetTextures.Venus.map
-                });
-                const venusMesh = new THREE.Mesh(venusGeo, venusMat);
-                const atmosGeo = new THREE.SphereGeometry(visualRadius * 1.02, 64, 32);
-                const atmosMat = new THREE.MeshPhongMaterial({
-                    map: planetTextures.Venus.atmosphere,
-                    transparent: true,
-                    opacity: 0.8,
-                    blending: THREE.AdditiveBlending
-                });
-                const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
-                mesh = new THREE.Group();
-                mesh.add(venusMesh);
-                mesh.add(atmosMesh);
             } else {
+                // Other bodies: apply a texture if defined; otherwise fallback to colour.
                 const geom = new THREE.SphereGeometry(visualRadius, 32, 16);
                 const matOpts = { roughness: 0.9, metalness: 0.1 };
                 const texDef = planetTextures[data.name];
@@ -520,7 +597,6 @@
             const bodyObject = { mesh, data };
             celestialBodies.push(bodyObject);
             addLabel(bodyObject);
-            mesh.userData = { body: bodyObject };
 
             if (isComet) {
                 const head = new THREE.Mesh(new THREE.SphereGeometry(visualRadius, 16, 8), new THREE.MeshBasicMaterial({ color: data.color }));
@@ -549,11 +625,16 @@
             bodyObject.orbit = orbit;
 
             if (data.name === 'Saturn') {
+                // Instead of flat textured slices, build a particle ring for Saturn.
+                // Thousands of tiny points are distributed between the inner and outer
+                // ring radii with a small vertical spread.  The ring is rotated
+                // slightly each frame (see animate()) to create a dynamic effect.
                 const inner = visualRadius * 1.20;
                 const outer = visualRadius * 2.50;
                 const particleCount = 3000;
                 const positions = new Float32Array(particleCount * 3);
                 for (let i = 0; i < particleCount; i++) {
+                    // Uniform distribution within an annulus: use random area method
                     const rand = Math.random();
                     const r = Math.sqrt(rand * (outer * outer - inner * inner) + inner * inner);
                     const angle = Math.random() * Math.PI * 2;
@@ -569,6 +650,9 @@
                 mesh.add(ringPoints);
                 dynamicRings.push(ringPoints);
             } else if (data.name === 'Jupiter') {
+                // Jupiter’s ring is faint and narrow.  Represent it with a single
+                // translucent ring slice without texture.  The ring is about
+                // 92,000 km wide with very low optical depth.
                 const inner = visualRadius * 1.05;
                 const outer = visualRadius * 1.15;
                 const ringGeo = new THREE.RingGeometry(inner, outer, 64, 1);
@@ -577,6 +661,9 @@
                 ringMesh.rotation.x = Math.PI / 2;
                 mesh.add(ringMesh);
             } else if (data.name === 'Uranus') {
+                // Uranus has several narrow rings; approximate them with two
+                // slices.  We adjust opacity higher than Jupiter’s since
+                // Uranian rings are darker.
                 const uranusRings = [
                     { inner: visualRadius * 1.5, outer: visualRadius * 1.6 },
                     { inner: visualRadius * 1.7, outer: visualRadius * 1.8 }
@@ -589,6 +676,8 @@
                     mesh.add(ringMesh);
                 });
             } else if (data.name === 'Neptune') {
+                // Neptune’s rings are dusty and faint; represent them with
+                // two low‑opacity slices.
                 const neptuneRings = [
                     { inner: visualRadius * 1.4, outer: visualRadius * 1.5 },
                     { inner: visualRadius * 1.6, outer: visualRadius * 1.7 }
@@ -601,6 +690,8 @@
                     mesh.add(ringMesh);
                 });
             } else if (data.name === 'Haumea') {
+                // The dwarf planet Haumea has a narrow ring discovered in 2017.
+                // Approximate it with a tiny semi‑transparent ring.
                 const inner = visualRadius * 2.0;
                 const outer = visualRadius * 2.2;
                 const ringGeo = new THREE.RingGeometry(inner, outer, 32, 1);
@@ -613,6 +704,9 @@
             if (data.moons) {
                 data.moons.forEach(moonData => {
                     const moonVisualRadius = moonData.radius * BODY_SCALE;
+                    // Apply a texture to the Moon if one is available.  Other
+                    // moons fall back to a simple coloured material.  The Moon
+                    // texture is derived from NASA elevation and imagery data【284792914588661†L133-L145】.
                     const moonMaterial = new THREE.MeshStandardMaterial({ roughness: 0.8 });
                     const moonTex = planetTextures[moonData.name];
                     if (moonTex && moonTex.map) {
@@ -625,7 +719,6 @@
                     const moonObject = { mesh: moonMesh, data: moonData, isMoon: true, parentBody: bodyObject };
                     celestialBodies.push(moonObject);
                     addLabel(moonObject, false);
-                    moonMesh.userData = { body: moonObject };
 
                     const moonOrbitalSystem = new THREE.Object3D();
                     moonOrbitalSystem.rotation.y = THREE.MathUtils.degToRad(moonData.lonAscNode || Math.random() * 360);
@@ -638,7 +731,6 @@
                     moonObject.currentMeanAnomaly = THREE.MathUtils.degToRad(moonData.meanAnomalyEpoch || Math.random() * 360);
                     const moonOrbit = new THREE.Line(getEllipsePath(moonData, visualRadius), new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.2 }));
                     moonOrbitalPlane.add(moonOrbit);
-                    moonObject.orbit = moonOrbit;
                 });
             }
         });
@@ -661,9 +753,14 @@
         scene.add(createBelt(5000, 0x544434, 2.2, 3.2, 0.2 * UNIVERSE_SCALE, 50, 250)); // Asteroid Belt
         scene.add(createBelt(8000, 0x344c54, 30, 50, 0.4 * UNIVERSE_SCALE, 100, 300)); // Kuiper Belt
 
-        const trajectoryMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
         probesData.forEach(probeData => {
+            // Build a more realistic spacecraft using the helper.  The model is
+            // later scaled to an appropriate size for our universe.  Probes are
+            // placed according to right ascension and declination, then given a
+            // velocity vector pointing radially outward.
             const probeGroup = createProbeModel(probeData.name);
+            // Scale the probe; adjust factor to maintain visibility without
+            // disrupting true distance scaling.
             probeGroup.scale.setScalar(UNIVERSE_SCALE / 15);
             const dist = probeData.distAU * UNIVERSE_SCALE;
             const raRad = THREE.MathUtils.degToRad(probeData.rightAscension);
@@ -673,25 +770,18 @@
                 dist * Math.sin(decRad),
                 dist * Math.cos(decRad) * Math.sin(raRad)
             );
+            // Orient the probe so its high‑gain dish points back toward the Sun.
             probeGroup.lookAt(new THREE.Vector3(0, 0, 0));
             scene.add(probeGroup);
             const probeObject = {
                 mesh: probeGroup,
                 data: probeData,
                 isProbe: true,
+                // simple velocity vector along the radial direction, scaled down
                 velocity: probeGroup.position.clone().normalize().multiplyScalar(5 * UNIVERSE_SCALE)
             };
             celestialBodies.push(probeObject);
             addLabel(probeObject);
-            probeGroup.userData = { body: probeObject };
-
-            // Trajectory line
-            const trajectoryGeo = new THREE.BufferGeometry();
-            const positions = new Float32Array(6);
-            trajectoryGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            const trajectoryLine = new THREE.Line(trajectoryGeo, trajectoryMaterial);
-            scene.add(trajectoryLine);
-            probeObject.trajectory = trajectoryLine;
         });
 
         starData.forEach(star => {
@@ -706,13 +796,11 @@
             const starObject = { mesh: starMesh, data: star, isStar: true };
             celestialBodies.push(starObject);
             addLabel(starObject, true, 2);
-            starMesh.userData = { body: starObject };
         });
 
         // --- UI & CAMERA ---
         const infoPanel = document.getElementById('info-panel-content');
         const funFactPanel = document.getElementById('fun-fact-panel');
-        const simTimeDiv = document.getElementById('sim-time');
         let funFactInterval;
         
         function updateInfoPanel(body) {
@@ -739,6 +827,7 @@
         }
 
         function focusOnBody(targetBody) {
+            // If the user is currently in fly mode, switch back to orbit mode
             if (isFlyMode) toggleFlyMode();
             TWEEN.removeAll();
             focusedBody = targetBody;
@@ -775,6 +864,7 @@
         }
 
         function returnToOverview() {
+             // Exit fly mode when returning to overview
              if (isFlyMode) toggleFlyMode();
              TWEEN.removeAll();
              focusedBody = null;
@@ -879,7 +969,12 @@
         const speedSlider = document.getElementById('speed-slider');
         function updateSpeed() {
             const sliderValue = parseFloat(speedSlider.value);
+            // Interpret slider position as a power of ten: value 0 → 1x, 1 → 10x,
+            // -1 → 0.1x, etc.  This provides an intuitive, exponential scaling
+            // across many orders of magnitude.
             speedMultiplier = Math.pow(10, sliderValue);
+            // Display the multiplier in a readable format.  For values >= 1
+            // display one decimal place; for values < 1, show one significant digit.
             let display;
             if (speedMultiplier >= 1) {
                 display = speedMultiplier.toFixed(1);
@@ -889,16 +984,20 @@
             document.getElementById('speed-value').textContent = display;
         }
         speedSlider.addEventListener('input', updateSpeed); updateSpeed();
-
+        // Toggle between orbiting and free‑flight (fly) controls.  When fly mode
+        // is activated, OrbitControls are disabled and FlyControls are enabled.
         function toggleFlyMode() {
             isFlyMode = !isFlyMode;
             flyControls.enabled = isFlyMode;
             controls.enabled = !isFlyMode;
+            // In fly mode we disable the automatic rotation and panning in OrbitControls
             controls.autoRotate = !isFlyMode;
             controls.enablePan = !isFlyMode;
+            // Update button label
             const btn = document.getElementById('fly-toggle');
             if (btn) btn.textContent = isFlyMode ? 'Exit Free Flight (WASD)' : 'Enter Free Flight (WASD)';
             
+            // Pointer lock for smoother look control
             if (isFlyMode) {
                 flyControls.dragToLook = false;
                 renderer.domElement.requestPointerLock();
@@ -907,52 +1006,16 @@
                 if (document.exitPointerLock) document.exitPointerLock();
             }
         }
-
         document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('side-menu').classList.toggle('collapsed'));
         document.getElementById('label-toggle').addEventListener('change', (e) => { labelRenderer.domElement.style.display = e.target.checked ? 'block' : 'none'; });
+        // Bind the fly mode toggle button
         const flyToggleButton = document.getElementById('fly-toggle');
         if (flyToggleButton) {
             flyToggleButton.addEventListener('click', () => {
                 toggleFlyMode();
             });
         }
-        const pauseToggleButton = document.getElementById('pause-toggle');
-        pauseToggleButton.addEventListener('click', () => {
-            isPaused = !isPaused;
-            pauseToggleButton.textContent = isPaused ? 'Resume' : 'Pause';
-        });
-        const orbitsToggle = document.getElementById('orbits-toggle');
-        orbitsToggle.addEventListener('change', (e) => {
-            celestialBodies.forEach(body => {
-                if (body.orbit) body.orbit.visible = e.target.checked;
-            });
-        });
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Shift') boost = 10;
-        });
-        window.addEventListener('keyup', (e) => {
-            if (e.key === 'Shift') boost = 1;
-        });
-        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); labelRenderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight); });
-
-        function onMouseClick(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children, true);
-            if (intersects.length > 0) {
-                let selectedMesh = intersects[0].object;
-                let current = selectedMesh;
-                while (current) {
-                    if (current.userData.body) {
-                        focusOnBody(current.userData.body);
-                        break;
-                    }
-                    current = current.parent;
-                }
-            }
-        }
-        renderer.domElement.addEventListener('click', onMouseClick);
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); labelRenderer.setSize(window.innerWidth, window.innerHeight); });
 
         celestialBodies.forEach(body => {
             if (body.data.period) {
@@ -981,98 +1044,47 @@
             const delta = clock.getDelta();
             const timeFactor = delta * speedMultiplier * BASE_ORBIT_SPEED;
             
-            if (!isPaused) {
-                simulatedDays += timeFactor;
-                const currentTime = new Date(epoch.getTime() + simulatedDays * 86400000);
-                simTimeDiv.textContent = `Sim Time: ${currentTime.toUTCString()}`;
-
-                celestialBodies.forEach(body => {
-                    if (body.mesh && body.data.rotation_period) {
-                        const omega = (2 * Math.PI / body.data.rotation_period);
-                        body.mesh.rotation.y += omega * timeFactor;
+            celestialBodies.forEach(body => {
+                if(body.mesh && body.data.axialTilt) { body.mesh.rotation.y += delta * 0.1; }
+                if (body.data.period && body.orbitalParams) {
+                    const n = (2 * Math.PI) / Math.abs(body.data.period);
+                    body.currentMeanAnomaly += n * timeFactor;
+                    body.currentMeanAnomaly %= (2 * Math.PI);
+                    
+                    let E = body.currentMeanAnomaly;
+                    for (let i = 0; i < 5; i++) { 
+                        E = E - (E - body.data.e * Math.sin(E) - body.currentMeanAnomaly) / (1 - body.data.e * Math.cos(E));
                     }
-                    if (body.data.period && body.orbitalParams) {
-                        const n = (2 * Math.PI) / Math.abs(body.data.period);
-                        body.currentMeanAnomaly += n * timeFactor;
-                        body.currentMeanAnomaly %= (2 * Math.PI);
-                        
-                        let E = body.currentMeanAnomaly;
-                        for (let i = 0; i < 5; i++) { 
-                            E = E - (E - body.data.e * Math.sin(E) - body.currentMeanAnomaly) / (1 - body.data.e * Math.cos(E));
-                        }
-                       const { a, b, focusShift } = body.orbitalParams;
-                        body.mesh.position.x = a * Math.cos(E) - focusShift;
-                        body.mesh.position.z = b * Math.sin(E);
-                    }
-                    if(body.isProbe) { 
-                        body.mesh.position.add(body.velocity.clone().multiplyScalar(delta * speedMultiplier)); 
-                        // Update trajectory
-                        const positions = body.trajectory.geometry.attributes.position.array;
-                        const worldPos = body.mesh.getWorldPosition(new THREE.Vector3());
-                        positions[0] = worldPos.x;
-                        positions[1] = worldPos.y;
-                        positions[2] = worldPos.z;
-                        const dir = body.velocity.clone().normalize().multiplyScalar(UNIVERSE_SCALE * 1000);
-                        positions[3] = worldPos.x + dir.x;
-                        positions[4] = worldPos.y + dir.y;
-                        positions[5] = worldPos.z + dir.z;
-                        body.trajectory.geometry.attributes.position.needsUpdate = true;
-                    }
-                    if (body.tail) { 
-                        const sunPos = new THREE.Vector3(); sunMesh.getWorldPosition(sunPos);
-                        const cometPos = new THREE.Vector3(); body.mesh.getWorldPosition(cometPos);
-                        const distToSun = cometPos.distanceTo(sunPos);
-                        const tailLength = Math.max(1, Math.min(kmToVisualUnits(50e6), kmToVisualUnits(5e9) / distToSun));
-                        body.tail.scale.set(tailLength,1,1);
-                        const tailDirection = cometPos.clone().sub(sunPos).normalize();
-                        body.tail.parent.worldToLocal(tailDirection.add(cometPos)); body.tail.lookAt(tailDirection);
-                    }
-                    if(body.label){
-                        const distToCamera = body.mesh.getWorldPosition(new THREE.Vector3()).distanceTo(camera.position);
-                        let isVisible = (focusedBody === body);
-                        if (!focusedBody) {
-                             isVisible = isVisible || (body.isSun) ||
-                                (!body.isMoon && !body.isProbe && !body.isStar && distToCamera < UNIVERSE_SCALE * 30) ||
-                                (body.isProbe && distToCamera < UNIVERSE_SCALE * 20) ||
-                                (body.isMoon && distToCamera < kmToVisualUnits(15e6)) ||
-                                (body.isStar && distToCamera < (body.data.distLY * LY_IN_AU * UNIVERSE_SCALE * 1.5));
-                        } else {
-                            isVisible = isVisible || (focusedBody.isStar && body.isSun);
-                        }
-                        body.label.element.classList.toggle('visible', isVisible);
-                    }
-                });
-                
-                if (solarFlareSystem) {
-                    const positions = solarFlareSystem.points.geometry.attributes.position.array;
-                    const count = solarFlareSystem.velocities.length;
-                    for (let i = 0; i < count; i++) {
-                        const idx = i * 3;
-                        positions[idx]     += solarFlareSystem.velocities[i].dir.x * solarFlareSystem.velocities[i].speed * delta;
-                        positions[idx + 1] += solarFlareSystem.velocities[i].dir.y * solarFlareSystem.velocities[i].speed * delta;
-                        positions[idx + 2] += solarFlareSystem.velocities[i].dir.z * solarFlareSystem.velocities[i].speed * delta;
-                        const dist = Math.sqrt(
-                            positions[idx] * positions[idx] +
-                            positions[idx + 1] * positions[idx + 1] +
-                            positions[idx + 2] * positions[idx + 2]
-                        );
-                        if (dist > solarFlareSystem.radius * 2) {
-                            const newDir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
-                            solarFlareSystem.velocities[i].dir = newDir;
-                            solarFlareSystem.velocities[i].speed = solarFlareSystem.radius * 0.5 * (0.2 + Math.random() * 0.5);
-                            const startDist = solarFlareSystem.radius * (1 + 0.05 * Math.random());
-                            positions[idx]     = newDir.x * startDist;
-                            positions[idx + 1] = newDir.y * startDist;
-                            positions[idx + 2] = newDir.z * startDist;
-                        }
-                    }
-                    solarFlareSystem.points.geometry.attributes.position.needsUpdate = true;
+                    const { a, b, focusShift } = body.orbitalParams;
+                    body.mesh.position.x = a * Math.cos(E) - focusShift;
+                    body.mesh.position.z = b * Math.sin(E);
                 }
-                dynamicRings.forEach(ring => {
-                    ring.rotation.z += delta * 0.05;
-                });
-            }
-
+                if(body.isProbe) { body.mesh.position.add(body.velocity.clone().multiplyScalar(delta * speedMultiplier)); }
+                if (body.tail) { 
+                    const sunPos = new THREE.Vector3(); sunMesh.getWorldPosition(sunPos);
+                    const cometPos = new THREE.Vector3(); body.mesh.getWorldPosition(cometPos);
+                    const distToSun = cometPos.distanceTo(sunPos);
+                    const tailLength = Math.max(1, Math.min(kmToVisualUnits(50e6), kmToVisualUnits(5e9) / distToSun));
+                    body.tail.scale.set(tailLength,1,1);
+                    const tailDirection = cometPos.clone().sub(sunPos).normalize();
+                    body.tail.parent.worldToLocal(tailDirection.add(cometPos)); body.tail.lookAt(tailDirection);
+                }
+                if(body.label){
+                    const distToCamera = body.mesh.getWorldPosition(new THREE.Vector3()).distanceTo(camera.position);
+                    let isVisible = (focusedBody === body);
+                    if (!focusedBody) { // Overview visibility logic
+                         isVisible = isVisible || (body.isSun) ||
+                            (!body.isMoon && !body.isProbe && !body.isStar && distToCamera < UNIVERSE_SCALE * 30) ||
+                            (body.isProbe && distToCamera < UNIVERSE_SCALE * 20) ||
+                            (body.isMoon && distToCamera < kmToVisualUnits(15e6)) ||
+                            (body.isStar && distToCamera < (body.data.distLY * LY_IN_AU * UNIVERSE_SCALE * 1.5));
+                    } else { // Focused visibility logic
+                        isVisible = isVisible || (focusedBody.isStar && body.isSun);
+                    }
+                    body.label.element.classList.toggle('visible', isVisible);
+                }
+            });
+            
             if (focusedBody && TWEEN.getAll().length === 0) {
                 const targetPosition = new THREE.Vector3();
                 focusedBody.mesh.getWorldPosition(targetPosition);
@@ -1081,13 +1093,52 @@
                 camera.position.copy(controls.target).add(offset);
             }
 
+            // Update appropriate controls depending on current mode.  FlyControls
+            // uses an internal clock step; OrbitControls use simple damping.
             if (isFlyMode) {
-                flyControls.movementSpeed = UNIVERSE_SCALE * 5 * speedMultiplier * boost;
+                // scale flight speed with current speed multiplier
+                flyControls.movementSpeed = UNIVERSE_SCALE * 5 * speedMultiplier;
                 flyControls.update(delta);
             } else {
                 controls.update();
             }
-            composer.render();
+            // Animate dynamic solar flares.  Each particle moves along its
+            // velocity vector; when it travels beyond twice the Sun’s radius,
+            // it is respawned near the surface with a new random direction and
+            // speed.  This creates a continuous corona without sprite
+            // artefacts.
+            if (solarFlareSystem) {
+                const positions = solarFlareSystem.points.geometry.attributes.position.array;
+                const count = solarFlareSystem.velocities.length;
+                for (let i = 0; i < count; i++) {
+                    const idx = i * 3;
+                    positions[idx]     += solarFlareSystem.velocities[i].dir.x * solarFlareSystem.velocities[i].speed * delta;
+                    positions[idx + 1] += solarFlareSystem.velocities[i].dir.y * solarFlareSystem.velocities[i].speed * delta;
+                    positions[idx + 2] += solarFlareSystem.velocities[i].dir.z * solarFlareSystem.velocities[i].speed * delta;
+                    const dist = Math.sqrt(
+                        positions[idx] * positions[idx] +
+                        positions[idx + 1] * positions[idx + 1] +
+                        positions[idx + 2] * positions[idx + 2]
+                    );
+                    if (dist > solarFlareSystem.radius * 2) {
+                        // Respawn at a random point near the surface
+                        const newDir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+                        solarFlareSystem.velocities[i].dir = newDir;
+                        solarFlareSystem.velocities[i].speed = solarFlareSystem.radius * 0.5 * (0.2 + Math.random() * 0.5);
+                        const startDist = solarFlareSystem.radius * (1 + 0.05 * Math.random());
+                        positions[idx]     = newDir.x * startDist;
+                        positions[idx + 1] = newDir.y * startDist;
+                        positions[idx + 2] = newDir.z * startDist;
+                    }
+                }
+                solarFlareSystem.points.geometry.attributes.position.needsUpdate = true;
+            }
+            // Slowly rotate dynamic rings to give Saturn's particle rings a
+            // sense of motion.
+            dynamicRings.forEach(ring => {
+                ring.rotation.z += delta * 0.05;
+            });
+            renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
         }
         
@@ -1110,62 +1161,6 @@
             label.position.set(0, yOffset, 0);
             body.mesh.add(label);
             body.label = label;
-        }
-
-        function createProbeModel(name) {
-            const group = new THREE.Group();
-            if (name.includes('Voyager')) {
-                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 16),
-                                            new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6, metalness: 0.2 }));
-                bus.rotation.z = Math.PI / 2;
-                group.add(bus);
-                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.18, 64),
-                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
-                dish.position.x = -0.3;
-                group.add(dish);
-                const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 1.2, 8),
-                                            new THREE.MeshStandardMaterial({ color: 0xaaaaaa }));
-                boom.rotation.z = Math.PI / 2;
-                group.add(boom);
-                const record = new THREE.Mesh(new THREE.CircleGeometry(0.05, 32),
-                                              new THREE.MeshStandardMaterial({ color: 0xd4af37, emissive: 0x664400 }));
-                record.position.set(0.05, 0, 0.08);
-                group.add(record);
-            } else if (name.includes('Pioneer')) {
-                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 12),
-                                            new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.6 }));
-                bus.rotation.z = Math.PI / 2;
-                group.add(bus);
-                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.16, 48),
-                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
-                dish.position.x = -0.25;
-                group.add(dish);
-                const paddleGeom = new THREE.BoxGeometry(0.02, 0.02, 0.4);
-                const paddleMat  = new THREE.MeshStandardMaterial({ color: 0x444444 });
-                const paddle1 = new THREE.Mesh(paddleGeom, paddleMat);
-                paddle1.position.set(0, 0.06, 0);
-                const paddle2 = paddle1.clone();
-                paddle2.position.set(0, -0.06, 0);
-                group.add(paddle1, paddle2);
-            } else if (name.includes('New Horizons')) {
-                const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.15),
-                                            new THREE.MeshStandardMaterial({ color: 0xb5b5b5, roughness: 0.7 }));
-                group.add(body);
-                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.12, 32),
-                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
-                dish.position.x = -0.2;
-                group.add(dish);
-            } else {
-                const bus = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 12),
-                                            new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, metalness: 0.2 }));
-                bus.rotation.z = Math.PI / 2;
-                group.add(bus);
-                const dish = new THREE.Mesh(new THREE.CircleGeometry(0.15, 32),
-                                            new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
-                dish.position.x = -0.3;
-                group.add(dish);
-            }
-            return group;
         }
 
         animate();
