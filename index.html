@@ -85,8 +85,9 @@
             </div>
             <div class="menu-section" id="controls-section">
                 <h2>SIMULATION CONTROLS</h2>
-                <label for="speed-slider">Time Acceleration: <span id="speed-value">1.0</span>x</label>
-                <input type="range" id="speed-slider" min="0" max="10" value="3.5" step="0.1">
+                <label for="speed-slider">Time Scale: <span id="speed-value">1.0</span>x</label>
+                <!-- Exponential time scale: slider values correspond to powers of ten (e.g. -3 → 0.001x, 0 → 1x, 3 → 1000x). -->
+                <input type="range" id="speed-slider" min="-4" max="4" value="0" step="0.05">
                 <label for="label-toggle">Show Labels:</label>
                  <input type="checkbox" id="label-toggle" checked>
                  <label style="display:block; margin-top:15px;">Flight Mode:</label>
@@ -104,8 +105,8 @@
     <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/" } }</script>
     <script type="module">
         import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { FlyControls } from 'three/addons/controls/FlyControls.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FlyControls } from 'three/addons/controls/FlyControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
         // --- TEXTURE LOADER AND PLANET TEXTURE DEFINITIONS ---
@@ -123,7 +124,9 @@
             },
             Earth: {
                 map: textureLoader.load('textures/earth_daymap.jpg'),
-                nightMap: textureLoader.load('textures/earth_nightmap.jpg'),
+                // Use a satellite‑based city‑lights texture for emissive lighting on the night side.  The
+                // previous nightMap (a dark map) was replaced by earth_lights.png to show city lights.
+                nightMap: textureLoader.load('textures/earth_lights.png'),
                 clouds: textureLoader.load('textures/earth_clouds.jpg'),
                 specular: textureLoader.load('textures/earth_specular_map.tif')
             },
@@ -167,8 +170,9 @@
         // keyboard input.  The movement speed is scaled relative to
         // UNIVERSE_SCALE so that traversal across astronomical distances is
         // comfortable.
+        // FlyControls provide a first‑person navigation mode.  The movement
+        // speed is assigned after UNIVERSE_SCALE is defined further below.
         const flyControls = new FlyControls(camera, renderer.domElement);
-        flyControls.movementSpeed = UNIVERSE_SCALE * 5;
         flyControls.rollSpeed = 0.3;
         flyControls.dragToLook = true;
         flyControls.enabled = false;
@@ -180,17 +184,7 @@
         // --- DATA ---
         scene.add(new THREE.AmbientLight(0xffffff, 0.02)); 
 
-        // --- BACKGROUND STARFIELD ---
-        // Surround the solar system with a large inverted sphere textured with
-        // a Milky Way star field.  The texture is an equirectangular map
-        // derived from NASA data and licensed under CC‑BY‑4.0【66222392126166†L133-L146】.
-        const starFieldGeo = new THREE.SphereGeometry(UNIVERSE_SCALE * 5000, 64, 32);
-        const starFieldMat = new THREE.MeshBasicMaterial({
-            map: textureLoader.load('textures/stars_milky_way.jpg'),
-            side: THREE.BackSide
-        });
-        const starField = new THREE.Mesh(starFieldGeo, starFieldMat);
-        scene.add(starField);
+        // The star field is defined later, after UNIVERSE_SCALE is known.  See below.
         
         const solarSystemData = [
              { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: ["The Sun accounts for 99.86% of the mass in the solar system.", "Its surface is about 5,500°C; its core is over 15 million °C.", "A solar flare can release the energy of a billion megatons of TNT."] },
@@ -262,12 +256,30 @@
         // --- SCALES AND CONSTANTS ---
         const KM_IN_AU = 149.6e6;
         const LY_IN_AU = 63241.1;
+        // Scale used to convert astronomical distances to visual units.  Keep this
+        // constant defined early so other components (e.g. starfield) can
+        // reference it safely.
         const UNIVERSE_SCALE = 10000;
         const BODY_SCALE = UNIVERSE_SCALE / KM_IN_AU; 
         // **** SPEED ADJUSTMENT **** // Reduced base speed for finer control
         const BASE_ORBIT_SPEED = 5; 
         const celestialBodies = [];
         const navButtons = new Map();
+
+        // Now that UNIVERSE_SCALE is known, create the Milky Way star field
+        // and configure fly‑control speed.  The star field uses an
+        // equirectangular map of the Milky Way derived from NASA data
+        // (licensed under CC‑BY‑4.0)【66222392126166†L133-L146】.  It is an inverted
+        // sphere that surrounds the scene.  Fly movement speed is scaled
+        // relative to UNIVERSE_SCALE to keep navigation comfortable.
+        const starFieldGeo2 = new THREE.SphereGeometry(UNIVERSE_SCALE * 5000, 64, 32);
+        const starFieldMat2 = new THREE.MeshBasicMaterial({ map: textureLoader.load('textures/stars_milky_way.jpg'), side: THREE.BackSide });
+        const starField2 = new THREE.Mesh(starFieldGeo2, starFieldMat2);
+        scene.add(starField2);
+        flyControls.movementSpeed = UNIVERSE_SCALE * 5;
+        // A container for solar flare sprites attached to the Sun.  It is
+        // defined here so it can be accessed in both creation and animation.
+        let solarFlares;
         
         function kmToVisualUnits(km) { return km * BODY_SCALE; }
 
@@ -345,9 +357,31 @@
         // --- CELESTIAL BODY CREATION ---
         const sunData = solarSystemData.find(d => d.name === 'Sun');
         const sunVisualRadius = sunData.radius * BODY_SCALE;
-        const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(sunVisualRadius, 64, 32), new THREE.MeshBasicMaterial({ color: sunData.color }));
-        const sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0); 
+        // Use a high‑resolution texture for the Sun’s photosphere.  The
+        // Solarsystemscope 2k sun map is based on NASA imagery and licensed
+        // under CC‑BY‑4.0【584546275592072†L134-L147】.  The Sun emits its own light,
+        // so we employ a basic material with emissive color.  A PointLight
+        // represents the Sun’s illumination for the rest of the scene.
+        const sunTexture = textureLoader.load('textures/sun.jpg');
+        const sunMaterial = new THREE.MeshBasicMaterial({ map: sunTexture, color: 0xffffff });
+        const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(sunVisualRadius, 64, 32), sunMaterial);
+        const sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0);
         sunMesh.add(sunLight);
+        // Create animated solar flares around the Sun.  Each flare is a sprite
+        // using the same texture, coloured and blended additively.  Their
+        // positions and sizes are randomised to give a dynamic corona.
+        solarFlares = new THREE.Group();
+        const numFlares = 8;
+        for (let i = 0; i < numFlares; i++) {
+            const flareMaterial = new THREE.SpriteMaterial({ map: sunTexture, color: 0xffaa66, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+            const flare = new THREE.Sprite(flareMaterial);
+            const size = sunVisualRadius * (1.3 + Math.random() * 0.7);
+            flare.scale.set(size, size, 1);
+            const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(sunVisualRadius * 1.5);
+            flare.position.copy(dir);
+            solarFlares.add(flare);
+        }
+        sunMesh.add(solarFlares);
         const sunObject = { mesh: sunMesh, data: sunData, isSun: true };
         celestialBodies.push(sunObject);
         scene.add(sunMesh);
@@ -369,9 +403,10 @@
                     specularMap: planetTextures.Earth.specular,
                     specular: new THREE.Color(0x333333),
                     shininess: 10,
+                    // Use a satellite‑based lights map for emissive illumination on the night side.
                     emissiveMap: planetTextures.Earth.nightMap,
                     emissive: new THREE.Color(0xffffff),
-                    emissiveIntensity: 0.6
+                    emissiveIntensity: 1.2
                 });
                 const earthMesh = new THREE.Mesh(earthGeo, earthMat);
                 const cloudGeo = new THREE.SphereGeometry(visualRadius * 1.01, 64, 32);
@@ -775,8 +810,19 @@
         const speedSlider = document.getElementById('speed-slider');
         function updateSpeed() {
             const sliderValue = parseFloat(speedSlider.value);
-            speedMultiplier = Math.pow(3, sliderValue) - 0.9;
-            document.getElementById('speed-value').textContent = speedMultiplier.toFixed(1);
+            // Interpret slider position as a power of ten: value 0 → 1x, 1 → 10x,
+            // -1 → 0.1x, etc.  This provides an intuitive, exponential scaling
+            // across many orders of magnitude.
+            speedMultiplier = Math.pow(10, sliderValue);
+            // Display the multiplier in a readable format.  For values >= 1
+            // display one decimal place; for values < 1, show one significant digit.
+            let display;
+            if (speedMultiplier >= 1) {
+                display = speedMultiplier.toFixed(1);
+            } else {
+                display = speedMultiplier.toPrecision(1);
+            }
+            document.getElementById('speed-value').textContent = display;
         }
         speedSlider.addEventListener('input', updateSpeed); updateSpeed();
         // Toggle between orbiting and free‑flight (fly) controls.  When fly mode
@@ -885,6 +931,17 @@
                 flyControls.update(delta * speedMultiplier);
             } else {
                 controls.update();
+            }
+            // Animate solar flares.  Each flare slowly rotates and pulses
+            // its opacity over time to mimic solar activity.  The `time`
+            // parameter from requestAnimationFrame is in milliseconds; scale
+            // it down to seconds for the sine wave.
+            if (solarFlares) {
+                solarFlares.children.forEach((flare, index) => {
+                    flare.material.rotation += delta * 0.5;
+                    const t = time * 0.001;
+                    flare.material.opacity = 0.4 + 0.4 * Math.sin(t * 0.5 + index);
+                });
             }
             renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
