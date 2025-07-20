@@ -92,7 +92,7 @@
                  <input type="checkbox" id="label-toggle" checked>
                  <label style="display:block; margin-top:15px;">Flight Mode:</label>
                  <!-- Button to toggle between orbiting and free‑flight controls.  When pressed, the user can freely fly around the solar system using WASD/arrow keys. -->
-                 <button id="fly-toggle" class="cosmic-button" style="width:100%; margin-top:5px;">Enter Fly Mode</button>
+                 <button id="fly-toggle" class="cosmic-button" style="width:100%; margin-top:5px;">Enter Free Flight (WASD)</button>
             </div>
             <div class="menu-section" id="navigation-section">
                 <h2>NAVIGATION TARGET</h2>
@@ -187,17 +187,53 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
         // The star field is defined later, after UNIVERSE_SCALE is known.  See below.
         
         const solarSystemData = [
-             { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: ["The Sun accounts for 99.86% of the mass in the solar system.", "Its surface is about 5,500°C; its core is over 15 million °C.", "A solar flare can release the energy of a billion megatons of TNT."] },
-             { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, funFacts: ["A day on Mercury is longer than its year.", "Temperatures swing from 427°C to -173°C.", "It has water ice in permanently shadowed craters."] },
-             { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, funFacts: ["Venus rotates backwards (retrograde rotation).", "It's the hottest planet in the solar system (~465°C).", "Atmospheric pressure is over 90 times that of Earth."] },
-             { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, funFacts: ["Earth is the only planet not named after a deity.", "It is the densest planet in the Solar System.", "The Earth's rotation is gradually slowing."], moons: [
+             { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: [
+                 "The Sun contains more than 99.8% of the mass of the solar system.",
+                 "Its diameter is about 109 times that of Earth.",
+                 "The core is over 27 million degrees Fahrenheit while the surface is about 10,000 °F.",
+                 "It formed around 4.6 billion years ago and will expand into a red giant in roughly five billion years.",
+                 "Its gravitational pull keeps all planets, asteroids and comets bound in their orbits."
+             ] },
+             { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, funFacts: [
+                 "Mercury is the smallest and closest planet to the Sun.",
+                 "A single day on Mercury (sunrise to sunrise) lasts 176 Earth days while a year is 88 days.",
+                 "It is the second‑densest planet after Earth despite its small size.",
+                 "Mercury has a global magnetic field about one percent as strong as Earth’s.",
+                 "Temperatures swing from 427 °C in sunlight to –173 °C in darkness, yet water ice exists in permanently shadowed craters at its poles."
+             ] },
+             { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, funFacts: [
+                 "A day on Venus (243 Earth days) is longer than its 225‑day year.",
+                 "It rotates backwards (retrograde) compared to most planets.",
+                 "It is the hottest planet in the solar system at roughly 465 °C due to a runaway greenhouse effect.",
+                 "Surface pressure on Venus is more than 90 times Earth’s atmospheric pressure.",
+                 "Often called Earth’s sister planet because of its similar size and mass."
+             ] },
+             { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, funFacts: [
+                 "Earth is the only planet not named after a mythological deity.",
+                 "It is the densest planet in the solar system.",
+                 "Earth’s rotation is gradually slowing by about 17 milliseconds per century.",
+                 "Roughly 70 percent of its surface is covered by water.",
+                 "Its magnetic field shields the surface from harmful solar wind and cosmic radiation."
+             ], moons: [
                  { name: 'Moon', radius: 1737, a: 0.384, e: 0.055, period: 27.3, color: 0xcccccc, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, funFacts: ["The Moon is drifting away from Earth by about 3.8 cm per year.", "It is the 5th largest moon in the solar system.", "The Moon has 'moonquakes' caused by the Earth's gravitational pull."] }
             ]},
-             { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, funFacts: ["Home to Olympus Mons, the largest volcano in the solar system.", "Its red color comes from iron oxide (rust).", "Has the largest dust storms, which can cover the entire planet."], moons: [
+             { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, funFacts: [
+                 "Home to Olympus Mons, the tallest volcano and mountain in the solar system.",
+                 "Its red colour comes from iron oxide (rust) in the soil and rocks.",
+                 "Mars has the largest dust storms in the solar system, sometimes covering the entire planet.",
+                 "The atmosphere is less than one percent as dense as Earth’s and composed mostly of carbon dioxide.",
+                 "Evidence suggests Mars once had flowing liquid water and perhaps conditions suitable for life."
+             ], moons: [
                  { name: 'Phobos', radius: 11.2, a: 0.00937, e: 0.015, period: 0.3, color: 0x8f8f8f, inclination: 1.1, funFacts: ["Phobos is getting closer to Mars and will either crash into it or break up into a ring in about 50 million years.", "It is a 'captured' asteroid, not a naturally formed moon."]},
                  { name: 'Deimos', radius: 6.2, a: 0.0234, e: 0.0002, period: 1.26, color: 0xafafaf, inclination: 0.9, funFacts: ["Deimos is one of the smallest known moons in the solar system.", "It is covered in a thick layer of fine dust, or regolith."] }
             ]},
-             { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, funFacts: ["All other planets could fit inside Jupiter.", "The Great Red Spot is a storm raging for hundreds of years.", "Has the shortest day of any planet (~10 hours)."], moons: [
+             { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, funFacts: [
+                 "Jupiter is the largest planet—more than twice as massive as all the other planets combined.",
+                 "The Great Red Spot is a colossal storm that has raged for centuries.",
+                 "It has the shortest day of any planet, rotating once every 10 hours.",
+                 "Jupiter has at least 79 moons; its largest moon, Ganymede, is bigger than the planet Mercury.",
+                 "The planet’s magnetic field is the strongest of any planet in the solar system."
+             ], moons: [
                  { name: 'Amalthea', radius: 83.5, a: 0.181, e: 0.003, period: 0.5, color: 0x9b593c, inclination: 0.37, funFacts: ["Amalthea is irregularly shaped and reddish, likely from sulfur from Io.", "It radiates more heat than it receives from the Sun."] },
                  { name: 'Io', radius: 1821, a: 0.421, e: 0.004, period: 1.77, color: 0xf3d649, inclination: 0.05, funFacts: ["Io is the most volcanically active body in the solar system, with hundreds of volcanoes.", "Its surface is covered in sulfur in various colorful forms."] },
                  { name: 'Europa', radius: 1560, a: 0.671, e: 0.009, period: 3.55, color: 0x8f7f70, inclination: 0.47, funFacts: ["Europa's icy surface may hide a global saltwater ocean underneath.", "Scientists believe this ocean could potentially harbor extraterrestrial life."] },
@@ -205,7 +241,13 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
                  { name: 'Callisto', radius: 2410, a: 1.882, e: 0.007, period: 16.69, color: 0x5a5651, inclination: 0.20, funFacts: ["Callisto has the most heavily cratered surface of any object in the solar system.", "It is thought to have a 'dead' surface that hasn't changed much in 4 billion years."] },
                  { name: 'Himalia', radius: 85, a: 11.46, e: 0.16, period: 250.6, inclination: 27.5, color: 0x8b8081, funFacts: ["Himalia is the largest irregular moon of Jupiter.", "It may be the remnant of a captured asteroid."] }
             ]},
-             { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, funFacts: ["Its rings are made of billions of particles of ice and rock.", "Saturn is less dense than water; it would float in a large enough bathtub.", "Winds can reach 1,800 km/h."], moons: [
+             { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, funFacts: [
+                 "Saturn’s rings are made of billions of particles of ice and rock and are only about 10 metres thick on average.",
+                 "The planet is less dense than water and would float in a bathtub large enough to hold it.",
+                 "Winds on Saturn can reach speeds of around 1,800 kilometres per hour.",
+                 "A persistent hexagonal storm rages at Saturn’s north pole.",
+                 "It has more than 145 known moons; Titan, the largest, has a thick nitrogen‑rich atmosphere."
+             ], moons: [
                  { name: 'Mimas', radius: 198, a: 0.185, e: 0.02, period: 0.9, color: 0xb0b0b0, inclination: 1.5, funFacts: ["Mimas is famous for its massive impact crater, Herschel, which makes it resemble the Death Star.", "The crater is 130 km wide, almost one-third of the moon's own diameter."] },
                  { name: 'Enceladus', radius: 252, a: 0.238, e: 0.005, period: 1.4, color: 0xe0e0e0, inclination: 0.02, funFacts: ["Enceladus has huge geysers at its south pole that spray water ice into space, forming Saturn's E-ring.", "It is one of the most promising places to search for life."] },
                  { name: 'Tethys', radius: 533, a: 0.294, e: 0.0, period: 1.9, color: 0xd8d8d8, inclination: 1.1, funFacts: ["Tethys has a gigantic canyon, Ithaca Chasma, that runs three-quarters of the way around the moon.", "It's composed almost entirely of water ice."] },
@@ -216,7 +258,13 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
                  { name: 'Iapetus', radius: 735, a: 3.560, e: 0.028, period: 79.3, color: 0x909090, inclination: 15.4, funFacts: ["Iapetus is a 'two-faced' moon, with one bright hemisphere and one dark one.", "It also has a mysterious, massive equatorial ridge."] },
                  { name: 'Phoebe', radius: 106.5, a: 12.952, e: 0.159, period: -550, color: 0x5a5a5a, inclination: 175.3, funFacts: ["Phoebe orbits Saturn in a retrograde (backwards) direction.", "It is thought to be a captured Kuiper Belt Object."] }
             ]},
-             { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, funFacts: ["Uranus is tilted on its side, likely due to a massive collision in its past.", "Its seasons last for over 20 years each.", "It is the coldest planet in the solar system."], moons: [
+             { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, funFacts: [
+                 "Uranus is tilted on its side by about 98°, likely the result of a giant impact in its distant past.",
+                 "Its seasons each last more than 20 Earth years because it takes 84 years to orbit the Sun.",
+                 "It is the coldest planet in the solar system, with temperatures dropping below −200 °C.",
+                 "Discovered by William Herschel in 1781, it was the first planet found with a telescope.",
+                 "It has faint dark rings and moons named after characters from Shakespeare and Alexander Pope."
+             ], moons: [
                  { name: 'Puck', radius: 81, a: 0.086, e: 0.0001, period: 0.76, color: 0x707070, inclination: 0.32, funFacts: ["Puck was the first inner moon of Uranus to be discovered by Voyager 2.", "Its surface is dark and covered with craters."] },
                  { name: 'Miranda', radius: 236, a: 0.129, e: 0.001, period: 1.4, color: 0xc0c0c0, inclination: 4.2, funFacts: ["Miranda has one of the most bizarre and varied landscapes in the solar system.", "It features enormous canyons, terraced layers, and a patchwork of different surfaces."] },
                  { name: 'Ariel', radius: 579, a: 0.191, e: 0.001, period: 2.5, color: 0xd0d0d0, inclination: 0.3, funFacts: ["Ariel has the brightest surface of Uranus's major moons.", "Its surface is marked by extensive fault valleys and canyons."] },
@@ -224,7 +272,13 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
                  { name: 'Titania', radius: 788, a: 0.436, e: 0.002, period: 8.7, color: 0xb0a090, inclination: 0.1, funFacts: ["Titania is the largest moon of Uranus.", "It has a network of huge canyons and fault lines, suggesting past geological activity."] },
                  { name: 'Oberon', radius: 761, a: 0.583, e: 0.001, period: 13.5, color: 0x908080, inclination: 0.1, funFacts: ["Oberon is the outermost large moon of Uranus.", "Its old, icy surface is heavily cratered and shows little sign of internal activity."] }
             ]},
-             { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, funFacts: ["Discovered by mathematical prediction before it was directly observed.", "Has the strongest winds in the solar system, reaching 2,100 km/h.", "A year on Neptune is almost 165 Earth years."] , moons: [
+             { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, funFacts: [
+                 "Neptune was predicted by mathematicians before it was observed through a telescope.",
+                 "It has the strongest winds in the solar system, topping 2,100 kilometres per hour.",
+                 "A Neptunian year lasts nearly 165 Earth years.",
+                 "Neptune radiates more heat than it receives from the Sun.",
+                 "Its largest moon, Triton, has nitrogen geysers and orbits the planet retrograde to its rotation."
+             ], moons: [
                  { name: 'Proteus', radius: 210, a: 0.117, e: 0.0005, period: 1.1, color: 0x606060, inclination: 0.026, funFacts: ["Proteus is one of the darkest objects in the solar system, reflecting only 6% of the light that hits it.", "It is irregularly shaped, about as large as a body can be before gravity pulls it into a sphere."] },
                  { name: 'Triton', radius: 1353, a: 0.354, e: 0.0, period: -5.9, color: 0xced4da, inclination: 157, funFacts: ["Triton is the only large moon in the solar system that orbits in the opposite direction of its planet's rotation (retrograde orbit).", "It has geysers that erupt nitrogen frost and is one of the coldest objects in the solar system."] },
                  { name: 'Nereid', radius: 170, a: 5.513, e: 0.75, period: 360, color: 0xa0a0a0, inclination: 7.2, funFacts: ["Nereid has one of the most eccentric orbits of any moon in the solar system.", "Its distance from Neptune varies by a factor of 7."] }
@@ -266,20 +320,74 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
         const celestialBodies = [];
         const navButtons = new Map();
 
-        // Now that UNIVERSE_SCALE is known, create the Milky Way star field
-        // and configure fly‑control speed.  The star field uses an
-        // equirectangular map of the Milky Way derived from NASA data
-        // (licensed under CC‑BY‑4.0)【66222392126166†L133-L146】.  It is an inverted
-        // sphere that surrounds the scene.  Fly movement speed is scaled
-        // relative to UNIVERSE_SCALE to keep navigation comfortable.
-        const starFieldGeo2 = new THREE.SphereGeometry(UNIVERSE_SCALE * 5000, 64, 32);
-        const starFieldMat2 = new THREE.MeshBasicMaterial({ map: textureLoader.load('textures/stars_milky_way.jpg'), side: THREE.BackSide });
-        const starField2 = new THREE.Mesh(starFieldGeo2, starFieldMat2);
-        scene.add(starField2);
+        // Create a random star field to serve as the distant backdrop.  We avoid
+        // using a low‑resolution texture by distributing thousands of points on
+        // a large sphere.  Because the points are rendered with a constant
+        // screen size, they remain visible even when the camera travels far
+        // from the origin.  The sphere radius is scaled with UNIVERSE_SCALE so
+        // that the user never leaves the star field.
+        const starCount = 8000;
+        const starDistance = UNIVERSE_SCALE * 10000;
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            // Generate random points uniformly on the sphere using spherical coordinates
+            const u = Math.random();
+            const v = Math.random();
+            const theta = 2 * Math.PI * u;
+            const phi = Math.acos(2 * v - 1);
+            const r = starDistance;
+            starPositions[3 * i]     = r * Math.sin(phi) * Math.cos(theta);
+            starPositions[3 * i + 1] = r * Math.cos(phi);
+            starPositions[3 * i + 2] = r * Math.sin(phi) * Math.sin(theta);
+        }
+        const starGeometry = new THREE.BufferGeometry();
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 5, sizeAttenuation: false });
+        const starField = new THREE.Points(starGeometry, starMaterial);
+        scene.add(starField);
+        // Set movement speed for fly controls relative to the scale of the universe.  A
+        // higher value allows the user to traverse interplanetary distances more
+        // comfortably in fly mode.
         flyControls.movementSpeed = UNIVERSE_SCALE * 5;
-        // A container for solar flare sprites attached to the Sun.  It is
-        // defined here so it can be accessed in both creation and animation.
-        let solarFlares;
+        // Global containers for dynamic solar flares and rotating ring particle systems.
+        let solarFlareSystem;
+        const dynamicRings = [];
+
+        /**
+         * Construct a dynamic particle system to simulate solar flares.  Each
+         * particle starts near the Sun’s surface, moves radially outward, and
+         * is reset when it travels beyond twice the Sun’s radius.  The cloud
+         * of points gives the impression of constantly erupting flares without
+         * relying on billboard sprites, eliminating the square texture artifacts
+         * seen previously.  The function refers to `sunVisualRadius` and
+         * `sunMesh`, which are defined later in this script; the function is
+         * invoked after those variables exist.
+         */
+        function createSolarFlares() {
+            const count = 600;
+            const radius = sunVisualRadius;
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+            for (let i = 0; i < count; i++) {
+                // Random unit vector determines the direction of the flare
+                const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+                const startDist = radius * (1 + 0.05 * Math.random());
+                positions[3 * i]     = dir.x * startDist;
+                positions[3 * i + 1] = dir.y * startDist;
+                positions[3 * i + 2] = dir.z * startDist;
+                // Speed is proportional to the Sun’s radius to keep the motion
+                // scale appropriate.  Each particle gets its own speed and
+                // direction so that the flares have varied trajectories.
+                velocities.push({ dir: dir.clone(), speed: radius * 0.5 * (0.2 + Math.random() * 0.5) });
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const mat = new THREE.PointsMaterial({ color: 0xffaa66, size: radius * 0.05, sizeAttenuation: true, transparent: true, opacity: 0.8 });
+            const points = new THREE.Points(geo, mat);
+            // Attach to the Sun so it follows its movement and rotation
+            solarFlareSystem = { points, velocities, radius };
+            sunMesh.add(points);
+        }
         
         function kmToVisualUnits(km) { return km * BODY_SCALE; }
 
@@ -367,21 +475,12 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
         const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(sunVisualRadius, 64, 32), sunMaterial);
         const sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0);
         sunMesh.add(sunLight);
-        // Create animated solar flares around the Sun.  Each flare is a sprite
-        // using the same texture, coloured and blended additively.  Their
-        // positions and sizes are randomised to give a dynamic corona.
-        solarFlares = new THREE.Group();
-        const numFlares = 8;
-        for (let i = 0; i < numFlares; i++) {
-            const flareMaterial = new THREE.SpriteMaterial({ map: sunTexture, color: 0xffaa66, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
-            const flare = new THREE.Sprite(flareMaterial);
-            const size = sunVisualRadius * (1.3 + Math.random() * 0.7);
-            flare.scale.set(size, size, 1);
-            const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(sunVisualRadius * 1.5);
-            flare.position.copy(dir);
-            solarFlares.add(flare);
-        }
-        sunMesh.add(solarFlares);
+        // Generate dynamic solar flares after the Sun is created.  This
+        // function constructs a cloud of points that emanate from the Sun
+        // and drift outward.  When a point travels too far it is reset to
+        // near the Sun’s surface with a new direction and speed.  See the
+        // createSolarFlares() definition below.
+        createSolarFlares();
         const sunObject = { mesh: sunMesh, data: sunData, isSun: true };
         celestialBodies.push(sunObject);
         scene.add(sunMesh);
@@ -463,33 +562,30 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
             bodyObject.orbit = orbit;
 
             if (data.name === 'Saturn') {
-                // Build Saturn’s rings using multiple concentric slices and
-                // slight vertical offsets to give the impression of thickness and
-                // varying optical depth.  Each slice uses the same radial
-                // texture derived from NASA data【984056278223721†L130-L166】, but a
-                // different opacity and radial extent.
-                const ringConfigs = [
-                    { inner: visualRadius * 1.20, outer: visualRadius * 1.50, opacity: 0.6 },
-                    { inner: visualRadius * 1.50, outer: visualRadius * 2.00, opacity: 0.8 },
-                    { inner: visualRadius * 2.00, outer: visualRadius * 2.30, opacity: 0.5 },
-                    { inner: visualRadius * 2.30, outer: visualRadius * 2.80, opacity: 0.3 }
-                ];
-                ringConfigs.forEach(config => {
-                    // create three layers for each ring slice to simulate thickness
-                    for (let layer = -1; layer <= 1; layer++) {
-                        const ringGeo = new THREE.RingGeometry(config.inner, config.outer, 256, 1);
-                        const ringMat = new THREE.MeshBasicMaterial({
-                            map: planetTextures.Saturn.ring,
-                            transparent: true,
-                            side: THREE.DoubleSide,
-                            opacity: config.opacity
-                        });
-                        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-                        ringMesh.rotation.x = Math.PI / 2;
-                        ringMesh.position.y = layer * visualRadius * 0.02;
-                        mesh.add(ringMesh);
-                    }
-                });
+                // Instead of flat textured slices, build a particle ring for Saturn.
+                // Thousands of tiny points are distributed between the inner and outer
+                // ring radii with a small vertical spread.  The ring is rotated
+                // slightly each frame (see animate()) to create a dynamic effect.
+                const inner = visualRadius * 1.20;
+                const outer = visualRadius * 2.50;
+                const particleCount = 3000;
+                const positions = new Float32Array(particleCount * 3);
+                for (let i = 0; i < particleCount; i++) {
+                    // Uniform distribution within an annulus: use random area method
+                    const rand = Math.random();
+                    const r = Math.sqrt(rand * (outer * outer - inner * inner) + inner * inner);
+                    const angle = Math.random() * Math.PI * 2;
+                    positions[3 * i]     = r * Math.cos(angle);
+                    positions[3 * i + 1] = (Math.random() - 0.5) * visualRadius * 0.05;
+                    positions[3 * i + 2] = r * Math.sin(angle);
+                }
+                const ringGeo = new THREE.BufferGeometry();
+                ringGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const ringMat = new THREE.PointsMaterial({ color: 0xdedede, size: visualRadius * 0.05, sizeAttenuation: true, transparent: true, opacity: 0.8 });
+                const ringPoints = new THREE.Points(ringGeo, ringMat);
+                ringPoints.rotation.x = Math.PI / 2;
+                mesh.add(ringPoints);
+                dynamicRings.push(ringPoints);
             } else if (data.name === 'Jupiter') {
                 // Jupiter’s ring is faint and narrow.  Represent it with a single
                 // translucent ring slice without texture.  The ring is about
@@ -836,7 +932,7 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
             controls.enablePan = !isFlyMode;
             // Update button label
             const btn = document.getElementById('fly-toggle');
-            if (btn) btn.textContent = isFlyMode ? 'Exit Fly Mode' : 'Enter Fly Mode';
+            if (btn) btn.textContent = isFlyMode ? 'Exit Free Flight (WASD)' : 'Enter Free Flight (WASD)';
         }
         document.getElementById('menu-toggle').addEventListener('click', () => document.getElementById('side-menu').classList.toggle('collapsed'));
         document.getElementById('label-toggle').addEventListener('change', (e) => { labelRenderer.domElement.style.display = e.target.checked ? 'block' : 'none'; });
@@ -932,17 +1028,42 @@ import { FlyControls } from 'three/addons/controls/FlyControls.js';
             } else {
                 controls.update();
             }
-            // Animate solar flares.  Each flare slowly rotates and pulses
-            // its opacity over time to mimic solar activity.  The `time`
-            // parameter from requestAnimationFrame is in milliseconds; scale
-            // it down to seconds for the sine wave.
-            if (solarFlares) {
-                solarFlares.children.forEach((flare, index) => {
-                    flare.material.rotation += delta * 0.5;
-                    const t = time * 0.001;
-                    flare.material.opacity = 0.4 + 0.4 * Math.sin(t * 0.5 + index);
-                });
+            // Animate dynamic solar flares.  Each particle moves along its
+            // velocity vector; when it travels beyond twice the Sun’s radius,
+            // it is respawned near the surface with a new random direction and
+            // speed.  This creates a continuous corona without sprite
+            // artefacts.
+            if (solarFlareSystem) {
+                const positions = solarFlareSystem.points.geometry.attributes.position.array;
+                const count = solarFlareSystem.velocities.length;
+                for (let i = 0; i < count; i++) {
+                    const idx = i * 3;
+                    positions[idx]     += solarFlareSystem.velocities[i].dir.x * solarFlareSystem.velocities[i].speed * delta;
+                    positions[idx + 1] += solarFlareSystem.velocities[i].dir.y * solarFlareSystem.velocities[i].speed * delta;
+                    positions[idx + 2] += solarFlareSystem.velocities[i].dir.z * solarFlareSystem.velocities[i].speed * delta;
+                    const dist = Math.sqrt(
+                        positions[idx] * positions[idx] +
+                        positions[idx + 1] * positions[idx + 1] +
+                        positions[idx + 2] * positions[idx + 2]
+                    );
+                    if (dist > solarFlareSystem.radius * 2) {
+                        // Respawn at a random point near the surface
+                        const newDir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+                        solarFlareSystem.velocities[i].dir = newDir;
+                        solarFlareSystem.velocities[i].speed = solarFlareSystem.radius * 0.5 * (0.2 + Math.random() * 0.5);
+                        const startDist = solarFlareSystem.radius * (1 + 0.05 * Math.random());
+                        positions[idx]     = newDir.x * startDist;
+                        positions[idx + 1] = newDir.y * startDist;
+                        positions[idx + 2] = newDir.z * startDist;
+                    }
+                }
+                solarFlareSystem.points.geometry.attributes.position.needsUpdate = true;
             }
+            // Slowly rotate dynamic rings to give Saturn's particle rings a
+            // sense of motion.
+            dynamicRings.forEach(ring => {
+                ring.rotation.z += delta * 0.05;
+            });
             renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
         }
