@@ -104,6 +104,35 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
+        // --- TEXTURE LOADER AND PLANET TEXTURE DEFINITIONS ---
+        // Load high‑resolution textures for each planet. These textures are based on
+        // NASA elevation and imagery data and provided by SolarSystemScope under
+        // a CC‑BY‑4.0 licence. See the repository documentation for attribution.
+        const textureLoader = new THREE.TextureLoader();
+        const planetTextures = {
+            Mercury: { map: textureLoader.load('textures/mercury.jpg') },
+            Venus: {
+                // Surface of Venus; you can optionally load an atmosphere texture and
+                // render it as a semi‑transparent layer similar to Earth’s clouds.
+                map: textureLoader.load('textures/venus_surface.jpg'),
+                atmosphere: textureLoader.load('textures/venus_atmosphere.jpg')
+            },
+            Earth: {
+                map: textureLoader.load('textures/earth_daymap.jpg'),
+                nightMap: textureLoader.load('textures/earth_nightmap.jpg'),
+                clouds: textureLoader.load('textures/earth_clouds.jpg'),
+                specular: textureLoader.load('textures/earth_specular_map.tif')
+            },
+            Mars:    { map: textureLoader.load('textures/mars.jpg') },
+            Jupiter: { map: textureLoader.load('textures/jupiter.jpg') },
+            Saturn:  {
+                map: textureLoader.load('textures/saturn.jpg'),
+                ring: textureLoader.load('textures/saturn_ring_alpha.png')
+            },
+            Uranus:  { map: textureLoader.load('textures/uranus.jpg') },
+            Neptune: { map: textureLoader.load('textures/neptune.jpg') }
+        };
+
         // --- CORE SETUP & STATE ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1e9);
@@ -241,7 +270,46 @@
             if (data.name === 'Sun') return;
             const visualRadius = data.radius * BODY_SCALE;
             const isComet = data.type === 'Comet';
-            const mesh = isComet ? new THREE.Group() : new THREE.Mesh(new THREE.SphereGeometry(visualRadius, 32, 16), new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.9, metalness: 0.1 }));
+            // Build a mesh or group for this body. Comets use a Group so that tails can be attached.
+            let mesh;
+            if (isComet) {
+                mesh = new THREE.Group();
+            } else if (data.name === 'Earth') {
+                // Earth: use high‑resolution textures with emissive night lights and clouds.
+                const earthGeo = new THREE.SphereGeometry(visualRadius, 64, 32);
+                const earthMat = new THREE.MeshPhongMaterial({
+                    map: planetTextures.Earth.map,
+                    specularMap: planetTextures.Earth.specular,
+                    specular: new THREE.Color(0x333333),
+                    shininess: 10,
+                    emissiveMap: planetTextures.Earth.nightMap,
+                    emissive: new THREE.Color(0xffffff),
+                    emissiveIntensity: 0.6
+                });
+                const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+                const cloudGeo = new THREE.SphereGeometry(visualRadius * 1.01, 64, 32);
+                const cloudMat = new THREE.MeshPhongMaterial({
+                    map: planetTextures.Earth.clouds,
+                    transparent: true,
+                    opacity: 0.8,
+                    depthWrite: false
+                });
+                const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+                mesh = new THREE.Group();
+                mesh.add(earthMesh);
+                mesh.add(cloudMesh);
+            } else {
+                // Other bodies: apply a texture if defined; otherwise fallback to colour.
+                const geom = new THREE.SphereGeometry(visualRadius, 32, 16);
+                const matOpts = { roughness: 0.9, metalness: 0.1 };
+                const texDef = planetTextures[data.name];
+                if (texDef && texDef.map) {
+                    matOpts.map = texDef.map;
+                } else {
+                    matOpts.color = data.color;
+                }
+                mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial(matOpts));
+            }
             const bodyObject = { mesh, data };
             celestialBodies.push(bodyObject);
             addLabel(bodyObject);
@@ -273,29 +341,19 @@
             bodyObject.orbit = orbit;
 
             if (data.name === 'Saturn') {
-                const ringParticles = 20000;
-                const ringGeo = new THREE.BufferGeometry();
-                const positions = new Float32Array(ringParticles * 3);
-                const colors = new Float32Array(ringParticles * 3);
-                const baseColor = new THREE.Color(0.8, 0.7, 0.6);
-
-                for (let i = 0; i < ringParticles; i++) {
-                    let radius = THREE.MathUtils.randFloat(visualRadius * 1.5, visualRadius * 2.5);
-                    if(radius > visualRadius * 2.0 && radius < visualRadius * 2.1) { radius += 0.2 * visualRadius; }
-                    const theta = Math.random() * 2 * Math.PI;
-                    positions[i * 3] = Math.cos(theta) * radius;
-                    positions[i * 3 + 2] = Math.sin(theta) * radius;
-                    positions[i * 3 + 1] = THREE.MathUtils.randFloatSpread(visualRadius * 0.01);
-                    const colorVariation = Math.random() * 0.2 - 0.1;
-                    colors[i * 3] = baseColor.r + colorVariation;
-                    colors[i * 3 + 1] = baseColor.g + colorVariation;
-                    colors[i * 3 + 2] = baseColor.b + colorVariation;
-                }
-                ringGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                ringGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                const ringMat = new THREE.PointsMaterial({ size: 2, vertexColors: true, transparent: true, opacity: 0.6, sizeAttenuation: true });
-                const ringSystem = new THREE.Points(ringGeo, ringMat);
-                mesh.add(ringSystem);
+                // Saturn’s ring: use a textured ring geometry instead of scattered particles.
+                const innerRadius = visualRadius * 1.2;
+                const outerRadius = visualRadius * 2.5;
+                const ringGeo = new THREE.RingGeometry(innerRadius, outerRadius, 256, 1);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    map: planetTextures.Saturn.ring,
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    color: 0xffffff
+                });
+                const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                ringMesh.rotation.x = Math.PI / 2;
+                mesh.add(ringMesh);
             }
 
             if (data.moons) {
