@@ -68,7 +68,15 @@ const BODY_SCALE    = UNIVERSE_SCALE / KM_IN_AU; // km → world units conversio
 const SIZE_MULTIPLIER = 1;           // Use a multiplier of one to preserve correct relative sizes
 
 // Panels & helpers
-let navPanel, infoPanel, probePanel;
+// mainPanel will become the single wrap‑around UI surface for all navigation,
+// information and probe controls.  navPanel, infoPanel and probePanel are no
+// longer individual meshes; instead, they will reference mainPanel so that
+// existing code which still refers to them does not break.  gravityArrow
+// indicates the probe’s gravitational vector.
+let mainPanel;
+let navPanel;
+let infoPanel;
+let probePanel;
 let gravityArrow;
 
 // Data definitions.  This array captures all of the major planets, dwarf planets,
@@ -527,83 +535,82 @@ function createDeepSpaceProbes() {
 
 // --- COCKPIT CREATION ---
 function createCockpit() {
-    // Floor
-    const floorGeo = new THREE.CircleGeometry(2.2, 32);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, side: THREE.DoubleSide });
+    // Redesign the cockpit: the player stands on a rounded floor rather than
+    // inside an opaque cylinder.  We create a hemispherical floor with a
+    // diameter of roughly 6 ft (~1.8 m).  The hemisphere is oriented so its
+    // flat edge lies at Y=0, giving a gentle curved floor beneath the player.
+    const floorGeo = new THREE.SphereGeometry(1.8, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
     floorMesh.rotation.x = -Math.PI / 2;
+    floorMesh.position.y = 0.0;
     cockpit.add(floorMesh);
 
-    // Cylindrical walls
-    const wallGeo = new THREE.CylinderGeometry(2.2, 2.2, 2.2, 40, 1, true);
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.3, side: THREE.DoubleSide });
-    const walls = new THREE.Mesh(wallGeo, wallMat);
-    walls.position.y = 1.1;
-    cockpit.add(walls);
-
-    // Diamond-like glass dome on top
-    const diamondGeo = new THREE.OctahedronGeometry(2.5);
-    const diamondMat = new THREE.MeshPhysicalMaterial({ color: 0x88ccee, transparent: true, transmission: 1.0, roughness: 0.05, thickness: 0.3 });
+    // Transparent diamond windows above the cockpit.  We use an octahedron
+    // geometry scaled up slightly and place it overhead.  The material is
+    // physically based to give subtle refraction and tint without obscuring
+    // the view.  This helps reduce VR sickness by providing a frame of
+    // reference while remaining mostly transparent.
+    const diamondGeo = new THREE.OctahedronGeometry(2.8);
+    const diamondMat = new THREE.MeshPhysicalMaterial({ color: 0x99bbff, metalness: 0.0, roughness: 0.05, transparent: true, transmission: 1.0, opacity: 0.6, thickness: 0.4 });
     const diamond = new THREE.Mesh(diamondGeo, diamondMat);
-    diamond.position.y = 2.7;
+    diamond.position.y = 2.4;
     cockpit.add(diamond);
 
-    // Create UI panel geometry
-    const panelGeo = new THREE.PlaneGeometry(0.9, 0.6);
+    // Unified wrap‑around UI panel.  This large surface contains navigation,
+    // information and probe controls in three sections.  We create a
+    // rectangular plane and tilt it slightly downward so it feels like a
+    // dashboard.  The resolution of the canvas backing this panel will
+    // later be increased for crisp text.  We set navPanel, infoPanel and
+    // probePanel to reference this same mesh so existing code that
+    // references them continues to function.
+    const panelGeo = new THREE.PlaneGeometry(2.4, 0.8);
+    mainPanel = createUIPanel(panelGeo, { x: 0, y: 1.4, z: -1.8 }, { y: 0 });
+    mainPanel.rotation.x = -Math.PI / 6;
+    mainPanel.userData.type = 'mainPanel';
+    // Increase canvas resolution for the larger panel
+    mainPanel.userData.canvas.width = 1024;
+    mainPanel.userData.canvas.height = 384;
+    mainPanel.userData.context = mainPanel.userData.canvas.getContext('2d');
+    mainPanel.userData.texture = new THREE.CanvasTexture(mainPanel.userData.canvas);
+    mainPanel.material.map = mainPanel.userData.texture;
+    cockpit.add(mainPanel);
+    // Legacy references for backwards compatibility
+    navPanel = mainPanel;
+    infoPanel = mainPanel;
+    probePanel = mainPanel;
 
-    // Navigation panel: warp controls
-    navPanel = createUIPanel(panelGeo, { x: -1.2, y: 1.2, z: -1.5 }, { y: 0.3 });
-    navPanel.userData.type = 'navigation';
-    cockpit.add(navPanel);
-
-    // Information panel on a lectern.  We build a small podium with a tilted
-    // display so that the player can look down at it like a monitor.
-    const lectern = new THREE.Group();
-    // Base of the lectern
-    const baseGeo = new THREE.CylinderGeometry(0.15, 0.2, 0.8, 16);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.7, roughness: 0.4 });
-    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-    baseMesh.position.y = 0.4;
-    lectern.add(baseMesh);
-    // Top surface where the panel sits
-    const topGeo = new THREE.BoxGeometry(0.9, 0.05, 0.6);
-    const topMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.3 });
-    const topMesh = new THREE.Mesh(topGeo, topMat);
-    topMesh.position.y = 0.8;
-    lectern.add(topMesh);
-    // Create the info panel and tilt it slightly towards the player
-    infoPanel = createUIPanel(panelGeo, { x: 0, y: 0.88, z: 0 }, { y: 0.0 });
-    infoPanel.userData.type = 'information';
-    infoPanel.rotation.x = -Math.PI / 6; // Tilt the panel downwards
-    lectern.add(infoPanel);
-    // Position the lectern in front of the player
-    lectern.position.set(0, 0, -1.6);
-    cockpit.add(lectern);
-
-    // Probe panel: shows probe status and launch
-    probePanel = createUIPanel(panelGeo, { x: 1.2, y: 1.2, z: -1.5 }, { y: -0.3 });
-    probePanel.userData.type = 'probe_control';
-    cockpit.add(probePanel);
-
-    // Flight stick
-    const stickBase = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.12, 16), wallMat);
-    stickBase.position.set(0.7, 0.7, -0.8);
+    // Flight stick: repositioned closer to the centre and anchored to the
+    // cockpit floor.  We scale the base down and adjust its height so it
+    // feels like part of the console.  The controls are still interactive.
+    const stickBaseGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 20);
+    const stickBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
+    const stickBase = new THREE.Mesh(stickBaseGeo, stickBaseMat);
+    stickBase.position.set(0.6, 0.4, -0.6);
     cockpit.add(stickBase);
-    const flightStick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 16), new THREE.MeshStandardMaterial({ color: 0xaa0000 }));
+    const flightStickGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.45, 20);
+    const flightStickMat = new THREE.MeshStandardMaterial({ color: 0xaa3333 });
+    const flightStick = new THREE.Mesh(flightStickGeo, flightStickMat);
     flightStick.position.y = 0.25;
     flightStick.userData = { type: 'flightStick', baseRotation: new THREE.Quaternion() };
     stickBase.add(flightStick);
 
-    // Throttle lever
-    const throttleBase = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.5), wallMat);
-    throttleBase.position.set(-0.7, 0.75, -0.8);
+    // Throttle lever: reposition symmetrically on the left.  It uses a
+    // box geometry for the base and a vertical lever.  Travel range is
+    // reduced slightly for finer control.
+    const throttleBaseGeo = new THREE.BoxGeometry(0.14, 0.07, 0.45);
+    const throttleBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
+    const throttleBase = new THREE.Mesh(throttleBaseGeo, throttleBaseMat);
+    throttleBase.position.set(-0.6, 0.4, -0.6);
     cockpit.add(throttleBase);
-    const throttleLever = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.25, 0.09), new THREE.MeshStandardMaterial({ color: 0x00aa00 }));
-    throttleLever.position.z = 0.2;
-    throttleLever.userData = { type: 'throttle', minZ: -0.2, maxZ: 0.2 };
+    const throttleLeverGeo = new THREE.BoxGeometry(0.09, 0.28, 0.09);
+    const throttleLeverMat = new THREE.MeshStandardMaterial({ color: 0x33aa33 });
+    const throttleLever = new THREE.Mesh(throttleLeverGeo, throttleLeverMat);
+    throttleLever.position.set(0, 0.15, 0.15);
+    throttleLever.userData = { type: 'throttle', minZ: -0.15, maxZ: 0.15 };
     throttleBase.add(throttleLever);
 
-    // Gravity vector indicator for probes
+    // Gravity vector indicator for probes remains unchanged
     gravityArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1.6, -2), 0.6, 0xffff00);
     gravityArrow.visible = false;
     cockpit.add(gravityArrow);
@@ -693,30 +700,61 @@ function onSelectStart(event) {
             if (uiBeepSound) uiBeepSound.play();
             return;
         }
-        // Navigation buttons
-        if (obj.userData.type === 'nav_button') {
-            const targetBody = celestialBodies.find(b => b.data.name === obj.userData.targetName);
-            if (targetBody) {
-                selectedTarget = targetBody;
-                warpTo(targetBody);
+        // Navigation, probe and fun‑fact buttons are no longer separate meshes;
+        // they are drawn on the unified main panel.  We detect clicks by
+        // converting the intersection’s UV coordinates into pixel space and
+        // consulting the stored button definitions on mainPanel.userData.
+        if (obj === mainPanel && intersection.uv) {
+            const uv = intersection.uv;
+            const px = uv.x * mainPanel.userData.canvas.width;
+            const py = (1 - uv.y) * mainPanel.userData.canvas.height;
+            // Check nav buttons
+            if (mainPanel.userData.navButtons) {
+                for (const btn of mainPanel.userData.navButtons) {
+                    if (px >= btn.x && px <= btn.x + btn.w && py >= btn.y && py <= btn.y + btn.h) {
+                        const targetBody = celestialBodies.find(b => b.data.name === btn.targetName);
+                        if (targetBody) {
+                            selectedTarget = targetBody;
+                            warpTo(targetBody);
+                        }
+                        if (uiBeepSound) uiBeepSound.play();
+                        return;
+                    }
+                }
             }
-            if (uiBeepSound) uiBeepSound.play();
-            return;
-        }
-        // Probe launch button
-        if (obj.userData.type === 'probe_launch_button') {
-            launchProbe();
-            if (uiBeepSound) uiBeepSound.play();
-            return;
-        }
-        // Text-to-speech button
-        if (obj.userData.type === 'tts_button') {
-            if (selectedTarget && selectedTarget.data.funFacts) {
-                const fact = selectedTarget.data.funFacts[Math.floor(Math.random() * selectedTarget.data.funFacts.length)];
-                narrate(fact);
+            // Check distance slider
+            const dist = mainPanel.userData.scaleSlider;
+            if (dist && py >= dist.y && py <= dist.y + dist.h && px >= dist.x && px <= dist.x + dist.w) {
+                const ratio = (px - dist.x) / dist.w;
+                distanceMultiplier = dist.min + ratio * (dist.max - dist.min);
+                if (uiBeepSound) uiBeepSound.play();
+                return;
             }
-            if (uiBeepSound) uiBeepSound.play();
-            return;
+            // Check time slider
+            const tsl = mainPanel.userData.timeSlider;
+            if (tsl && py >= tsl.y && py <= tsl.y + tsl.h && px >= tsl.x && px <= tsl.x + tsl.w) {
+                const ratio = (px - tsl.x) / tsl.w;
+                timeScale = tsl.min + ratio * (tsl.max - tsl.min);
+                if (uiBeepSound) uiBeepSound.play();
+                return;
+            }
+            // Check tts button
+            const tts = mainPanel.userData.tts_button;
+            if (tts && px >= tts.x && px <= tts.x + tts.w && py >= tts.y && py <= tts.y + tts.h) {
+                if (selectedTarget && selectedTarget.data.funFacts) {
+                    const fact = selectedTarget.data.funFacts[Math.floor(Math.random() * selectedTarget.data.funFacts.length)];
+                    narrate(fact);
+                }
+                if (uiBeepSound) uiBeepSound.play();
+                return;
+            }
+            // Check probe launch
+            const plb = mainPanel.userData.probe_launch_button;
+            if (plb && px >= plb.x && px <= plb.x + plb.w && py >= plb.y && py <= plb.y + plb.h) {
+                launchProbe();
+                if (uiBeepSound) uiBeepSound.play();
+                return;
+            }
         }
         // Otherwise, see if we've pointed at a celestial body (planet or moon) to scan it
         const body = celestialBodies.find(b => b.mesh === obj);
@@ -725,31 +763,8 @@ function onSelectStart(event) {
             if (uiBeepSound) uiBeepSound.play();
             return;
         }
-        // If the nav panel itself is clicked, handle slider interactions.  We use
-        // the intersection’s UV coordinates to find where the laser hit on the
-        // panel’s canvas.  Slider definitions were stored on navPanel.userData.
-        if (obj === navPanel && intersection.uv) {
-            const uv = intersection.uv;
-            // Convert UV to canvas pixel coordinates (origin at top left)
-            const px  = uv.x * navPanel.userData.canvas.width;
-            const py  = (1 - uv.y) * navPanel.userData.canvas.height;
-            // Distance slider
-            const dist = navPanel.userData.scaleSlider;
-            if (py >= dist.y && py <= dist.y + dist.h && px >= dist.x && px <= dist.x + dist.w) {
-                const ratio = (px - dist.x) / dist.w;
-                distanceMultiplier = dist.min + ratio * (dist.max - dist.min);
-                if (uiBeepSound) uiBeepSound.play();
-                return;
-            }
-            // Time slider
-            const tsl = navPanel.userData.timeSlider;
-            if (py >= tsl.y && py <= tsl.y + tsl.h && px >= tsl.x && px <= tsl.x + tsl.w) {
-                const ratio = (px - tsl.x) / tsl.w;
-                timeScale = tsl.min + ratio * (tsl.max - tsl.min);
-                if (uiBeepSound) uiBeepSound.play();
-                return;
-            }
-        }
+        // Legacy slider hit detection on navPanel removed because sliders live on
+        // mainPanel.  All UI interactions are now handled above.
     }
 }
 
@@ -788,16 +803,23 @@ function handleController(controller) {
             grabbedObject.position.y = 0;
             const { minZ, maxZ } = grabbedObject.userData;
             grabbedObject.position.z = Math.max(minZ, Math.min(maxZ, localPos.z));
-            // Map throttle position to flight speed: up to 50 units per second
-            flightSpeed = ((grabbedObject.position.z - minZ) / (maxZ - minZ)) * 50;
+            // Map throttle position to flight speed.  Reduce the maximum
+            // speed to 20 world units per second for finer, more comfortable
+            // movement control.
+            flightSpeed = ((grabbedObject.position.z - minZ) / (maxZ - minZ)) * 20;
         } else if (type === 'flightStick') {
             const localPos = grabbedObject.parent.worldToLocal(grabbedObject.position.clone());
             grabbedObject.position.set(localPos.x, localPos.y, 0);
             grabbedObject.lookAt(new THREE.Vector3(localPos.x, localPos.y, 1));
             const pitch = -grabbedObject.rotation.x;
             const yaw   = grabbedObject.rotation.y;
-            cockpit.rotation.x = THREE.MathUtils.lerp(cockpit.rotation.x, cockpit.rotation.x - pitch * 0.1, 0.1);
-            cockpit.rotation.y = THREE.MathUtils.lerp(cockpit.rotation.y, cockpit.rotation.y - yaw   * 0.1, 0.1);
+            // Smoothly adjust the cockpit’s orientation based on the stick’s
+            // pitch and yaw.  We use a smaller multiplier and lerp factor
+            // to reduce jerky motion and provide more natural control.
+            const targetPitch = cockpit.rotation.x - pitch * 0.07;
+            const targetYaw   = cockpit.rotation.y - yaw   * 0.07;
+            cockpit.rotation.x = THREE.MathUtils.lerp(cockpit.rotation.x, targetPitch, 0.05);
+            cockpit.rotation.y = THREE.MathUtils.lerp(cockpit.rotation.y, targetYaw,   0.05);
         }
     } else if (controller === controller2) {
         // Right-hand laser pointer length adapts to nearest intersection
@@ -813,88 +835,130 @@ function handleController(controller) {
 
 // --- UI & NARRATION ---
 function updateUIPanels() {
-    // Navigation panel: list of warp targets
-    const navCtx = navPanel.userData.context;
-    drawPanelBackground(navCtx, 'NAV / WARP');
+    // If the unified main panel hasn’t been created yet, bail out.
+    if (!mainPanel) return;
+    const ctx = mainPanel.userData.context;
+    const canvas = ctx.canvas;
+    const width = canvas.width;
+    const height = canvas.height;
+    // Clear background and outline
+    ctx.fillStyle = '#0a1a2a';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(0, 0, width, height);
+    // Draw dividing lines for the three sections
+    const sectionWidth = width / 3;
+    ctx.strokeStyle = '#003040';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sectionWidth, 50);
+    ctx.lineTo(sectionWidth, height - 20);
+    ctx.moveTo(sectionWidth * 2, 50);
+    ctx.lineTo(sectionWidth * 2, height - 20);
+    ctx.stroke();
+    // Titles for each section
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('NAV / WARP', sectionWidth / 2, 40);
+    ctx.fillText('SYSTEM INFO', sectionWidth + sectionWidth / 2, 40);
+    ctx.fillText('PROBE CONTROL', sectionWidth * 2 + sectionWidth / 2, 40);
+    ctx.textAlign = 'left';
+    // --- Navigation section ---
+    mainPanel.userData.navButtons = [];
     solarSystemData.forEach((body, i) => {
-        const yPos = 80 + i * 28;
-        const btn = { x: 50, y: yPos - 18, w: 412, h: 25, targetName: body.name, type: 'nav_button' };
-        drawButton(navCtx, body.name, btn, selectedTarget?.data.name === body.name);
-        navPanel.userData[body.name] = btn;
+        const yPos = 80 + i * 26;
+        const btn = {
+            x: 20,
+            y: yPos - 18,
+            w: sectionWidth - 40,
+            h: 22,
+            targetName: body.name,
+            type: 'nav_button'
+        };
+        drawButton(ctx, body.name, {
+            x: btn.x,
+            y: btn.y,
+            w: btn.w,
+            h: btn.h
+        }, selectedTarget?.data.name === body.name);
+        mainPanel.userData.navButtons.push(btn);
     });
-    navPanel.userData.texture.needsUpdate = true;
-
-    // Define sliders for distance and time scaling on the nav panel.  These live
-    // near the bottom of the panel.  We store their metadata on the panel for
-    // hit detection during interaction.  Each slider covers the full width of
-    // the panel minus margins.
-    const sliderWidth  = 412;
-    const sliderHeight = 16;
-    // Distance slider: adjust how far apart bodies appear relative to their
-    // true scaled distance.  Range [1, 10].
+    // Distance scale slider
+    const sliderH = 18;
     const distSlider = {
         label: 'Scale',
-        x: 50,
-        y: 360,
-        w: sliderWidth,
-        h: sliderHeight,
+        x: 20,
+        y: height - 110,
+        w: sectionWidth - 40,
+        h: sliderH,
         min: 1,
         max: 10
     };
-    // Time slider: adjust simulation speed.  Range [0, 20].
+    drawSlider(ctx, distSlider, distanceMultiplier);
+    mainPanel.userData.scaleSlider = distSlider;
+    // Time slider
     const timeSlider = {
         label: 'Time',
-        x: 50,
-        y: 390,
-        w: sliderWidth,
-        h: sliderHeight,
+        x: 20,
+        y: height - 70,
+        w: sectionWidth - 40,
+        h: sliderH,
         min: 0,
         max: 20
     };
-    // Draw the sliders onto the navigation panel
-    drawSlider(navCtx, distSlider, distanceMultiplier);
-    drawSlider(navCtx, timeSlider, timeScale);
-    // Persist slider definitions so they can be hit-tested
-    navPanel.userData.scaleSlider = distSlider;
-    navPanel.userData.timeSlider  = timeSlider;
-
-    // Info panel: display details about selected target
-    const infoCtx = infoPanel.userData.context;
-    drawPanelBackground(infoCtx, 'SYSTEM INFO');
+    drawSlider(ctx, timeSlider, timeScale);
+    mainPanel.userData.timeSlider = timeSlider;
+    // --- Information section ---
+    const infoX = sectionWidth;
+    const infoMargin = 20;
     if (selectedTarget) {
         const data = selectedTarget.data;
-        infoCtx.fillStyle = 'white';
-        infoCtx.font = '24px sans-serif';
-        infoCtx.fillText(`Target: ${data.name}`, 30, 80);
-        infoCtx.font = '20px sans-serif';
-        infoCtx.fillText(`Radius: ${data.radius.toLocaleString()} km`, 30, 120);
-        if (data.a) infoCtx.fillText(`Orbit (a): ${data.a.toLocaleString()} M km`, 30, 150);
-        if (data.distAU) infoCtx.fillText(`Distance: ${data.distAU} AU`, 30, 150);
-        // fun facts button
-        const ttsBtn = { x: 50, y: 280, w: 412, h: 40, type: 'tts_button' };
-        drawButton(infoCtx, 'NARRATE FUN FACT', ttsBtn, false);
-        infoPanel.userData['tts_button'] = ttsBtn;
+        ctx.fillStyle = 'white';
+        ctx.font = '22px sans-serif';
+        ctx.fillText(`Target: ${data.name}`, infoX + infoMargin, 80);
+        ctx.font = '20px sans-serif';
+        ctx.fillText(`Radius: ${data.radius.toLocaleString()} km`, infoX + infoMargin, 110);
+        if (data.a) ctx.fillText(`Orbit: ${data.a.toLocaleString()} M km`, infoX + infoMargin, 140);
+        if (data.distAU) ctx.fillText(`Dist: ${data.distAU} AU`, infoX + infoMargin, 140);
+        // Narrate button
+        const ttsBtn = {
+            x: infoX + infoMargin,
+            y: height - 80,
+            w: sectionWidth - 2 * infoMargin,
+            h: 36,
+            type: 'tts_button'
+        };
+        drawButton(ctx, 'NARRATE FUN FACT', ttsBtn, false);
+        mainPanel.userData.tts_button = ttsBtn;
     } else {
-        infoCtx.fillStyle = '#aaa';
-        infoCtx.font = '24px sans-serif';
-        infoCtx.fillText('No target selected.', 30, 80);
+        ctx.fillStyle = '#aaa';
+        ctx.font = '22px sans-serif';
+        ctx.fillText('No target selected.', infoX + infoMargin, 100);
+        // Clear tts button so we don’t accidentally pick up an old one
+        delete mainPanel.userData.tts_button;
     }
-    infoPanel.userData.texture.needsUpdate = true;
-
-    // Probe panel
-    const probeCtx = probePanel.userData.context;
-    drawPanelBackground(probeCtx, 'PROBE CONTROL');
-    probeCtx.fillStyle = 'white';
-    probeCtx.font = '20px sans-serif';
-    probeCtx.fillText(`Active Probe: ${activeProbe ? 'Yes' : 'No'}`, 30, 80);
+    // --- Probe control section ---
+    const probeX = sectionWidth * 2;
+    ctx.fillStyle = 'white';
+    ctx.font = '20px sans-serif';
+    ctx.fillText(`Active Probe: ${activeProbe ? 'Yes' : 'No'}`, probeX + 20, 80);
     if (activeProbe) {
         const speed = activeProbe.velocity.length() / BODY_SCALE;
-        probeCtx.fillText(`Velocity: ${speed.toFixed(2)} km/s`, 30, 110);
+        ctx.fillText(`Velocity: ${speed.toFixed(2)} km/s`, probeX + 20, 110);
     }
-    const launchBtn = { x: 50, y: 280, w: 412, h: 40, type: 'probe_launch_button' };
-    drawButton(probeCtx, 'LAUNCH PROBE', launchBtn, false);
-    probePanel.userData['probe_launch_button'] = launchBtn;
-    probePanel.userData.texture.needsUpdate = true;
+    const launchBtn = {
+        x: probeX + 20,
+        y: height - 80,
+        w: sectionWidth - 40,
+        h: 36,
+        type: 'probe_launch_button'
+    };
+    drawButton(ctx, 'LAUNCH PROBE', launchBtn, false);
+    mainPanel.userData.probe_launch_button = launchBtn;
+    // After drawing everything, update the texture
+    mainPanel.userData.texture.needsUpdate = true;
 }
 
 function drawPanelBackground(ctx, title) {
