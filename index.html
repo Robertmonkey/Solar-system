@@ -26,9 +26,6 @@ import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
-// Tween.js is imported as a default export.  Importing named exports from
-// tween.module.min.js causes an error because the module doesn’t define them.
-// Tween.js is not used; warp transitions are implemented manually below.
 
 // --- GLOBALS & CONSTANTS ---
 let scene, camera, renderer, clock;
@@ -40,12 +37,6 @@ let controller1, controller2;
 let hand1, hand2;
 let handModelFactory, controllerModelFactory;
 const raycaster = new THREE.Raycaster();
-// When grabbing a flight control (flight stick or throttle), we store an
-// object describing the control, its original base (parent) and the
-// controller used to grab it.  This allows us to compute controller
-// movements relative to the control’s base without physically attaching
-// the control to the controller.  When grabbing other objects (e.g. UI
-// interactions) `grabbedObject` can remain the mesh itself.
 let grabbedObject = null;
 let selectedTarget = null;
 let activeProbe = null;
@@ -54,269 +45,244 @@ let flightSpeed = 0;
 const celestialBodies = [];
 const launchableProbes = [];
 
-// Runtime parameters that can be adjusted via in‑game sliders.  `distanceMultiplier`
-// scales the distances between bodies without altering their relative sizes; a
-// value of 1 corresponds to real astronomical ratios (1 AU → 100 world units).
-// Increasing it stretches the emptiness of space (e.g. 2 makes Earth’s orbit
-// 200 units).  `timeScale` multiplies simulation speed: 1 is normal, 0 pauses,
-// values >1 accelerate orbits and probe motion.
 let distanceMultiplier = 1;
-let timeScale         = 1;
+let timeScale = 1;
+let simulationTime = 0;
 
-// Fundamental constants
-const G = 6.67430e-11;               // Gravitational constant
-const KM_IN_AU = 149.6e6;            // Number of km in one AU
-const UNIVERSE_SCALE = 100;          // 1 AU = 100 world units.  This maps physical distances into
-                                      // manageable VR units without altering the ratios between
-                                      // orbital radii.  For example, Earth’s orbit (1 AU) becomes
-                                      // 100 world units.
-const BODY_SCALE    = UNIVERSE_SCALE / KM_IN_AU; // km → world units conversion
-const SIZE_MULTIPLIER = 1;           // Use a multiplier of one to preserve correct relative sizes
+const G = 6.67430e-11;
+const KM_IN_AU = 149.6e6;
+const UNIVERSE_SCALE = 100;
+const BODY_SCALE = UNIVERSE_SCALE / KM_IN_AU;
+const SIZE_MULTIPLIER = 1;
 
-// Panels & helpers
-// mainPanel will become the single wrap‑around UI surface for all navigation,
-// information and probe controls.  navPanel, infoPanel and probePanel are no
-// longer individual meshes; instead, they will reference mainPanel so that
-// existing code which still refers to them does not break.  gravityArrow
-// indicates the probe’s gravitational vector.
 let mainPanel;
 let navPanel;
 let infoPanel;
 let probePanel;
 let gravityArrow;
 
-// Timestamp of the last hand interaction to avoid accidental rapid
-// repeated triggers when a fingertip hovers on the UI.  Measured in
-// seconds according to the Three.js clock.
 let lastHandPressTime = 0;
 
-// Data definitions.  This array captures all of the major planets, dwarf planets,
-// and notable small bodies described by the user.  Semi-major axes (a) are in
-// millions of kilometers (M km); radius is in km.  The game will automatically
-// convert these to world units using BODY_SCALE and UNIVERSE_SCALE.  Additional
-// properties such as color, eccentricity (e), orbital period, inclination, axial
-// tilt, and fun facts enrich the simulation and the user interface.
 const solarSystemData = [
-    { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: [
+    { name: 'Sun', radius: 696340, color: 0xfff000, mass: 1.989e30, funFacts: [
         "The Sun contains more than 99.8% of the mass of the solar system.",
         "Its diameter is about 109 times that of Earth.",
         "The core is over 27 million degrees Fahrenheit while the surface is about 10,000 °F.",
         "It formed around 4.6 billion years ago and will expand into a red giant in roughly five billion years.",
         "Its gravitational pull keeps all planets, asteroids and comets bound in their orbits."
     ] },
-    { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, funFacts: [
+    { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, mass: 3.3011e23, funFacts: [
         "Mercury is the smallest and closest planet to the Sun.",
         "A single day on Mercury (sunrise to sunrise) lasts 176 Earth days while a year is 88 days.",
         "It is the second‑densest planet after Earth despite its small size.",
         "Mercury has a global magnetic field about one percent as strong as Earth’s.",
         "Temperatures swing from 427 °C in sunlight to –173 °C in darkness, yet water ice exists in permanently shadowed craters at its poles."
     ] },
-    { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, funFacts: [
+    { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, mass: 4.8675e24, funFacts: [
         "A day on Venus (243 Earth days) is longer than its 225‑day year.",
         "It rotates backwards (retrograde) compared to most planets.",
         "It is the hottest planet in the solar system at roughly 465 °C due to a runaway greenhouse effect.",
         "Surface pressure on Venus is more than 90 times Earth’s atmospheric pressure.",
         "Often called Earth’s sister planet because of its similar size and mass."
     ] },
-    { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, funFacts: [
+    { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, mass: 5.97237e24, funFacts: [
         "Earth is the only planet not named after a mythological deity.",
         "It is the densest planet in the solar system.",
         "Earth’s rotation is gradually slowing by about 17 milliseconds per century.",
         "Roughly 70 percent of its surface is covered by water.",
         "Its magnetic field shields the surface from harmful solar wind and cosmic radiation."
     ], moons: [
-        { name: 'Moon', radius: 1737, color: 0xcccccc, a: 0.384, e: 0.055, period: 27.3, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, funFacts: [
+        { name: 'Moon', radius: 1737, color: 0xcccccc, a: 0.384, e: 0.055, period: 27.3, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, mass: 7.342e22, funFacts: [
             "The Moon is drifting away from Earth by about 3.8 cm per year.",
             "It is the 5th largest moon in the solar system.",
             "The Moon has 'moonquakes' caused by the Earth's gravitational pull."
         ] }
     ]},
-    { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, funFacts: [
+    { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, mass: 6.4171e23, funFacts: [
         "Home to Olympus Mons, the tallest volcano and mountain in the solar system.",
         "Its red colour comes from iron oxide (rust) in the soil and rocks.",
         "Mars has the largest dust storms in the solar system, sometimes covering the entire planet.",
         "The atmosphere is less than one percent as dense as Earth’s and composed mostly of carbon dioxide.",
         "Evidence suggests Mars once had flowing liquid water and perhaps conditions suitable for life."
     ], moons: [
-        { name: 'Phobos', radius: 11.2, color: 0x8f8f8f, a: 0.00937, e: 0.015, period: 0.3, inclination: 1.1, funFacts: [
+        { name: 'Phobos', radius: 11.2, color: 0x8f8f8f, a: 0.00937, e: 0.015, period: 0.3, inclination: 1.1, mass: 1.0659e16, funFacts: [
             "Phobos is getting closer to Mars and will either crash into it or break up into a ring in about 50 million years.",
             "It is a 'captured' asteroid, not a naturally formed moon."
         ]},
-        { name: 'Deimos', radius: 6.2, color: 0xafafaf, a: 0.0234, e: 0.0002, period: 1.26, inclination: 0.9, funFacts: [
+        { name: 'Deimos', radius: 6.2, color: 0xafafaf, a: 0.0234, e: 0.0002, period: 1.26, inclination: 0.9, mass: 1.4762e15, funFacts: [
             "Deimos is one of the smallest known moons in the solar system.",
             "It is covered in a thick layer of fine dust, or regolith."
         ] }
     ]},
-    { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, funFacts: [
+    { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, mass: 1.89813e27, funFacts: [
         "Jupiter is the largest planet—more than twice as massive as all the other planets combined.",
         "The Great Red Spot is a colossal storm that has raged for centuries.",
         "It has the shortest day of any planet, rotating once every 10 hours.",
         "Jupiter has at least 79 moons; its largest moon, Ganymede, is bigger than the planet Mercury.",
         "The planet’s magnetic field is the strongest of any planet in the solar system."
     ], moons: [
-        { name: 'Io', radius: 1821, color: 0xf3d649, a: 0.421, e: 0.004, period: 1.77, inclination: 0.05, funFacts: [
+        { name: 'Io', radius: 1821, color: 0xf3d649, a: 0.421, e: 0.004, period: 1.77, inclination: 0.05, mass: 8.9319e22, funFacts: [
             "Io is the most volcanically active body in the solar system, with hundreds of volcanoes.",
             "Its surface is covered in sulfur in various colorful forms."
         ]},
-        { name: 'Europa', radius: 1560, color: 0x8f7f70, a: 0.671, e: 0.009, period: 3.55, inclination: 0.47, funFacts: [
+        { name: 'Europa', radius: 1560, color: 0x8f7f70, a: 0.671, e: 0.009, period: 3.55, inclination: 0.47, mass: 4.7998e22, funFacts: [
             "Europa's icy surface may hide a global saltwater ocean underneath.",
             "Scientists believe this ocean could potentially harbor extraterrestrial life."
         ]},
-        { name: 'Ganymede', radius: 2634, color: 0x9e9990, a: 1.070, e: 0.001, period: 7.15, inclination: 0.20, funFacts: [
+        { name: 'Ganymede', radius: 2634, color: 0x9e9990, a: 1.070, e: 0.001, period: 7.15, inclination: 0.20, mass: 1.4819e23, funFacts: [
             "Ganymede is the largest moon in the solar system, bigger than the planet Mercury.",
             "It is the only moon known to have its own magnetic field."
         ]},
-        { name: 'Callisto', radius: 2410, color: 0x5a5651, a: 1.882, e: 0.007, period: 16.69, inclination: 0.20, funFacts: [
+        { name: 'Callisto', radius: 2410, color: 0x5a5651, a: 1.882, e: 0.007, period: 16.69, inclination: 0.20, mass: 1.0759e23, funFacts: [
             "Callisto has the most heavily cratered surface of any object in the solar system.",
             "It is thought to have a 'dead' surface that hasn't changed much in 4 billion years."
         ]},
-        { name: 'Himalia', radius: 85, color: 0x8b8081, a: 11.46, e: 0.16, period: 250.6, inclination: 27.5, funFacts: [
+        { name: 'Himalia', radius: 85, color: 0x8b8081, a: 11.46, e: 0.16, period: 250.6, inclination: 27.5, mass: 4.2e18, funFacts: [
             "Himalia is the largest irregular moon of Jupiter.",
             "It may be the remnant of a captured asteroid."
         ] }
     ]},
-    { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, funFacts: [
+    { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, mass: 5.6834e26, funFacts: [
         "Saturn’s rings are made of billions of particles of ice and rock and are only about 10 metres thick on average.",
         "The planet is less dense than water and would float in a bathtub large enough to hold it.",
         "Winds on Saturn can reach speeds of around 1,800 kilometres per hour.",
         "A persistent hexagonal storm rages at Saturn’s north pole.",
         "It has more than 145 known moons; Titan, the largest, has a thick nitrogen‑rich atmosphere."
     ], moons: [
-        { name: 'Mimas', radius: 198, color: 0xb0b0b0, a: 0.185, e: 0.02, period: 0.9, inclination: 1.5, funFacts: [
+        { name: 'Mimas', radius: 198, color: 0xb0b0b0, a: 0.185, e: 0.02, period: 0.9, inclination: 1.5, mass: 3.7493e19, funFacts: [
             "Mimas is famous for its massive impact crater, Herschel, which makes it resemble the Death Star.",
             "The crater is 130 km wide, almost one-third of the moon's own diameter."
         ] },
-        { name: 'Enceladus', radius: 252, color: 0xe0e0e0, a: 0.238, e: 0.005, period: 1.4, inclination: 0.02, funFacts: [
+        { name: 'Enceladus', radius: 252, color: 0xe0e0e0, a: 0.238, e: 0.005, period: 1.4, inclination: 0.02, mass: 1.08022e20, funFacts: [
             "Enceladus has huge geysers at its south pole that spray water ice into space, forming Saturn's E-ring.",
             "It is one of the most promising places to search for life."
         ] },
-        { name: 'Tethys', radius: 533, color: 0xd8d8d8, a: 0.294, e: 0.0, period: 1.9, inclination: 1.1, funFacts: [
+        { name: 'Tethys', radius: 533, color: 0xd8d8d8, a: 0.294, e: 0.0, period: 1.9, inclination: 1.1, mass: 6.1745e20, funFacts: [
             "Tethys has a gigantic canyon, Ithaca Chasma, that runs three-quarters of the way around the moon.",
             "It's composed almost entirely of water ice."
         ] },
-        { name: 'Dione', radius: 561, color: 0xc8c8c8, a: 0.377, e: 0.002, period: 2.7, inclination: 0.02, funFacts: [
+        { name: 'Dione', radius: 561, color: 0xc8c8c8, a: 0.377, e: 0.002, period: 2.7, inclination: 0.02, mass: 1.095452e21, funFacts: [
             "Dione has bright, wispy ice cliffs on its trailing hemisphere.",
             "It may have a subsurface ocean, much like Enceladus."
         ] },
-        { name: 'Rhea', radius: 764, color: 0xb8b8b8, a: 0.527, e: 0.001, period: 4.5, inclination: 0.3, funFacts: [
+        { name: 'Rhea', radius: 764, color: 0xb8b8b8, a: 0.527, e: 0.001, period: 4.5, inclination: 0.3, mass: 2.306518e21, funFacts: [
             "Rhea is the second-largest moon of Saturn.",
             "Scientists once thought Rhea might have its own faint ring system, a first for a moon."
         ] },
-        { name: 'Titan', radius: 2575, color: 0xf5ad6f, a: 1.221, e: 0.029, period: 15.9, inclination: 0.33, funFacts: [
+        { name: 'Titan', radius: 2575, color: 0xf5ad6f, a: 1.221, e: 0.029, period: 15.9, inclination: 0.33, mass: 1.3452e23, funFacts: [
             "Titan is the only moon with a thick, dense atmosphere.",
             "It has rivers, lakes, and seas of liquid methane and ethane on its surface."
         ] },
-        { name: 'Hyperion', radius: 135, color: 0xa08c78, a: 1.481, e: 0.1, period: 21.3, inclination: 0.43, funFacts: [
+        { name: 'Hyperion', radius: 135, color: 0xa08c78, a: 1.481, e: 0.1, period: 21.3, inclination: 0.43, mass: 5.585e18, funFacts: [
             "Hyperion is one of the largest irregularly shaped moons.",
             "It tumbles chaotically through its orbit, with no stable rotation axis."
         ] },
-        { name: 'Iapetus', radius: 735, color: 0x909090, a: 3.560, e: 0.028, period: 79.3, inclination: 15.4, funFacts: [
+        { name: 'Iapetus', radius: 735, color: 0x909090, a: 3.560, e: 0.028, period: 79.3, inclination: 15.4, mass: 1.805635e21, funFacts: [
             "Iapetus is a 'two-faced' moon, with one bright hemisphere and one dark one.",
             "It also has a mysterious, massive equatorial ridge."
         ] },
-        { name: 'Phoebe', radius: 106.5, color: 0x5a5a5a, a: 12.952, e: 0.159, period: -550, inclination: 175.3, funFacts: [
+        { name: 'Phoebe', radius: 106.5, color: 0x5a5a5a, a: 12.952, e: 0.159, period: -550, inclination: 175.3, mass: 8.292e18, funFacts: [
             "Phoebe orbits Saturn in a retrograde (backwards) direction.",
             "It is thought to be a captured Kuiper Belt Object."
         ] }
     ]},
-    { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, funFacts: [
+    { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, mass: 8.681e25, funFacts: [
         "Uranus is tilted on its side by about 98°, likely the result of a giant impact in its distant past.",
         "Its seasons each last more than 20 Earth years because it takes 84 years to orbit the Sun.",
         "It is the coldest planet in the solar system, with temperatures dropping below −200 °C.",
         "Discovered by William Herschel in 1781, it was the first planet found with a telescope.",
         "It has faint dark rings and moons named after characters from Shakespeare and Alexander Pope."
     ], moons: [
-        { name: 'Puck', radius: 81, color: 0x707070, a: 0.086, e: 0.0001, period: 0.76, inclination: 0.32, funFacts: [
+        { name: 'Puck', radius: 81, color: 0x707070, a: 0.086, e: 0.0001, period: 0.76, inclination: 0.32, mass: 2.9e18, funFacts: [
             "Puck was the first inner moon of Uranus to be discovered by Voyager 2.",
             "Its surface is dark and covered with craters."
         ] },
-        { name: 'Miranda', radius: 236, color: 0xc0c0c0, a: 0.129, e: 0.001, period: 1.4, inclination: 4.2, funFacts: [
+        { name: 'Miranda', radius: 236, color: 0xc0c0c0, a: 0.129, e: 0.001, period: 1.4, inclination: 4.2, mass: 6.59e19, funFacts: [
             "Miranda has one of the most bizarre and varied landscapes in the solar system.",
             "It features enormous canyons, terraced layers, and a patchwork of different surfaces."
         ] },
-        { name: 'Ariel', radius: 579, color: 0xd0d0d0, a: 0.191, e: 0.001, period: 2.5, inclination: 0.3, funFacts: [
+        { name: 'Ariel', radius: 579, color: 0xd0d0d0, a: 0.191, e: 0.001, period: 2.5, inclination: 0.3, mass: 1.353e21, funFacts: [
             "Ariel has the brightest surface of Uranus's major moons.",
             "Its surface is marked by extensive fault valleys and canyons."
         ] },
-        { name: 'Umbriel', radius: 585, color: 0x888888, a: 0.266, e: 0.004, period: 4.1, inclination: 0.3, funFacts: [
+        { name: 'Umbriel', radius: 585, color: 0x888888, a: 0.266, e: 0.004, period: 4.1, inclination: 0.3, mass: 1.172e21, funFacts: [
             "Umbriel is the darkest of Uranus's large moons.",
             "Its most prominent feature is a bright, mysterious ring on its equator called the 'Wunda crater'."
         ] },
-        { name: 'Titania', radius: 788, color: 0xb0a090, a: 0.436, e: 0.002, period: 8.7, inclination: 0.1, funFacts: [
+        { name: 'Titania', radius: 788, color: 0xb0a090, a: 0.436, e: 0.002, period: 8.7, inclination: 0.1, mass: 3.527e21, funFacts: [
             "Titania is the largest moon of Uranus.",
             "It has a network of huge canyons and fault lines, suggesting past geological activity."
         ] },
-        { name: 'Oberon', radius: 761, color: 0x908080, a: 0.583, e: 0.001, period: 13.5, inclination: 0.1, funFacts: [
+        { name: 'Oberon', radius: 761, color: 0x908080, a: 0.583, e: 0.001, period: 13.5, inclination: 0.1, mass: 3.014e21, funFacts: [
             "Oberon is the outermost large moon of Uranus.",
             "Its old, icy surface is heavily cratered and shows little sign of internal activity."
         ] }
     ]},
-    { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, funFacts: [
+    { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, mass: 1.02413e26, funFacts: [
         "Neptune was predicted by mathematicians before it was observed through a telescope.",
         "It has the strongest winds in the solar system, topping 2,100 kilometres per hour.",
         "A Neptunian year lasts nearly 165 Earth years.",
         "Neptune radiates more heat than it receives from the Sun.",
         "Its largest moon, Triton, has nitrogen geysers and orbits the planet retrograde to its rotation."
     ], moons: [
-        { name: 'Proteus', radius: 210, color: 0x606060, a: 0.117, e: 0.0005, period: 1.1, inclination: 0.026, funFacts: [
+        { name: 'Proteus', radius: 210, color: 0x606060, a: 0.117, e: 0.0005, period: 1.1, inclination: 0.026, mass: 5.0e19, funFacts: [
             "Proteus is one of the darkest objects in the solar system, reflecting only 6% of the light that hits it.",
             "It is irregularly shaped, about as large as a body can be before gravity pulls it into a sphere."
         ] },
-        { name: 'Triton', radius: 1353, color: 0xced4da, a: 0.354, e: 0.0, period: -5.9, inclination: 157, funFacts: [
+        { name: 'Triton', radius: 1353, color: 0xced4da, a: 0.354, e: 0.0, period: -5.9, inclination: 157, mass: 2.14e22, funFacts: [
             "Triton is the only large moon in the solar system that orbits in the opposite direction of its planet's rotation (retrograde orbit).",
             "It has geysers that erupt nitrogen frost and is one of the coldest objects in the solar system."
         ] },
-        { name: 'Nereid', radius: 170, color: 0xa0a0a0, a: 5.513, e: 0.75, period: 360, inclination: 7.2, funFacts: [
+        { name: 'Nereid', radius: 170, color: 0xa0a0a0, a: 5.513, e: 0.75, period: 360, inclination: 7.2, mass: 3.1e19, funFacts: [
             "Nereid has one of the most eccentric orbits of any moon in the solar system.",
             "Its distance from Neptune varies by a factor of 7."
         ] }
     ]},
-    { name: 'Ceres', type: 'Dwarf Planet', radius: 476, color: 0xaaaaaa, a: 413.7, e: 0.076, period: 1682, inclination: 10.6, axialTilt: 4, lonAscNode: 80.3, argPeri: 73.6, meanAnomalyEpoch: 149.3, funFacts: [
+    { name: 'Ceres', type: 'Dwarf Planet', radius: 476, color: 0xaaaaaa, a: 413.7, e: 0.076, period: 1682, inclination: 10.6, axialTilt: 4, lonAscNode: 80.3, argPeri: 73.6, meanAnomalyEpoch: 149.3, mass: 9.39e20, funFacts: [
         "The largest object in the asteroid belt.",
         "The bright spots on its surface are salt deposits, likely from an ancient subsurface ocean.",
         "It is the only dwarf planet in the inner solar system."
     ] },
-    { name: 'Pluto', type: 'Dwarf Planet', radius: 1188, color: 0xead9c2, a: 5906.4, e: 0.249, period: 90560, inclination: 17.2, axialTilt: 122.5, lonAscNode: 110.3, argPeri: 113.8, meanAnomalyEpoch: 14.5, funFacts: [
+    { name: 'Pluto', type: 'Dwarf Planet', radius: 1188, color: 0xead9c2, a: 5906.4, e: 0.249, period: 90560, inclination: 17.2, axialTilt: 122.5, lonAscNode: 110.3, argPeri: 113.8, meanAnomalyEpoch: 14.5, mass: 1.303e22, funFacts: [
         "Its orbit is so eccentric it's sometimes closer to the Sun than Neptune.",
         "Features a massive, heart-shaped nitrogen glacier named Tombaugh Regio.",
         "Its largest moon, Charon, is so big they orbit a common point in space outside of Pluto."
     ], moons: [
-        { name: 'Charon', radius: 606, color: 0xb5a99d, a: 0.0195, e: 0.0, period: 6.4, inclination: 0.00, funFacts: [
+        { name: 'Charon', radius: 606, color: 0xb5a99d, a: 0.0195, e: 0.0, period: 6.4, inclination: 0.00, mass: 1.586e21, funFacts: [
             "Charon is so large relative to Pluto (about half its diameter) that they are considered a binary system.",
             "It has a reddish north pole, thought to be caused by gases escaping from Pluto's atmosphere and freezing on Charon's surface."
         ] },
-        { name: 'Nix', radius: 22, color: 0x909090, a: 0.048, e: 0.002, period: 24.8, inclination: 0.13, funFacts: [
+        { name: 'Nix', radius: 22, color: 0x909090, a: 0.048, e: 0.002, period: 24.8, inclination: 0.13, mass: 4.5e16, funFacts: [
             "Nix and Hydra were discovered in 2005 from Hubble Space Telescope images.",
             "It has a reddish hue, possibly from tholins on its surface."
         ] },
-        { name: 'Hydra', radius: 26, color: 0xa0a0a0, a: 0.064, e: 0.005, period: 38.2, inclination: 0.24, funFacts: [
+        { name: 'Hydra', radius: 26, color: 0xa0a0a0, a: 0.064, e: 0.005, period: 38.2, inclination: 0.24, mass: 4.8e16, funFacts: [
             "Hydra is Pluto's outermost known moon.",
             "It is thought to be covered in nearly pure water ice."
         ] }
     ]},
-    { name: 'Haumea', type: 'Dwarf Planet', radius: 620, color: 0xd1c7b7, a: 6452, e: 0.195, period: 103363, inclination: 28.2, axialTilt: 0, lonAscNode: 122.1, argPeri: 240.2, meanAnomalyEpoch: 201.7, funFacts: [
+    { name: 'Haumea', type: 'Dwarf Planet', radius: 620, color: 0xd1c7b7, a: 6452, e: 0.195, period: 103363, inclination: 28.2, axialTilt: 0, lonAscNode: 122.1, argPeri: 240.2, meanAnomalyEpoch: 201.7, mass: 4.006e21, funFacts: [
         "Haumea is one of the fastest rotating large objects in our solar system, spinning once every 4 hours.",
         "Its rapid spin has elongated it into a shape resembling a flattened football.",
         "It has its own ring system."
     ] },
-    { name: 'Makemake', type: 'Dwarf Planet', radius: 715, color: 0xc18d66, a: 6847, e: 0.156, period: 112897, inclination: 29.0, axialTilt: 0, lonAscNode: 79.4, argPeri: 295.2, meanAnomalyEpoch: 359.8, funFacts: [
+    { name: 'Makemake', type: 'Dwarf Planet', radius: 715, color: 0xc18d66, a: 6847, e: 0.156, period: 112897, inclination: 29.0, axialTilt: 0, lonAscNode: 79.4, argPeri: 295.2, meanAnomalyEpoch: 359.8, mass: 3.1e21, funFacts: [
         "Makemake was discovered shortly after Easter in 2005, earning it the codename 'Easterbunny'.",
         "Its surface is covered with frozen methane, ethane, and nitrogen.",
         "It has a tiny, dark moon nicknamed MK2."
     ] },
-    { name: 'Eris', type: 'Dwarf Planet', radius: 1163, color: 0xcec8c8, a: 10123, e: 0.436, period: 203830, inclination: 44.0, axialTilt: 0, lonAscNode: 35.9, argPeri: 151.9, meanAnomalyEpoch: 205.9, funFacts: [
+    { name: 'Eris', type: 'Dwarf Planet', radius: 1163, color: 0xcec8c8, a: 10123, e: 0.436, period: 203830, inclination: 44.0, axialTilt: 0, lonAscNode: 35.9, argPeri: 151.9, meanAnomalyEpoch: 205.9, mass: 1.66e22, funFacts: [
         "The discovery of Eris, a body more massive than Pluto, directly led to the 2006 re-definition of a planet.",
         "It is the most distant dwarf planet from the Sun for most of its orbit.",
         "Its moon is named Dysnomia, the Greek goddess of lawlessness."
     ] },
-    { name: "Halley's Comet", type: 'Comet', radius: 5.5, color: 0xffffff, a: 2667, e: 0.967, period: 27740, inclination: 162.2, axialTilt: 0, lonAscNode: 58.4, argPeri: 111.3, meanAnomalyEpoch: 351.4, funFacts: [
+    { name: "Halley's Comet", type: 'Comet', radius: 5.5, color: 0xffffff, a: 2667, e: 0.967, period: 27740, inclination: 162.2, axialTilt: 0, lonAscNode: 58.4, argPeri: 111.3, meanAnomalyEpoch: 351.4, mass: 2.2e14, funFacts: [
         "The most famous comet, visible from Earth every 75-76 years.",
         "It is a 'periodic' comet and will next appear in mid-2061.",
         "Its tail always points away from the Sun due to solar wind."
     ] }
 ];
 
-// Deep space probes.  Distances are in astronomical units (AU) measured from the Sun.
 const probesData = [
     { name: 'Voyager 1', distAU: 167.3, declination: 12.1, rightAscension: 267.0, funFacts: [
         "Launched in 1977, it is the most distant human-made object from Earth.",
@@ -340,28 +306,6 @@ const probesData = [
     ] }
 ];
 
-// Data for a handful of nearby stars (currently unused by the simulation but can be
-// plotted if extended later).
-const starData = [
-    { name: 'Proxima Centauri', distLY: 4.24, color: 0xff6a3d, ra: 222.9, dec: -62.6, funFacts: [
-        "Our closest stellar neighbor.",
-        "It's a red dwarf, much smaller and cooler than the Sun.",
-        "Hosts at least one exoplanet, Proxima Centauri b."
-    ] },
-    { name: 'Alpha Centauri A', distLY: 4.37, color: 0xfff4e1, ra: 219.9, dec: -60.8, funFacts: [
-        "A star very similar to our Sun in size and type.",
-        "Part of a triple star system with Alpha Centauri B and Proxima Centauri."
-    ] },
-    { name: 'Alpha Centauri B', distLY: 4.37, color: 0xffd9a1, ra: 219.9, dec: -60.8, funFacts: [
-        "A bit smaller and cooler than the Sun.",
-        "Orbits its larger companion, Alpha Centauri A, every 80 years."
-    ] },
-    { name: 'Sirius', distLY: 8.6, color: 0xcad7ff, ra: 101.3, dec: -16.7, funFacts: [
-        "The brightest star in the night sky, also known as the 'Dog Star'.",
-        "It has a tiny, dense white dwarf companion star called Sirius B."
-    ] }
-];
-
 // --- INITIALIZATION ---
 function init() {
     scene = new THREE.Scene();
@@ -375,7 +319,6 @@ function init() {
     document.body.appendChild(renderer.domElement);
     document.body.appendChild(VRButton.createButton(renderer));
 
-    // Audio listener attaches to camera so sounds follow player
     listener = new THREE.AudioListener();
     camera.add(listener);
 
@@ -383,9 +326,9 @@ function init() {
     scene.add(solarGroup);
     cockpit = new THREE.Group();
     scene.add(cockpit);
+
     camera.position.set(0, 1.6, 0);
 
-    // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
     scene.add(ambientLight);
 
@@ -396,9 +339,6 @@ function init() {
     setupControllers();
     loadAudio();
 
-    // Position the entire solar system a safe distance away so the player doesn't
-    // start inside the Sun.  Negative Z pushes the system forward along the
-    // player's gaze direction.
     solarGroup.position.set(0, 0, -200);
 
     window.addEventListener('resize', onWindowResize);
@@ -414,7 +354,6 @@ function onWindowResize() {
 // --- AUDIO ---
 function loadAudio() {
     const audioLoader = new THREE.AudioLoader();
-    // Ambient background soundtrack
     audioLoader.load('sounds/ambience.mp3', buffer => {
         ambientSound = new THREE.Audio(listener);
         ambientSound.setBuffer(buffer);
@@ -422,20 +361,17 @@ function loadAudio() {
         ambientSound.setVolume(0.2);
         ambientSound.play();
     });
-    // Warp sound effect
     audioLoader.load('sounds/warp.mp3', buffer => {
         warpSound = new THREE.Audio(listener);
         warpSound.setBuffer(buffer);
         warpSound.setVolume(0.8);
     });
-    // UI beep for button presses
     audioLoader.load('sounds/beep.mp3', buffer => {
         uiBeepSound = new THREE.Audio(listener);
         uiBeepSound.setBuffer(buffer);
         uiBeepSound.setVolume(0.4);
     });
-    // Probe launch sound
-    audioLoader.load('sounds/launch.mp3', buffer => {
+    audioLoader.load('sounds/beep.mp3', buffer => {  // Use beep as fallback for launch
         launchSound = new THREE.Audio(listener);
         launchSound.setBuffer(buffer);
         launchSound.setVolume(0.6);
@@ -444,7 +380,6 @@ function loadAudio() {
 
 // --- STARFIELD ---
 function createStarfield() {
-    // Distant dense stars
     const geo1 = new THREE.BufferGeometry();
     const verts1 = [];
     for (let i = 0; i < 15000; i++) {
@@ -459,7 +394,6 @@ function createStarfield() {
     const stars1 = new THREE.Points(geo1, mat1);
     solarGroup.add(stars1);
 
-    // Closer brighter stars
     const geo2 = new THREE.BufferGeometry();
     const verts2 = [];
     for (let i = 0; i < 1000; i++) {
@@ -477,46 +411,79 @@ function createStarfield() {
 
 // --- SOLAR SYSTEM CREATION ---
 function createSolarSystem() {
-    // Sun
-    const sunData = solarSystemData.find(d => d.name === 'Sun');
-    const sunVisualRadius = sunData.radius * BODY_SCALE * SIZE_MULTIPLIER;
-    const sunGeo = new THREE.SphereGeometry(sunVisualRadius, 64, 32);
-    // Use a simple emissive material for the Sun to simulate glow
-    const sunMat = new THREE.MeshBasicMaterial({ color: sunData.color });
-    const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-    // Bright point light at the Sun's centre
-    const sunLight = new THREE.PointLight(0xffffff, 3.5, 0, 0);
-    sunMesh.add(sunLight);
-    const sunObject = { mesh: sunMesh, data: sunData, isSun: true };
-    celestialBodies.push(sunObject);
-    solarGroup.add(sunMesh);
-
-    // Planets and moons
     solarSystemData.forEach(bodyData => {
-        if (bodyData.name === 'Sun') return;
+        let bodyRadius = bodyData.radius * BODY_SCALE * SIZE_MULTIPLIER;
+        let bodyGeo = new THREE.SphereGeometry(bodyRadius, 48, 24);
+        let bodyMat = new THREE.MeshStandardMaterial({ color: bodyData.color });
+        let bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+        bodyMesh.castShadow = false;
+        bodyMesh.receiveShadow = false;
 
-        // Planet itself
-        const planetRadius = bodyData.radius * BODY_SCALE * SIZE_MULTIPLIER;
-        const planetGeo = new THREE.SphereGeometry(planetRadius, 48, 24);
-        const planetMat = new THREE.MeshStandardMaterial({ color: bodyData.color });
-        const planetMesh = new THREE.Mesh(planetGeo, planetMat);
-        planetMesh.castShadow = false;
-        planetMesh.receiveShadow = false;
+        // Load texture if available
+        const lowerName = bodyData.name.toLowerCase();
+        const texturePath = `textures/${lowerName}.jpg`;
+        textureLoader.load(texturePath, (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            bodyMat.map = tex;
+            bodyMat.needsUpdate = true;
+        }, undefined, () => {});  // Ignore missing textures
 
-        const planetObj = { mesh: planetMesh, data: bodyData, isMoon: false, isSun: false, currentMeanAnomaly: 0 };
-        celestialBodies.push(planetObj);
-        solarGroup.add(planetMesh);
+        // Special cases
+        if (bodyData.name === 'Earth') {
+            textureLoader.load('textures/earth_daymap.jpg', (tex) => { bodyMat.map = tex; bodyMat.needsUpdate = true; });
+            textureLoader.load('textures/earth_specular_map.tif', (tex) => { bodyMat.specularMap = tex; bodyMat.needsUpdate = true; });
+            textureLoader.load('textures/earth_lights.png', (tex) => { bodyMat.emissiveMap = tex; bodyMat.emissive = new THREE.Color(0xffffff); bodyMat.emissiveIntensity = 0.5; bodyMat.needsUpdate = true; });
+            // Clouds
+            const cloudsGeo = new THREE.SphereGeometry(bodyRadius * 1.01, 48, 24);
+            const cloudsMat = new THREE.MeshStandardMaterial({ map: textureLoader.load('textures/earth_clouds.jpg'), transparent: true, opacity: 0.8 });
+            const cloudsMesh = new THREE.Mesh(cloudsGeo, cloudsMat);
+            bodyMesh.add(cloudsMesh);
+            // Atmosphere
+            const atmosGeo = new THREE.SphereGeometry(bodyRadius * 1.02, 48, 24);
+            const atmosMat = new THREE.MeshBasicMaterial({ map: textureLoader.load('textures/earth_atmos.jpg'), transparent: true, blending: THREE.AdditiveBlending });
+            const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
+            bodyMesh.add(atmosMesh);
+        } else if (bodyData.name === 'Venus') {
+            textureLoader.load('textures/venus_surface.jpg', (tex) => { bodyMat.map = tex; bodyMat.needsUpdate = true; });
+            const atmosGeo = new THREE.SphereGeometry(bodyRadius * 1.01, 48, 24);
+            const atmosMat = new THREE.MeshBasicMaterial({ map: textureLoader.load('textures/venus_atmosphere.jpg'), transparent: true, blending: THREE.AdditiveBlending });
+            const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
+            bodyMesh.add(atmosMesh);
+        } else if (bodyData.name === 'Saturn') {
+            // Rings
+            const ringTexture = textureLoader.load('textures/saturn_ring_alpha.png');
+            const ringMat = new THREE.MeshBasicMaterial({ alphaMap: ringTexture, transparent: true, side: THREE.DoubleSide });
+            const innerRadius = bodyRadius * 1.2;
+            const outerRadius = bodyRadius * 2.3;
+            const ringGeo = new THREE.RingGeometry(innerRadius, outerRadius, 128);
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.rotation.x = Math.PI / 2;
+            bodyMesh.add(ringMesh);
+        } else if (bodyData.name === 'Moon') {
+            textureLoader.load('textures/moon.jpg', (tex) => { bodyMat.map = tex; bodyMat.needsUpdate = true; });
+        } else if (bodyData.name === 'Sun') {
+            bodyMat = new THREE.MeshBasicMaterial({ map: textureLoader.load('textures/sun.jpg') });
+            const sunLight = new THREE.PointLight(0xffffff, 3.5, 0, 0);
+            bodyMesh.add(sunLight);
+        }
 
-        // Attach moons, if any
+        const bodyObj = { mesh: bodyMesh, data: bodyData, isMoon: false, isSun: bodyData.name === 'Sun' };
+        celestialBodies.push(bodyObj);
+        solarGroup.add(bodyMesh);
+
         if (bodyData.moons) {
             bodyData.moons.forEach(moonData => {
-                const moonRadius = moonData.radius * BODY_SCALE * (SIZE_MULTIPLIER * 0.5);
+                const moonRadius = moonData.radius * BODY_SCALE * SIZE_MULTIPLIER;
                 const moonGeo = new THREE.SphereGeometry(moonRadius, 32, 16);
                 const moonMat = new THREE.MeshStandardMaterial({ color: moonData.color });
                 const moonMesh = new THREE.Mesh(moonGeo, moonMat);
                 moonMesh.castShadow = false;
                 moonMesh.receiveShadow = false;
-                const moonObj = { mesh: moonMesh, data: moonData, isMoon: true, parentBody: planetObj, currentMeanAnomaly: 0 };
+                // Moon texture
+                if (moonData.name === 'Moon') {
+                    textureLoader.load('textures/moon.jpg', (tex) => { moonMat.map = tex; moonMat.needsUpdate = true; });
+                }
+                const moonObj = { mesh: moonMesh, data: moonData, isMoon: true, parentBody: bodyObj };
                 celestialBodies.push(moonObj);
                 solarGroup.add(moonMesh);
             });
@@ -527,13 +494,11 @@ function createSolarSystem() {
 // --- PROBES AND STARS ---
 function createDeepSpaceProbes() {
     probesData.forEach(probe => {
-        // Represent each probe as a tiny glowing point
         const probeGeo = new THREE.SphereGeometry(0.02, 6, 6);
         const probeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
         const probeMesh = new THREE.Mesh(probeGeo, probeMat);
-        // Convert distance in AU to world units (UNIVERSE_SCALE) and place in 3D using right ascension / declination
         const r = probe.distAU * UNIVERSE_SCALE;
-        const raRad  = THREE.MathUtils.degToRad(probe.rightAscension);
+        const raRad = THREE.MathUtils.degToRad(probe.rightAscension);
         const decRad = THREE.MathUtils.degToRad(probe.declination);
         const x = r * Math.cos(decRad) * Math.cos(raRad);
         const y = r * Math.sin(decRad);
@@ -546,13 +511,6 @@ function createDeepSpaceProbes() {
 
 // --- COCKPIT CREATION ---
 function createCockpit() {
-    // Redesign the cockpit: the player stands on a rounded floor rather than
-    // inside an opaque cylinder.  We create a hemispherical floor with a
-    // diameter of roughly 6 ft (~1.8 m).  The hemisphere is oriented so its
-    // flat edge lies at Y=0, giving a gentle curved floor beneath the player.
-    // Create a simple circular floor to stand on.  Using a flat disc
-    // eliminates the feeling of being inside a cylinder.  The disc has
-    // radius 1.8 m and is double‑sided so it renders correctly from above.
     const floorGeo = new THREE.CircleGeometry(1.8, 40);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
@@ -560,21 +518,12 @@ function createCockpit() {
     floorMesh.position.y = 0;
     cockpit.add(floorMesh);
 
-    // Transparent diamond windows above the cockpit.  We use an octahedron
-    // geometry scaled up slightly and place it overhead.  The material is
-    // physically based to give subtle refraction and tint without obscuring
-    // the view.  This helps reduce VR sickness by providing a frame of
-    // reference while remaining mostly transparent.
     const diamondGeo = new THREE.OctahedronGeometry(2.5);
     const diamondMat = new THREE.MeshPhysicalMaterial({ color: 0x99bbff, metalness: 0.0, roughness: 0.05, transparent: true, transmission: 1.0, opacity: 0.6, thickness: 0.4 });
     const diamond = new THREE.Mesh(diamondGeo, diamondMat);
     diamond.position.y = 2.2;
     cockpit.add(diamond);
 
-    // Desk and dashboard: create a pedestal and top to support the unified
-    // panel, and mount the flight controls.  The desk sits in front of
-    // the player and raises the dashboard to chest height, giving the
-    // impression of a lectern or workstation.
     const desk = new THREE.Group();
     const deskBaseGeo = new THREE.CylinderGeometry(0.25, 0.25, 1.0, 20);
     const deskBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.5, roughness: 0.6 });
@@ -586,30 +535,17 @@ function createCockpit() {
     const deskTop = new THREE.Mesh(deskTopGeo, deskTopMat);
     deskTop.position.y = 1.0;
     desk.add(deskTop);
-    // Position the desk slightly closer to the player.  Negative Z values push
-    // the desk forward along the camera’s viewing direction.  A value of
-    // -1.4 places the desk roughly 1.4 metres in front of the user.
     desk.position.set(0, 0, -1.4);
     cockpit.add(desk);
 
-    // Unified panel on top of the desk.  Rotate the panel 180° around the
-    // Y‑axis so its front faces the user.  Move it towards the front edge
-    // of the desk (positive Z) so it sits above the desktop like a
-    // workstation screen.  It’s tilted downward to encourage looking down.
     const panelGeo2 = new THREE.PlaneGeometry(2.0, 0.7);
     mainPanel = createUIPanel(panelGeo2, { x: 0, y: 0.25, z: 0.35 }, { y: Math.PI });
     mainPanel.rotation.x = -Math.PI / 5;
     mainPanel.userData.type = 'mainPanel';
-    // Increase canvas resolution for crisp text on the larger panel
     mainPanel.userData.canvas.width = 1024;
     mainPanel.userData.canvas.height = 384;
     mainPanel.userData.context = mainPanel.userData.canvas.getContext('2d');
     mainPanel.userData.texture = new THREE.CanvasTexture(mainPanel.userData.canvas);
-    // Flip the texture horizontally so that when the panel is rotated 180°
-    // around the Y‑axis, the text and UI elements appear correctly.  Without
-    // this, the texture would be mirrored.  RepeatWrapping with a negative
-    // repeat flips the UV coordinates horizontally; the offset realigns
-    // the origin so the left side of the panel corresponds to u=0.
     mainPanel.userData.texture.wrapS = THREE.RepeatWrapping;
     mainPanel.userData.texture.repeat.x = -1;
     mainPanel.userData.texture.offset.x = 1;
@@ -619,17 +555,9 @@ function createCockpit() {
     infoPanel = mainPanel;
     probePanel = mainPanel;
 
-    // Flight stick mounted on the right side of the desk.  Attach the
-    // control to the desk top rather than the cockpit so it stays put
-    // when the desk moves.  Position it near the front edge with a small
-    // vertical offset so the base rests on the desk surface.  The stick
-    // itself remains a child of the base.
     const stickBaseGeo2 = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 20);
     const stickBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
     const stickBase2 = new THREE.Mesh(stickBaseGeo2, stickBaseMat2);
-    // Position the stick slightly further forward on the desk so it does not
-    // overlap with the dashboard.  Moving it along +Z brings it closer to
-    // the player relative to the panel.
     stickBase2.position.set(0.8, 0.05, 0.5);
     deskTop.add(stickBase2);
     const flightStickGeo2 = new THREE.CylinderGeometry(0.03, 0.03, 0.4, 20);
@@ -639,14 +567,9 @@ function createCockpit() {
     flightStick2.userData = { type: 'flightStick', baseRotation: new THREE.Quaternion() };
     stickBase2.add(flightStick2);
 
-    // Throttle lever mounted on the left side of the desk.  Like the stick,
-    // it’s attached to the desk top for stability.  The lever itself is
-    // nested inside its base so it can be grabbed and moved.
     const throttleBaseGeo2 = new THREE.BoxGeometry(0.14, 0.07, 0.45);
     const throttleBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
     const throttleBase2 = new THREE.Mesh(throttleBaseGeo2, throttleBaseMat2);
-    // Position the throttle similarly forward.  This keeps both controls
-    // out of the panel’s footprint, improving readability of the UI.
     throttleBase2.position.set(-0.8, 0.05, 0.5);
     deskTop.add(throttleBase2);
     const throttleLeverGeo2 = new THREE.BoxGeometry(0.09, 0.28, 0.09);
@@ -656,7 +579,6 @@ function createCockpit() {
     throttleLever2.userData = { type: 'throttle', minZ: -0.15, maxZ: 0.15 };
     throttleBase2.add(throttleLever2);
 
-    // Gravity vector indicator for probes remains unchanged
     gravityArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1.6, -2), 0.6, 0xffff00);
     gravityArrow.visible = false;
     cockpit.add(gravityArrow);
@@ -667,10 +589,6 @@ function createUIPanel(geometry, position, rotation) {
     canvas.width = 512;
     canvas.height = 384;
     const texture = new THREE.CanvasTexture(canvas);
-    // Use a double‑sided material for UI panels.  Without this the back of
-    // the plane (which faces the user when mounted on the desk) would be
-    // culled, resulting in a blank or mirrored panel.  Setting side to
-    // DoubleSide ensures the canvas is visible from either direction.
     const material = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
@@ -687,8 +605,6 @@ function createUIPanel(geometry, position, rotation) {
 }
 
 function createLaunchableProbe() {
-    // Make the probe slightly larger and brighter so it’s easier to see in
-    // deep space.  A radius of 0.07 and a vivid colour improve visibility.
     const probeGeo = new THREE.SphereGeometry(0.07, 16, 8);
     const probeMat = new THREE.MeshStandardMaterial({ color: 0xffff00, metalness: 0.8, roughness: 0.2 });
     const probeMesh = new THREE.Mesh(probeGeo, probeMat);
@@ -703,8 +619,8 @@ function createLaunchableProbe() {
         mesh: probeMesh,
         velocity: new THREE.Vector3(),
         trajectory: trajectoryLine,
-        trailParticles: [],       // will hold meshes for the visual exhaust trail
-        timeSinceLastTrail: 0     // accumulate time between adding trail particles
+        trailParticles: [],
+        timeSinceLastTrail: 0
     };
     launchableProbes.push(probe);
     return probe;
@@ -715,11 +631,6 @@ function setupControllers() {
     handModelFactory = new XRHandModelFactory();
     controllerModelFactory = new XRControllerModelFactory();
 
-    // Left controller: used to grab flight controls.  Controllers and
-    // hand models are attached to the scene rather than the cockpit so
-    // they remain anchored to the player’s XR reference space.  If
-    // parented to the cockpit, they would move and rotate with the ship,
-    // causing the hands to drift or disappear from view.
     controller1 = renderer.xr.getController(0);
     controller1.addEventListener('selectstart', onSelectStart);
     controller1.addEventListener('selectend', onSelectEnd);
@@ -731,7 +642,6 @@ function setupControllers() {
     hand1.add(handModelFactory.createHandModel(hand1, 'mesh'));
     scene.add(hand1);
 
-    // Right controller: pointing and scanning
     controller2 = renderer.xr.getController(1);
     controller2.addEventListener('selectstart', onSelectStart);
     controller2.addEventListener('selectend', onSelectEnd);
@@ -754,13 +664,7 @@ function onSelectStart(event) {
     if (intersections.length > 0) {
         const intersection = intersections[0];
         const obj = intersection.object;
-        // Grab flight controls
         if (obj.userData.type === 'flightStick' || obj.userData.type === 'throttle') {
-            // Start grabbing the flight control.  Instead of attaching the
-            // control mesh to the controller (which breaks its local
-            // coordinate system), we remember which controller is
-            // interacting and what the control’s base is.  Movement and
-            // rotation are computed relative to this base in handleController().
             grabbedObject = {
                 type: obj.userData.type,
                 object: obj,
@@ -770,20 +674,11 @@ function onSelectStart(event) {
             if (uiBeepSound) uiBeepSound.play();
             return;
         }
-        // Navigation, probe and fun‑fact buttons are no longer separate meshes;
-        // they are drawn on the unified main panel.  We detect clicks by
-        // converting the intersection’s UV coordinates into pixel space and
-        // consulting the stored button definitions on mainPanel.userData.
         if (obj === mainPanel && intersection.uv) {
             const uv = intersection.uv;
-            // The panel is rotated 180° around the Y‑axis, which flips the
-            // horizontal (U) coordinate.  Invert u so that interactions map
-            // correctly to the canvas.  v remains unchanged except for
-            // converting from top‑left origin.
             const u = 1 - uv.x;
             const px = u * mainPanel.userData.canvas.width;
             const py = (1 - uv.y) * mainPanel.userData.canvas.height;
-            // Check nav buttons
             if (mainPanel.userData.navButtons) {
                 for (const btn of mainPanel.userData.navButtons) {
                     if (px >= btn.x && px <= btn.x + btn.w && py >= btn.y && py <= btn.y + btn.h) {
@@ -797,7 +692,6 @@ function onSelectStart(event) {
                     }
                 }
             }
-            // Check distance slider
             const dist = mainPanel.userData.scaleSlider;
             if (dist && py >= dist.y && py <= dist.y + dist.h && px >= dist.x && px <= dist.x + dist.w) {
                 const ratio = (px - dist.x) / dist.w;
@@ -805,7 +699,6 @@ function onSelectStart(event) {
                 if (uiBeepSound) uiBeepSound.play();
                 return;
             }
-            // Check time slider
             const tsl = mainPanel.userData.timeSlider;
             if (tsl && py >= tsl.y && py <= tsl.y + tsl.h && px >= tsl.x && px <= tsl.x + tsl.w) {
                 const ratio = (px - tsl.x) / tsl.w;
@@ -813,7 +706,6 @@ function onSelectStart(event) {
                 if (uiBeepSound) uiBeepSound.play();
                 return;
             }
-            // Check tts button
             const tts = mainPanel.userData.tts_button;
             if (tts && px >= tts.x && px <= tts.x + tts.w && py >= tts.y && py <= tts.y + tts.h) {
                 if (selectedTarget && selectedTarget.data.funFacts) {
@@ -823,7 +715,6 @@ function onSelectStart(event) {
                 if (uiBeepSound) uiBeepSound.play();
                 return;
             }
-            // Check probe launch
             const plb = mainPanel.userData.probe_launch_button;
             if (plb && px >= plb.x && px <= plb.x + plb.w && py >= plb.y && py <= plb.y + plb.h) {
                 launchProbe();
@@ -831,23 +722,16 @@ function onSelectStart(event) {
                 return;
             }
         }
-        // Otherwise, see if we've pointed at a celestial body (planet or moon) to scan it
         const body = celestialBodies.find(b => b.mesh === obj);
         if (body) {
             selectedTarget = body;
             if (uiBeepSound) uiBeepSound.play();
             return;
         }
-        // Legacy slider hit detection on navPanel removed because sliders live on
-        // mainPanel.  All UI interactions are now handled above.
     }
 }
 
 function onSelectEnd(event) {
-    // When releasing a flight control, simply clear the grabbedObject
-    // descriptor.  Since we never detached the control from its base,
-    // there’s no need to reattach anything.  UI interactions do not set
-    // grabbedObject so this branch only affects flight controls.
     if (grabbedObject && grabbedObject.controller === event.target) {
         grabbedObject = null;
     }
@@ -863,22 +747,16 @@ function getIntersections(controller) {
         ...cockpit.children,
         ...cockpit.children.flatMap(c => c.children),
         ...cockpit.children.flatMap(c => c.children.flatMap(gc => gc.children)),
-        ...celestialBodies.map(b => b.mesh) // include planets/moons for scanning
+        ...celestialBodies.map(b => b.mesh)
     ], true);
 }
 
 function handleController(controller) {
-    // If grabbing a flight control with this controller, update its movement
-    // and orientation relative to its base.  When not grabbing, process
-    // controller‑specific behaviour (e.g. laser pointer).
     if (grabbedObject && grabbedObject.controller === controller) {
         const control = grabbedObject.object;
-        const base    = grabbedObject.base;
-        const localPos = base.worldToLocal(grabbedObject.controller.getWorldPosition(new THREE.Vector3()));
+        const base = grabbedObject.base;
+        const localPos = base.worldToLocal(controller.getWorldPosition(new THREE.Vector3()));
         if (control.userData.type === 'throttle') {
-            // Constrain motion along the base’s local Z axis.  Keep X and Y
-            // anchored so the lever slides forward/back.  Clamp to the
-            // specified range and map to flight speed (0 – 20 m/s).
             control.position.x = 0;
             control.position.y = 0;
             const { minZ, maxZ } = control.userData;
@@ -886,21 +764,16 @@ function handleController(controller) {
             control.position.z = clampedZ;
             flightSpeed = ((clampedZ - minZ) / (maxZ - minZ)) * 20;
         } else if (control.userData.type === 'flightStick') {
-            // Position the stick’s pivot at the controller’s local X and Y
-            // position relative to its base.  Then orient the stick to look
-            // forward along +Z of its local space.  Use the resulting
-            // rotation to adjust cockpit pitch and yaw.
             control.position.set(localPos.x, localPos.y, 0);
             control.lookAt(new THREE.Vector3(localPos.x, localPos.y, 1));
             const pitch = -control.rotation.x;
-            const yaw   = control.rotation.y;
-            const targetPitch = cockpit.rotation.x - pitch * 0.07;
-            const targetYaw   = cockpit.rotation.y - yaw   * 0.07;
-            cockpit.rotation.x = THREE.MathUtils.lerp(cockpit.rotation.x, targetPitch, 0.05);
-            cockpit.rotation.y = THREE.MathUtils.lerp(cockpit.rotation.y, targetYaw,   0.05);
+            const yaw = control.rotation.y;
+            const targetPitch = solarGroup.rotation.x + pitch * 0.07;
+            const targetYaw = solarGroup.rotation.y + yaw * 0.07;
+            solarGroup.rotation.x = THREE.MathUtils.lerp(solarGroup.rotation.x, targetPitch, 0.05);
+            solarGroup.rotation.y = THREE.MathUtils.lerp(solarGroup.rotation.y, targetYaw, 0.05);
         }
     } else if (controller === controller2) {
-        // Right-hand laser pointer length adapts to nearest intersection
         const intersections = getIntersections(controller);
         const laser = controller.userData.laser;
         if (intersections.length > 0) {
@@ -911,52 +784,27 @@ function handleController(controller) {
     }
 }
 
-// --- HAND INTERACTIONS ---
-// Enable fingertip touch detection on the UI.  When the index finger tip of a
-// connected hand comes close to the main panel, we convert its local
-// coordinates into canvas pixel coordinates and dispatch a UI press.  A
-// short cooldown prevents repeated firing when the finger lingers on a
-// button or slider.
 function handleHandInteractions(hand) {
     if (!hand || !mainPanel || !hand.joints) return;
-    const tip = hand.joints[ 'index-finger-tip' ];
+    const tip = hand.joints['index-finger-tip'];
     if (!tip) return;
-    // Current time from Three.js clock
     const now = clock.getElapsedTime();
     const tipWorld = new THREE.Vector3();
     tip.getWorldPosition(tipWorld);
-    // Transform fingertip into the local space of the main panel
     const panelInverse = new THREE.Matrix4().copy(mainPanel.matrixWorld).invert();
     const tipLocal = tipWorld.clone().applyMatrix4(panelInverse);
-    // The plane lies in the XY plane of its local space (z≈0).  Check
-    // proximity along z and bounds along x and y based on the panel’s
-    // geometry (halfWidth=1.2, halfHeight=0.4 for a 2.4×0.8 panel).
-    // Compute half dimensions based on the panel geometry.  The panel is
-    // created as 2.0×0.7, so half widths are 1.0 and 0.35 respectively.
     const halfW = 1.0;
     const halfH = 0.35;
-    // If the fingertip is close enough to the panel’s surface
     if (Math.abs(tipLocal.z) < 0.03 && Math.abs(tipLocal.x) <= halfW && Math.abs(tipLocal.y) <= halfH) {
-        // Debounce: only register a press every 0.4 seconds
         if (now - lastHandPressTime < 0.4) return;
         lastHandPressTime = now;
-        // Convert local x,y to canvas pixel coordinates
-        // The panel is rotated 180° around the Y‑axis, flipping the local X
-        // coordinate.  Convert the fingertip position to canvas space by
-        // inverting the X component relative to the panel width.  Y
-        // remains as before but uses a top‑left origin.
         const px = ((halfW - tipLocal.x) / (halfW * 2)) * mainPanel.userData.canvas.width;
         const py = ((halfH - tipLocal.y) / (halfH * 2)) * mainPanel.userData.canvas.height;
         handleUIPress(px, py);
     }
 }
 
-// Centralised handler for UI presses.  Accepts pixel coordinates on the
-// main panel’s canvas and runs the same logic used in onSelectStart to
-// activate buttons and sliders.  Called both by hand interactions and
-// controller ray‑casting.
 function handleUIPress(px, py) {
-    // Navigation buttons
     if (mainPanel.userData.navButtons) {
         for (const btn of mainPanel.userData.navButtons) {
             if (px >= btn.x && px <= btn.x + btn.w && py >= btn.y && py <= btn.y + btn.h) {
@@ -970,7 +818,6 @@ function handleUIPress(px, py) {
             }
         }
     }
-    // Scale slider
     const dist = mainPanel.userData.scaleSlider;
     if (dist && py >= dist.y && py <= dist.y + dist.h && px >= dist.x && px <= dist.x + dist.w) {
         const ratio = (px - dist.x) / dist.w;
@@ -978,7 +825,6 @@ function handleUIPress(px, py) {
         if (uiBeepSound) uiBeepSound.play();
         return;
     }
-    // Time slider
     const tsl = mainPanel.userData.timeSlider;
     if (tsl && py >= tsl.y && py <= tsl.y + tsl.h && px >= tsl.x && px <= tsl.x + tsl.w) {
         const ratio = (px - tsl.x) / tsl.w;
@@ -986,7 +832,6 @@ function handleUIPress(px, py) {
         if (uiBeepSound) uiBeepSound.play();
         return;
     }
-    // Narrate fun fact
     const ttsBtn = mainPanel.userData.tts_button;
     if (ttsBtn && px >= ttsBtn.x && px <= ttsBtn.x + ttsBtn.w && py >= ttsBtn.y && py <= ttsBtn.y + ttsBtn.h) {
         if (selectedTarget && selectedTarget.data.funFacts) {
@@ -996,7 +841,6 @@ function handleUIPress(px, py) {
         if (uiBeepSound) uiBeepSound.play();
         return;
     }
-    // Launch probe
     const plb = mainPanel.userData.probe_launch_button;
     if (plb && px >= plb.x && px <= plb.x + plb.w && py >= plb.y && py <= plb.y + plb.h) {
         launchProbe();
@@ -1007,19 +851,16 @@ function handleUIPress(px, py) {
 
 // --- UI & NARRATION ---
 function updateUIPanels() {
-    // If the unified main panel hasn’t been created yet, bail out.
     if (!mainPanel) return;
     const ctx = mainPanel.userData.context;
     const canvas = ctx.canvas;
     const width = canvas.width;
     const height = canvas.height;
-    // Clear background and outline
     ctx.fillStyle = '#0a1a2a';
     ctx.fillRect(0, 0, width, height);
     ctx.strokeStyle = '#00ffff';
     ctx.lineWidth = 3;
     ctx.strokeRect(0, 0, width, height);
-    // Draw dividing lines for the three sections
     const sectionWidth = width / 3;
     ctx.strokeStyle = '#003040';
     ctx.lineWidth = 2;
@@ -1029,7 +870,6 @@ function updateUIPanels() {
     ctx.moveTo(sectionWidth * 2, 50);
     ctx.lineTo(sectionWidth * 2, height - 20);
     ctx.stroke();
-    // Titles for each section
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 26px sans-serif';
     ctx.textAlign = 'center';
@@ -1037,7 +877,6 @@ function updateUIPanels() {
     ctx.fillText('SYSTEM INFO', sectionWidth + sectionWidth / 2, 40);
     ctx.fillText('PROBE CONTROL', sectionWidth * 2 + sectionWidth / 2, 40);
     ctx.textAlign = 'left';
-    // --- Navigation section ---
     mainPanel.userData.navButtons = [];
     solarSystemData.forEach((body, i) => {
         const yPos = 80 + i * 26;
@@ -1049,15 +888,9 @@ function updateUIPanels() {
             targetName: body.name,
             type: 'nav_button'
         };
-        drawButton(ctx, body.name, {
-            x: btn.x,
-            y: btn.y,
-            w: btn.w,
-            h: btn.h
-        }, selectedTarget?.data.name === body.name);
+        drawButton(ctx, body.name, btn, selectedTarget?.data.name === body.name);
         mainPanel.userData.navButtons.push(btn);
     });
-    // Distance scale slider
     const sliderH = 18;
     const distSlider = {
         label: 'Scale',
@@ -1070,7 +903,6 @@ function updateUIPanels() {
     };
     drawSlider(ctx, distSlider, distanceMultiplier);
     mainPanel.userData.scaleSlider = distSlider;
-    // Time slider
     const timeSlider = {
         label: 'Time',
         x: 20,
@@ -1082,7 +914,6 @@ function updateUIPanels() {
     };
     drawSlider(ctx, timeSlider, timeScale);
     mainPanel.userData.timeSlider = timeSlider;
-    // --- Information section ---
     const infoX = sectionWidth;
     const infoMargin = 20;
     if (selectedTarget) {
@@ -1094,7 +925,6 @@ function updateUIPanels() {
         ctx.fillText(`Radius: ${data.radius.toLocaleString()} km`, infoX + infoMargin, 110);
         if (data.a) ctx.fillText(`Orbit: ${data.a.toLocaleString()} M km`, infoX + infoMargin, 140);
         if (data.distAU) ctx.fillText(`Dist: ${data.distAU} AU`, infoX + infoMargin, 140);
-        // Narrate button
         const ttsBtn = {
             x: infoX + infoMargin,
             y: height - 80,
@@ -1108,10 +938,8 @@ function updateUIPanels() {
         ctx.fillStyle = '#aaa';
         ctx.font = '22px sans-serif';
         ctx.fillText('No target selected.', infoX + infoMargin, 100);
-        // Clear tts button so we don’t accidentally pick up an old one
         delete mainPanel.userData.tts_button;
     }
-    // --- Probe control section ---
     const probeX = sectionWidth * 2;
     ctx.fillStyle = 'white';
     ctx.font = '20px sans-serif';
@@ -1129,38 +957,19 @@ function updateUIPanels() {
     };
     drawButton(ctx, 'LAUNCH PROBE', launchBtn, false);
     mainPanel.userData.probe_launch_button = launchBtn;
-    // After drawing everything, update the texture
     mainPanel.userData.texture.needsUpdate = true;
 }
 
-function drawPanelBackground(ctx, title) {
-    ctx.fillStyle = '#0a1a2a';
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.strokeStyle = '#00ffff';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.fillStyle = '#00ffff';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(title, ctx.canvas.width / 2, 40);
-    ctx.textAlign = 'left';
-}
-
-// Draw a horizontal slider with a label.  `slider` describes the position and
-// range of the slider in pixel coordinates relative to the panel canvas.
 function drawSlider(ctx, slider, currentValue) {
     const { label, x, y, w, h, min, max } = slider;
-    // Draw label
     ctx.fillStyle = '#00ffff';
     ctx.font = '18px sans-serif';
     ctx.fillText(`${label}: ${currentValue.toFixed(1)}`, x, y - 8);
-    // Draw bar
     ctx.fillStyle = '#004060';
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = '#00ffff';
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, w, h);
-    // Draw knob
     const ratio = (currentValue - min) / (max - min);
     const knobX = x + ratio * w;
     ctx.fillStyle = '#00bfff';
@@ -1173,7 +982,6 @@ function drawButton(ctx, text, data, isActive) {
     ctx.fillText(text, data.x + 10, data.y + 18);
     ctx.strokeStyle = isActive ? '#ffff00' : '#00ffff';
     ctx.strokeRect(data.x, data.y, data.w, data.h);
-    // Buttons are stored manually in updateUIPanels; nothing to do here
 }
 
 function narrate(text) {
@@ -1185,11 +993,9 @@ function narrate(text) {
 // --- PHYSICS & MOVEMENT ---
 function launchProbe() {
     const probe = createLaunchableProbe();
-    // Launch from just in front of the cockpit
     const launchPos = new THREE.Vector3(0, 1.6, -5);
     cockpit.localToWorld(launchPos);
     probe.mesh.position.copy(launchPos);
-    // Direction based on camera orientation
     const direction = new THREE.Vector3();
     camera.getWorldDirection(direction);
     probe.velocity = direction.multiplyScalar(2000 * BODY_SCALE);
@@ -1202,47 +1008,35 @@ function launchProbe() {
 }
 
 function updatePhysics(delta) {
-    // Update orbital positions for each body
-    celestialBodies.forEach(body => {
+    simulationTime += delta;
+
+    // Update non-moons first
+    celestialBodies.filter(body => !body.isMoon).forEach(body => {
         const data = body.data;
-        if (!data.period) return;
-        // Advance mean anomaly (scaled to speed up simulation)
-        const n = (2 * Math.PI) / (data.period * 24 * 3600);
-        body.currentMeanAnomaly += n * delta * 5e5;
-        let pos;
-        if (body.isMoon) {
-            // For moons: position relative to parent planet.  The semi-major axis `a` is in
-            // millions of kilometres.  We convert it to kilometres, then to world
-            // units using BODY_SCALE.  Add the radius of the parent so the moon orbits
-            // outside of the planet.  We avoid any artificial multipliers here to keep
-            // the ratio of lunar orbits correct.
-            const parentRadius = body.parentBody.data.radius * BODY_SCALE * SIZE_MULTIPLIER;
-            const a_km  = data.a * 1e6;
-            const aUnit = parentRadius + (a_km * BODY_SCALE);
-            pos = getEllipsePosition(aUnit, data.e, body.currentMeanAnomaly);
-        } else {
-            // Planets: standard conversion of semi-major axis to world units
-            const aUnit = data.a * 1e6 * BODY_SCALE;
-            pos = getEllipsePosition(aUnit, data.e, body.currentMeanAnomaly);
-        }
-        // Apply distance multiplier so the user can stretch or compress the void
+        if (body.isSun) return;
+        const pos = getOrbitalPosition(data, simulationTime);
         pos.multiplyScalar(distanceMultiplier);
-        body.mesh.position.set(pos.x, 0, pos.z);
-        // Simple rotation on own axis
-        const rotationSpeed = (2 * Math.PI) / (data.period / 365.25);
-        body.mesh.rotation.y += rotationSpeed * delta * 50;
+        body.mesh.position.copy(pos);
+        body.mesh.rotation.y += (2 * Math.PI / data.period) * delta * 50;  // Arbitrary rotation speed
     });
 
-    // Update Sun (no rotation needed here because we removed custom shader)
+    // Then moons
+    celestialBodies.filter(body => body.isMoon).forEach(body => {
+        const data = body.data;
+        const pos = getOrbitalPosition(data, simulationTime);
+        pos.multiplyScalar(distanceMultiplier);
+        pos.add(body.parentBody.mesh.position);
+        body.mesh.position.copy(pos);
+        body.mesh.rotation.y += (2 * Math.PI / data.period) * delta * 50;
+    });
 
-    // Update probes under gravitational acceleration
     launchableProbes.forEach(probe => {
         if (!probe.launched) return;
         const netAcceleration = new THREE.Vector3();
         celestialBodies.forEach(body => {
             if (!body.data.mass) return;
             const bodyPos = body.mesh.getWorldPosition(new THREE.Vector3());
-            const rVec = new THREE.Vector3().subVectors(bodyPos, probe.mesh.position);
+            const rVec = bodyPos.clone().sub(probe.mesh.position);
             const rSq = rVec.lengthSq();
             if (rSq < 1) return;
             const forceMag = (G * body.data.mass) / rSq;
@@ -1250,16 +1044,12 @@ function updatePhysics(delta) {
         });
         probe.velocity.add(netAcceleration.multiplyScalar(delta));
         probe.mesh.position.add(probe.velocity.clone().multiplyScalar(delta));
-        // Record trajectory points
         probe.mesh.userData.trajectoryPoints.push(probe.mesh.position.clone());
         if (probe.mesh.userData.trajectoryPoints.length > 500) {
             probe.mesh.userData.trajectoryPoints.shift();
         }
         probe.trajectory.geometry.setFromPoints(probe.mesh.userData.trajectoryPoints);
 
-        // --- Exhaust trail management ---
-        // Accumulate time since the last particle was added.  When this exceeds
-        // 0.05 seconds, add a new particle to the trail at the probe’s position.
         probe.timeSinceLastTrail += delta;
         if (probe.timeSinceLastTrail > 0.05) {
             probe.timeSinceLastTrail = 0;
@@ -1267,13 +1057,12 @@ function updatePhysics(delta) {
             const particleMat = new THREE.MeshBasicMaterial({ color: 0x0066ff, transparent: true, opacity: 0.6 });
             const particle = new THREE.Mesh(particleGeo, particleMat);
             particle.position.copy(probe.mesh.position);
-            particle.userData.birth = clock.elapsedTime;
+            particle.userData.birth = clock.getElapsedTime();
             probe.trailParticles.push(particle);
             solarGroup.add(particle);
         }
-        // Update existing particles: fade out and shrink over 2 seconds
         probe.trailParticles = probe.trailParticles.filter(p => {
-            const age = clock.elapsedTime - p.userData.birth;
+            const age = clock.getElapsedTime() - p.userData.birth;
             const maxLife = 2.0;
             if (age > maxLife) {
                 solarGroup.remove(p);
@@ -1285,7 +1074,6 @@ function updatePhysics(delta) {
             return true;
         });
 
-        // Update gravity arrow orientation
         if (probe === activeProbe) {
             const dir = netAcceleration.clone().normalize();
             const len = Math.min(1.5, 0.2 + netAcceleration.length() * 1e12);
@@ -1294,53 +1082,57 @@ function updatePhysics(delta) {
         }
     });
 
-    // Apply ship flight motion
     if (flightSpeed > 0) {
         const direction = new THREE.Vector3(0, 0, -1);
-        direction.applyQuaternion(cockpit.quaternion);
+        direction.applyQuaternion(camera.quaternion);
         solarGroup.position.add(direction.multiplyScalar(-flightSpeed * delta));
     }
 }
 
-function getEllipsePosition(a, e, M) {
-    // Solve Kepler's equation M = E - e*sin(E) for E using Newton's method
+function getOrbitalPosition(data, time) {
+    if (!data.period) return new THREE.Vector3();
+    const degToRad = THREE.MathUtils.degToRad;
+    const aUnit = data.a * 1e6 * BODY_SCALE;
+    const n = 2 * Math.PI / (Math.abs(data.period) * 86400);
+    let M = degToRad(data.meanAnomalyEpoch) + n * time * (data.period < 0 ? -1 : 1);
     let E = M;
-    for (let i = 0; i < 5; i++) {
-        E = E - (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+    for (let i = 0; i < 10; i++) {
+        E = M + data.e * Math.sin(E);
     }
-    const x = a * (Math.cos(E) - e);
-    const z = a * Math.sqrt(1 - e * e) * Math.sin(E);
-    return new THREE.Vector3(x, 0, z);
+    const nu = 2 * Math.atan2(Math.sqrt(1 + data.e) * Math.sin(E / 2), Math.sqrt(1 - data.e) * Math.cos(E / 2));
+    const r = aUnit * (1 - data.e ** 2) / (1 + data.e * Math.cos(nu));
+    let pos = new THREE.Vector3(r * Math.cos(nu), 0, r * Math.sin(nu));
+    const rotPeri = new THREE.Matrix4().makeRotationZ(degToRad(data.argPeri));
+    pos.applyMatrix4(rotPeri);
+    const rotIncl = new THREE.Matrix4().makeRotationX(degToRad(data.inclination));
+    pos.applyMatrix4(rotIncl);
+    const rotNode = new THREE.Matrix4().makeRotationZ(degToRad(data.lonAscNode));
+    pos.applyMatrix4(rotNode);
+    return pos;
 }
 
 function warpTo(destination) {
-    // Play warp sound if available
     if (warpSound && !warpSound.isPlaying) warpSound.play();
-    const endPos = destination.mesh.getWorldPosition(new THREE.Vector3()).negate();
-    // Immediately reposition the solar system so the selected body appears
-    // directly ahead of the cockpit.  Moving first then fading avoids
-    // issues where the warp never happens due to timing errors in the
-    // animation loop.
+    const radius = destination.data.radius * BODY_SCALE * SIZE_MULTIPLIER;
+    const d = radius * 1.5 + 5;
+    const offset = new THREE.Vector3(0, 0, d);
+    const endPos = destination.mesh.position.clone().negate().add(offset);
     solarGroup.position.copy(endPos);
-    // Create a fullscreen white overlay for the fade transition
     const overlay = new THREE.Mesh(
         new THREE.PlaneGeometry(2, 2),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
     );
     overlay.position.z = -0.1;
     camera.add(overlay);
-    const duration = 0.5; // half a second to fade in and another half to fade out
+    const duration = 0.5;
     const startTime = performance.now();
     function fade() {
         const elapsed = (performance.now() - startTime) / 1000;
         if (elapsed <= duration) {
-            // Fade in: opacity from 0 → 1
             overlay.material.opacity = elapsed / duration;
         } else if (elapsed <= duration * 2) {
-            // Fade out: overlay opacity decreases from 1 → 0
             overlay.material.opacity = 1 - (elapsed - duration) / duration;
         } else {
-            // Remove overlay after transition
             camera.remove(overlay);
             return;
         }
@@ -1351,23 +1143,16 @@ function warpTo(destination) {
 
 // --- RENDER LOOP ---
 function animate() {
-    const delta = clock.getDelta();
-    // Scale the time step according to the user's selected time scale.  A timeScale
-    // of zero freezes motion, values > 1 accelerate the simulation.
-    const effDelta = delta * timeScale;
+    const delta = clock.getDelta() * timeScale;
     handleController(controller1);
     handleController(controller2);
-    updatePhysics(effDelta);
+    updatePhysics(delta);
     updateUIPanels();
-    // Process hand interactions after the UI has been drawn.  Both left and
-    // right hands can activate UI elements by touching them with the index
-    // fingertip.  This makes the interface feel like a physical touchscreen.
     handleHandInteractions(hand1);
     handleHandInteractions(hand2);
     renderer.render(scene, camera);
 }
 
-// Kick off the simulation
 init();
 </script>
 </body>
