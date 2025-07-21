@@ -10,7 +10,7 @@
         canvas { display: block; }
         #vr-button { position: absolute; bottom: 20px; right: 20px; z-index: 1000; }
     </style>
-    <!-- Import map allows us to load modules directly from a CDN. -->
+    <script src="https://stewdio.github.io/handy.js/handy.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -27,7 +27,6 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 
-// --- GLOBALS & CONSTANTS ---
 let scene, camera, renderer, clock;
 let solarGroup, cockpit;
 let listener, ambientSound, warpSound, uiBeepSound, launchSound;
@@ -53,7 +52,7 @@ const G = 6.67430e-11;
 const KM_IN_AU = 149.6e6;
 const UNIVERSE_SCALE = 100;
 const BODY_SCALE = UNIVERSE_SCALE / KM_IN_AU;
-const SIZE_MULTIPLIER = 1;
+const SIZE_MULTIPLIER = 1000;
 
 let mainPanel;
 let navPanel;
@@ -306,7 +305,6 @@ const probesData = [
     ] }
 ];
 
-// --- INITIALIZATION ---
 function init() {
     scene = new THREE.Scene();
     clock = new THREE.Clock();
@@ -332,6 +330,10 @@ function init() {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
     scene.add(ambientLight);
 
+    const cockpitLight = new THREE.PointLight(0xffffff, 0.5);
+    cockpitLight.position.set(0, 2, -1);
+    cockpit.add(cockpitLight);
+
     createStarfield();
     createSolarSystem();
     createDeepSpaceProbes();
@@ -351,7 +353,6 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// --- AUDIO ---
 function loadAudio() {
     const audioLoader = new THREE.AudioLoader();
     audioLoader.load('sounds/ambience.mp3', buffer => {
@@ -371,14 +372,13 @@ function loadAudio() {
         uiBeepSound.setBuffer(buffer);
         uiBeepSound.setVolume(0.4);
     });
-    audioLoader.load('sounds/beep.mp3', buffer => {  // Use beep as fallback for launch
+    audioLoader.load('sounds/beep.mp3', buffer => {  // Fallback for launch
         launchSound = new THREE.Audio(listener);
         launchSound.setBuffer(buffer);
         launchSound.setVolume(0.6);
     });
 }
 
-// --- STARFIELD ---
 function createStarfield() {
     const geo1 = new THREE.BufferGeometry();
     const verts1 = [];
@@ -409,7 +409,6 @@ function createStarfield() {
     solarGroup.add(stars2);
 }
 
-// --- SOLAR SYSTEM CREATION ---
 function createSolarSystem() {
     solarSystemData.forEach(bodyData => {
         let bodyRadius = bodyData.radius * BODY_SCALE * SIZE_MULTIPLIER;
@@ -419,26 +418,22 @@ function createSolarSystem() {
         bodyMesh.castShadow = false;
         bodyMesh.receiveShadow = false;
 
-        // Load texture if available
         const lowerName = bodyData.name.toLowerCase();
         const texturePath = `textures/${lowerName}.jpg`;
         textureLoader.load(texturePath, (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
             bodyMat.map = tex;
             bodyMat.needsUpdate = true;
-        }, undefined, () => {});  // Ignore missing textures
+        }, undefined, () => {});
 
-        // Special cases
         if (bodyData.name === 'Earth') {
             textureLoader.load('textures/earth_daymap.jpg', (tex) => { bodyMat.map = tex; bodyMat.needsUpdate = true; });
             textureLoader.load('textures/earth_specular_map.tif', (tex) => { bodyMat.specularMap = tex; bodyMat.needsUpdate = true; });
             textureLoader.load('textures/earth_lights.png', (tex) => { bodyMat.emissiveMap = tex; bodyMat.emissive = new THREE.Color(0xffffff); bodyMat.emissiveIntensity = 0.5; bodyMat.needsUpdate = true; });
-            // Clouds
             const cloudsGeo = new THREE.SphereGeometry(bodyRadius * 1.01, 48, 24);
             const cloudsMat = new THREE.MeshStandardMaterial({ map: textureLoader.load('textures/earth_clouds.jpg'), transparent: true, opacity: 0.8 });
             const cloudsMesh = new THREE.Mesh(cloudsGeo, cloudsMat);
             bodyMesh.add(cloudsMesh);
-            // Atmosphere
             const atmosGeo = new THREE.SphereGeometry(bodyRadius * 1.02, 48, 24);
             const atmosMat = new THREE.MeshBasicMaterial({ map: textureLoader.load('textures/earth_atmos.jpg'), transparent: true, blending: THREE.AdditiveBlending });
             const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
@@ -450,7 +445,6 @@ function createSolarSystem() {
             const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
             bodyMesh.add(atmosMesh);
         } else if (bodyData.name === 'Saturn') {
-            // Rings
             const ringTexture = textureLoader.load('textures/saturn_ring_alpha.png');
             const ringMat = new THREE.MeshBasicMaterial({ alphaMap: ringTexture, transparent: true, side: THREE.DoubleSide });
             const innerRadius = bodyRadius * 1.2;
@@ -479,7 +473,6 @@ function createSolarSystem() {
                 const moonMesh = new THREE.Mesh(moonGeo, moonMat);
                 moonMesh.castShadow = false;
                 moonMesh.receiveShadow = false;
-                // Moon texture
                 if (moonData.name === 'Moon') {
                     textureLoader.load('textures/moon.jpg', (tex) => { moonMat.map = tex; moonMat.needsUpdate = true; });
                 }
@@ -491,10 +484,9 @@ function createSolarSystem() {
     });
 }
 
-// --- PROBES AND STARS ---
 function createDeepSpaceProbes() {
     probesData.forEach(probe => {
-        const probeGeo = new THREE.SphereGeometry(0.02, 6, 6);
+        const probeGeo = new THREE.SphereGeometry(0.5, 6, 6); // Larger for visibility
         const probeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
         const probeMesh = new THREE.Mesh(probeGeo, probeMat);
         const r = probe.distAU * UNIVERSE_SCALE;
@@ -509,29 +501,28 @@ function createDeepSpaceProbes() {
     });
 }
 
-// --- COCKPIT CREATION ---
 function createCockpit() {
     const floorGeo = new THREE.CircleGeometry(1.8, 40);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x001133, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
     floorMesh.rotation.x = -Math.PI / 2;
     floorMesh.position.y = 0;
     cockpit.add(floorMesh);
 
     const diamondGeo = new THREE.OctahedronGeometry(2.5);
-    const diamondMat = new THREE.MeshPhysicalMaterial({ color: 0x99bbff, metalness: 0.0, roughness: 0.05, transparent: true, transmission: 1.0, opacity: 0.6, thickness: 0.4 });
+    const diamondMat = new THREE.MeshPhysicalMaterial({ color: 0x66aaff, metalness: 0.0, roughness: 0.05, transparent: true, transmission: 1.0, opacity: 0.6, thickness: 0.4 });
     const diamond = new THREE.Mesh(diamondGeo, diamondMat);
     diamond.position.y = 2.2;
     cockpit.add(diamond);
 
     const desk = new THREE.Group();
     const deskBaseGeo = new THREE.CylinderGeometry(0.25, 0.25, 1.0, 20);
-    const deskBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.5, roughness: 0.6 });
+    const deskBaseMat = new THREE.MeshStandardMaterial({ color: 0x002244, metalness: 0.5, roughness: 0.6 });
     const deskBaseMesh = new THREE.Mesh(deskBaseGeo, deskBaseMat);
     deskBaseMesh.position.y = 0.5;
     desk.add(deskBaseMesh);
     const deskTopGeo = new THREE.BoxGeometry(2.0, 0.05, 0.8);
-    const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.4, roughness: 0.4 });
+    const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x003355, metalness: 0.4, roughness: 0.4 });
     const deskTop = new THREE.Mesh(deskTopGeo, deskTopMat);
     deskTop.position.y = 1.0;
     desk.add(deskTop);
@@ -539,7 +530,7 @@ function createCockpit() {
     cockpit.add(desk);
 
     const panelGeo2 = new THREE.PlaneGeometry(2.0, 0.7);
-    mainPanel = createUIPanel(panelGeo2, { x: 0, y: 0.25, z: 0.35 }, { y: Math.PI });
+    mainPanel = createUIPanel(panelGeo2, { x: 0, y: 0.25, z: 0 }, { y: Math.PI });
     mainPanel.rotation.x = -Math.PI / 5;
     mainPanel.userData.type = 'mainPanel';
     mainPanel.userData.canvas.width = 1024;
@@ -556,24 +547,24 @@ function createCockpit() {
     probePanel = mainPanel;
 
     const stickBaseGeo2 = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 20);
-    const stickBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
+    const stickBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x002244, metalness: 0.4, roughness: 0.5 });
     const stickBase2 = new THREE.Mesh(stickBaseGeo2, stickBaseMat2);
-    stickBase2.position.set(0.8, 0.05, 0.5);
+    stickBase2.position.set(0.8, 0.05, 0.3);
     deskTop.add(stickBase2);
     const flightStickGeo2 = new THREE.CylinderGeometry(0.03, 0.03, 0.4, 20);
-    const flightStickMat2 = new THREE.MeshStandardMaterial({ color: 0xaa3333 });
+    const flightStickMat2 = new THREE.MeshStandardMaterial({ color: 0xff4444 });
     const flightStick2 = new THREE.Mesh(flightStickGeo2, flightStickMat2);
     flightStick2.position.y = 0.2;
     flightStick2.userData = { type: 'flightStick', baseRotation: new THREE.Quaternion() };
     stickBase2.add(flightStick2);
 
     const throttleBaseGeo2 = new THREE.BoxGeometry(0.14, 0.07, 0.45);
-    const throttleBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
+    const throttleBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x002244, metalness: 0.4, roughness: 0.5 });
     const throttleBase2 = new THREE.Mesh(throttleBaseGeo2, throttleBaseMat2);
-    throttleBase2.position.set(-0.8, 0.05, 0.5);
+    throttleBase2.position.set(-0.8, 0.05, 0.3);
     deskTop.add(throttleBase2);
     const throttleLeverGeo2 = new THREE.BoxGeometry(0.09, 0.28, 0.09);
-    const throttleLeverMat2 = new THREE.MeshStandardMaterial({ color: 0x33aa33 });
+    const throttleLeverMat2 = new THREE.MeshStandardMaterial({ color: 0x44ff44 });
     const throttleLever2 = new THREE.Mesh(throttleLeverGeo2, throttleLeverMat2);
     throttleLever2.position.set(0, 0.15, 0.15);
     throttleLever2.userData = { type: 'throttle', minZ: -0.15, maxZ: 0.15 };
@@ -605,7 +596,7 @@ function createUIPanel(geometry, position, rotation) {
 }
 
 function createLaunchableProbe() {
-    const probeGeo = new THREE.SphereGeometry(0.07, 16, 8);
+    const probeGeo = new THREE.SphereGeometry(0.5, 16, 8);
     const probeMat = new THREE.MeshStandardMaterial({ color: 0xffff00, metalness: 0.8, roughness: 0.2 });
     const probeMesh = new THREE.Mesh(probeGeo, probeMat);
     probeMesh.userData = { launched: false, trajectoryPoints: [] };
@@ -626,7 +617,6 @@ function createLaunchableProbe() {
     return probe;
 }
 
-// --- CONTROLLERS & INTERACTION ---
 function setupControllers() {
     handModelFactory = new XRHandModelFactory();
     controllerModelFactory = new XRControllerModelFactory();
@@ -634,6 +624,7 @@ function setupControllers() {
     controller1 = renderer.xr.getController(0);
     controller1.addEventListener('selectstart', onSelectStart);
     controller1.addEventListener('selectend', onSelectEnd);
+    controller1.userData.isGrabbing = false;
     scene.add(controller1);
     const controllerGrip1 = renderer.xr.getControllerGrip(0);
     controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
@@ -641,10 +632,12 @@ function setupControllers() {
     hand1 = renderer.xr.getHand(0);
     hand1.add(handModelFactory.createHandModel(hand1, 'mesh'));
     scene.add(hand1);
+    Handy.makeHandy(hand1);
 
     controller2 = renderer.xr.getController(1);
     controller2.addEventListener('selectstart', onSelectStart);
     controller2.addEventListener('selectend', onSelectEnd);
+    controller2.userData.isGrabbing = false;
     scene.add(controller2);
     const laserGeo = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-5) ]);
     const laserLine = new THREE.Line(laserGeo, new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 }));
@@ -656,6 +649,7 @@ function setupControllers() {
     hand2 = renderer.xr.getHand(1);
     hand2.add(handModelFactory.createHandModel(hand2, 'mesh'));
     scene.add(hand2);
+    Handy.makeHandy(hand2);
 }
 
 function onSelectStart(event) {
@@ -679,48 +673,7 @@ function onSelectStart(event) {
             const u = 1 - uv.x;
             const px = u * mainPanel.userData.canvas.width;
             const py = (1 - uv.y) * mainPanel.userData.canvas.height;
-            if (mainPanel.userData.navButtons) {
-                for (const btn of mainPanel.userData.navButtons) {
-                    if (px >= btn.x && px <= btn.x + btn.w && py >= btn.y && py <= btn.y + btn.h) {
-                        const targetBody = celestialBodies.find(b => b.data.name === btn.targetName);
-                        if (targetBody) {
-                            selectedTarget = targetBody;
-                            warpTo(targetBody);
-                        }
-                        if (uiBeepSound) uiBeepSound.play();
-                        return;
-                    }
-                }
-            }
-            const dist = mainPanel.userData.scaleSlider;
-            if (dist && py >= dist.y && py <= dist.y + dist.h && px >= dist.x && px <= dist.x + dist.w) {
-                const ratio = (px - dist.x) / dist.w;
-                distanceMultiplier = dist.min + ratio * (dist.max - dist.min);
-                if (uiBeepSound) uiBeepSound.play();
-                return;
-            }
-            const tsl = mainPanel.userData.timeSlider;
-            if (tsl && py >= tsl.y && py <= tsl.y + tsl.h && px >= tsl.x && px <= tsl.x + tsl.w) {
-                const ratio = (px - tsl.x) / tsl.w;
-                timeScale = tsl.min + ratio * (tsl.max - tsl.min);
-                if (uiBeepSound) uiBeepSound.play();
-                return;
-            }
-            const tts = mainPanel.userData.tts_button;
-            if (tts && px >= tts.x && px <= tts.x + tts.w && py >= tts.y && py <= tts.y + tts.h) {
-                if (selectedTarget && selectedTarget.data.funFacts) {
-                    const fact = selectedTarget.data.funFacts[Math.floor(Math.random() * selectedTarget.data.funFacts.length)];
-                    narrate(fact);
-                }
-                if (uiBeepSound) uiBeepSound.play();
-                return;
-            }
-            const plb = mainPanel.userData.probe_launch_button;
-            if (plb && px >= plb.x && px <= plb.x + plb.w && py >= plb.y && py <= plb.y + plb.h) {
-                launchProbe();
-                if (uiBeepSound) uiBeepSound.play();
-                return;
-            }
+            handleUIPress(px, py);
         }
         const body = celestialBodies.find(b => b.mesh === obj);
         if (body) {
@@ -744,9 +697,7 @@ function getIntersections(controller) {
     raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
     return raycaster.intersectObjects([
-        ...cockpit.children,
-        ...cockpit.children.flatMap(c => c.children),
-        ...cockpit.children.flatMap(c => c.children.flatMap(gc => gc.children)),
+        ...cockpit.children.flatMap(c => [c, ...c.children.flatMap(gc => [gc, ...gc.children])]),
         ...celestialBodies.map(b => b.mesh)
     ], true);
 }
@@ -849,7 +800,30 @@ function handleUIPress(px, py) {
     }
 }
 
-// --- UI & NARRATION ---
+function checkPose(hand, controller) {
+    if (hand.isPose('fist') && !controller.userData.isGrabbing) {
+        controller.userData.isGrabbing = true;
+        const intersections = getIntersections(controller);
+        if (intersections.length > 0) {
+            const obj = intersections[0].object;
+            if (obj.userData.type === 'flightStick' || obj.userData.type === 'throttle') {
+                grabbedObject = {
+                    type: obj.userData.type,
+                    object: obj,
+                    base: obj.parent,
+                    controller: controller
+                };
+                if (uiBeepSound) uiBeepSound.play();
+            }
+        }
+    } else if (!hand.isPose('fist') && controller.userData.isGrabbing) {
+        controller.userData.isGrabbing = false;
+        if (grabbedObject && grabbedObject.controller === controller) {
+            grabbedObject = null;
+        }
+    }
+}
+
 function updateUIPanels() {
     if (!mainPanel) return;
     const ctx = mainPanel.userData.context;
@@ -871,7 +845,7 @@ function updateUIPanels() {
     ctx.lineTo(sectionWidth * 2, height - 20);
     ctx.stroke();
     ctx.fillStyle = '#00ffff';
-    ctx.font = 'bold 26px sans-serif';
+    ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('NAV / WARP', sectionWidth / 2, 40);
     ctx.fillText('SYSTEM INFO', sectionWidth + sectionWidth / 2, 40);
@@ -879,12 +853,12 @@ function updateUIPanels() {
     ctx.textAlign = 'left';
     mainPanel.userData.navButtons = [];
     solarSystemData.forEach((body, i) => {
-        const yPos = 80 + i * 26;
+        const yPos = 70 + i * 22;
         const btn = {
             x: 20,
-            y: yPos - 18,
+            y: yPos - 16,
             w: sectionWidth - 40,
-            h: 22,
+            h: 20,
             targetName: body.name,
             type: 'nav_button'
         };
@@ -919,9 +893,9 @@ function updateUIPanels() {
     if (selectedTarget) {
         const data = selectedTarget.data;
         ctx.fillStyle = 'white';
-        ctx.font = '22px sans-serif';
-        ctx.fillText(`Target: ${data.name}`, infoX + infoMargin, 80);
         ctx.font = '20px sans-serif';
+        ctx.fillText(`Target: ${data.name}`, infoX + infoMargin, 80);
+        ctx.font = '18px sans-serif';
         ctx.fillText(`Radius: ${data.radius.toLocaleString()} km`, infoX + infoMargin, 110);
         if (data.a) ctx.fillText(`Orbit: ${data.a.toLocaleString()} M km`, infoX + infoMargin, 140);
         if (data.distAU) ctx.fillText(`Dist: ${data.distAU} AU`, infoX + infoMargin, 140);
@@ -936,13 +910,13 @@ function updateUIPanels() {
         mainPanel.userData.tts_button = ttsBtn;
     } else {
         ctx.fillStyle = '#aaa';
-        ctx.font = '22px sans-serif';
+        ctx.font = '20px sans-serif';
         ctx.fillText('No target selected.', infoX + infoMargin, 100);
         delete mainPanel.userData.tts_button;
     }
     const probeX = sectionWidth * 2;
     ctx.fillStyle = 'white';
-    ctx.font = '20px sans-serif';
+    ctx.font = '18px sans-serif';
     ctx.fillText(`Active Probe: ${activeProbe ? 'Yes' : 'No'}`, probeX + 20, 80);
     if (activeProbe) {
         const speed = activeProbe.velocity.length() / BODY_SCALE;
@@ -978,8 +952,8 @@ function drawSlider(ctx, slider, currentValue) {
 
 function drawButton(ctx, text, data, isActive) {
     ctx.fillStyle = isActive ? '#ffff00' : '#00ffff';
-    ctx.font = '22px sans-serif';
-    ctx.fillText(text, data.x + 10, data.y + 18);
+    ctx.font = '18px sans-serif';
+    ctx.fillText(text, data.x + 10, data.y + 16);
     ctx.strokeStyle = isActive ? '#ffff00' : '#00ffff';
     ctx.strokeRect(data.x, data.y, data.w, data.h);
 }
@@ -990,7 +964,6 @@ function narrate(text) {
     speechSynthesis.speak(utterance);
 }
 
-// --- PHYSICS & MOVEMENT ---
 function launchProbe() {
     const probe = createLaunchableProbe();
     const launchPos = new THREE.Vector3(0, 1.6, -5);
@@ -1010,17 +983,15 @@ function launchProbe() {
 function updatePhysics(delta) {
     simulationTime += delta;
 
-    // Update non-moons first
     celestialBodies.filter(body => !body.isMoon).forEach(body => {
         const data = body.data;
         if (body.isSun) return;
         const pos = getOrbitalPosition(data, simulationTime);
         pos.multiplyScalar(distanceMultiplier);
         body.mesh.position.copy(pos);
-        body.mesh.rotation.y += (2 * Math.PI / data.period) * delta * 50;  // Arbitrary rotation speed
+        body.mesh.rotation.y += (2 * Math.PI / data.period) * delta * 50;
     });
 
-    // Then moons
     celestialBodies.filter(body => body.isMoon).forEach(body => {
         const data = body.data;
         const pos = getOrbitalPosition(data, simulationTime);
@@ -1141,9 +1112,11 @@ function warpTo(destination) {
     requestAnimationFrame(fade);
 }
 
-// --- RENDER LOOP ---
 function animate() {
     const delta = clock.getDelta() * timeScale;
+    Handy.update();
+    checkPose(hand1, controller1);
+    checkPose(hand2, controller2);
     handleController(controller1);
     handleController(controller2);
     updatePhysics(delta);
