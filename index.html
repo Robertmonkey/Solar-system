@@ -40,6 +40,12 @@ let controller1, controller2;
 let hand1, hand2;
 let handModelFactory, controllerModelFactory;
 const raycaster = new THREE.Raycaster();
+// When grabbing a flight control (flight stick or throttle), we store an
+// object describing the control, its original base (parent) and the
+// controller used to grab it.  This allows us to compute controller
+// movements relative to the control’s base without physically attaching
+// the control to the controller.  When grabbing other objects (e.g. UI
+// interactions) `grabbedObject` can remain the mesh itself.
 let grabbedObject = null;
 let selectedTarget = null;
 let activeProbe = null;
@@ -624,7 +630,7 @@ function createCockpit() {
     // Position the stick slightly further forward on the desk so it does not
     // overlap with the dashboard.  Moving it along +Z brings it closer to
     // the player relative to the panel.
-    stickBase2.position.set(0.6, 0.05, 0.45);
+    stickBase2.position.set(0.8, 0.05, 0.5);
     deskTop.add(stickBase2);
     const flightStickGeo2 = new THREE.CylinderGeometry(0.03, 0.03, 0.4, 20);
     const flightStickMat2 = new THREE.MeshStandardMaterial({ color: 0xaa3333 });
@@ -641,7 +647,7 @@ function createCockpit() {
     const throttleBase2 = new THREE.Mesh(throttleBaseGeo2, throttleBaseMat2);
     // Position the throttle similarly forward.  This keeps both controls
     // out of the panel’s footprint, improving readability of the UI.
-    throttleBase2.position.set(-0.6, 0.05, 0.45);
+    throttleBase2.position.set(-0.8, 0.05, 0.5);
     deskTop.add(throttleBase2);
     const throttleLeverGeo2 = new THREE.BoxGeometry(0.09, 0.28, 0.09);
     const throttleLeverMat2 = new THREE.MeshStandardMaterial({ color: 0x33aa33 });
@@ -681,8 +687,10 @@ function createUIPanel(geometry, position, rotation) {
 }
 
 function createLaunchableProbe() {
-    const probeGeo = new THREE.SphereGeometry(0.05, 16, 8);
-    const probeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
+    // Make the probe slightly larger and brighter so it’s easier to see in
+    // deep space.  A radius of 0.07 and a vivid colour improve visibility.
+    const probeGeo = new THREE.SphereGeometry(0.07, 16, 8);
+    const probeMat = new THREE.MeshStandardMaterial({ color: 0xffff00, metalness: 0.8, roughness: 0.2 });
     const probeMesh = new THREE.Mesh(probeGeo, probeMat);
     probeMesh.userData = { launched: false, trajectoryPoints: [] };
 
@@ -748,13 +756,17 @@ function onSelectStart(event) {
         const obj = intersection.object;
         // Grab flight controls
         if (obj.userData.type === 'flightStick' || obj.userData.type === 'throttle') {
-            // When grabbing a control, remember its original parent so it can
-            // be returned on release.  Without storing this, the release
-            // handler would have to search the scene graph, which can be
-            // fragile after restructuring the cockpit.
-            grabbedObject = obj;
-            obj.userData.originalParent = obj.parent;
-            controller.attach(obj);
+            // Start grabbing the flight control.  Instead of attaching the
+            // control mesh to the controller (which breaks its local
+            // coordinate system), we remember which controller is
+            // interacting and what the control’s base is.  Movement and
+            // rotation are computed relative to this base in handleController().
+            grabbedObject = {
+                type: obj.userData.type,
+                object: obj,
+                base: obj.parent,
+                controller: controller
+            };
             if (uiBeepSound) uiBeepSound.play();
             return;
         }
@@ -832,18 +844,11 @@ function onSelectStart(event) {
 }
 
 function onSelectEnd(event) {
-    if (grabbedObject) {
-        // Return flight controls to their original parents.  We stored the
-        // original parent when the control was grabbed.  If for some
-        // reason the original parent is missing, fall back to adding
-        // it back to the cockpit.
-        const orig = grabbedObject.userData.originalParent;
-        if (orig) {
-            orig.add(grabbedObject);
-            delete grabbedObject.userData.originalParent;
-        } else {
-            cockpit.add(grabbedObject);
-        }
+    // When releasing a flight control, simply clear the grabbedObject
+    // descriptor.  Since we never detached the control from its base,
+    // there’s no need to reattach anything.  UI interactions do not set
+    // grabbedObject so this branch only affects flight controls.
+    if (grabbedObject && grabbedObject.controller === event.target) {
         grabbedObject = null;
     }
 }
@@ -863,28 +868,32 @@ function getIntersections(controller) {
 }
 
 function handleController(controller) {
-    // If grabbing a flight control, update its position and apply movement/rotation
-    if (grabbedObject) {
-        const type = grabbedObject.userData.type;
-        if (type === 'throttle') {
-            const localPos = grabbedObject.parent.worldToLocal(grabbedObject.position.clone());
-            grabbedObject.position.x = 0;
-            grabbedObject.position.y = 0;
-            const { minZ, maxZ } = grabbedObject.userData;
-            grabbedObject.position.z = Math.max(minZ, Math.min(maxZ, localPos.z));
-            // Map throttle position to flight speed.  Reduce the maximum
-            // speed to 20 world units per second for finer, more comfortable
-            // movement control.
-            flightSpeed = ((grabbedObject.position.z - minZ) / (maxZ - minZ)) * 20;
-        } else if (type === 'flightStick') {
-            const localPos = grabbedObject.parent.worldToLocal(grabbedObject.position.clone());
-            grabbedObject.position.set(localPos.x, localPos.y, 0);
-            grabbedObject.lookAt(new THREE.Vector3(localPos.x, localPos.y, 1));
-            const pitch = -grabbedObject.rotation.x;
-            const yaw   = grabbedObject.rotation.y;
-            // Smoothly adjust the cockpit’s orientation based on the stick’s
-            // pitch and yaw.  We use a smaller multiplier and lerp factor
-            // to reduce jerky motion and provide more natural control.
+    // If grabbing a flight control with this controller, update its movement
+    // and orientation relative to its base.  When not grabbing, process
+    // controller‑specific behaviour (e.g. laser pointer).
+    if (grabbedObject && grabbedObject.controller === controller) {
+        const control = grabbedObject.object;
+        const base    = grabbedObject.base;
+        const localPos = base.worldToLocal(grabbedObject.controller.getWorldPosition(new THREE.Vector3()));
+        if (control.userData.type === 'throttle') {
+            // Constrain motion along the base’s local Z axis.  Keep X and Y
+            // anchored so the lever slides forward/back.  Clamp to the
+            // specified range and map to flight speed (0 – 20 m/s).
+            control.position.x = 0;
+            control.position.y = 0;
+            const { minZ, maxZ } = control.userData;
+            const clampedZ = Math.max(minZ, Math.min(maxZ, localPos.z));
+            control.position.z = clampedZ;
+            flightSpeed = ((clampedZ - minZ) / (maxZ - minZ)) * 20;
+        } else if (control.userData.type === 'flightStick') {
+            // Position the stick’s pivot at the controller’s local X and Y
+            // position relative to its base.  Then orient the stick to look
+            // forward along +Z of its local space.  Use the resulting
+            // rotation to adjust cockpit pitch and yaw.
+            control.position.set(localPos.x, localPos.y, 0);
+            control.lookAt(new THREE.Vector3(localPos.x, localPos.y, 1));
+            const pitch = -control.rotation.x;
+            const yaw   = control.rotation.y;
             const targetPitch = cockpit.rotation.x - pitch * 0.07;
             const targetYaw   = cockpit.rotation.y - yaw   * 0.07;
             cockpit.rotation.x = THREE.MathUtils.lerp(cockpit.rotation.x, targetPitch, 0.05);
@@ -1308,6 +1317,11 @@ function warpTo(destination) {
     // Play warp sound if available
     if (warpSound && !warpSound.isPlaying) warpSound.play();
     const endPos = destination.mesh.getWorldPosition(new THREE.Vector3()).negate();
+    // Immediately reposition the solar system so the selected body appears
+    // directly ahead of the cockpit.  Moving first then fading avoids
+    // issues where the warp never happens due to timing errors in the
+    // animation loop.
+    solarGroup.position.copy(endPos);
     // Create a fullscreen white overlay for the fade transition
     const overlay = new THREE.Mesh(
         new THREE.PlaneGeometry(2, 2),
@@ -1323,11 +1337,7 @@ function warpTo(destination) {
             // Fade in: opacity from 0 → 1
             overlay.material.opacity = elapsed / duration;
         } else if (elapsed <= duration * 2) {
-            // Fade out: call warp halfway through
-            if (elapsed - 0.016 < duration) {
-                // Move the solar group once when transitioning
-                solarGroup.position.copy(endPos);
-            }
+            // Fade out: overlay opacity decreases from 1 → 0
             overlay.material.opacity = 1 - (elapsed - duration) / duration;
         } else {
             // Remove overlay after transition
