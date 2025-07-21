@@ -183,20 +183,13 @@ const probesData = [
     { name: 'Pioneer 10', distAU: 139.0, declination: 25.6, rightAscension: 75.8, funFacts: ["The first spacecraft to traverse the asteroid belt and make direct observations of Jupiter.", "Its last signal was received in 2003 and it is now silent.", "Carries a plaque with a pictorial message from humankind."]},
     { name: 'New Horizons', distAU: 60.5, declination: -21.4, rightAscension: 290.0, funFacts: ["Performed the first-ever flyby of the Pluto system in 2015.", "Visited the Kuiper Belt Object 'Arrokoth' in 2019, the most distant object ever explored up close.", "Travels at over 58,000 km/h."]}
 ];
-const starData = [
-    { name: 'Proxima Centauri', distLY: 4.24, color: 0xff6a3d, ra: 222.9, dec: -62.6, funFacts: [ "Our closest stellar neighbor.", "It's a red dwarf, much smaller and cooler than the Sun.", "Hosts at least one exoplanet, Proxima Centauri b."]},
-    { name: 'Alpha Centauri A', distLY: 4.37, color: 0xfff4e1, ra: 219.9, dec: -60.8, funFacts: [ "A star very similar to our Sun in size and type.", "Part of a triple star system with Alpha Centauri B and Proxima Centauri."]},
-    { name: 'Alpha Centauri B', distLY: 4.37, color: 0xffd9a1, ra: 219.9, dec: -60.8, funFacts: [ "A bit smaller and cooler than the Sun.", "Orbits its larger companion, Alpha Centauri A, every 80 years."]},
-    { name: 'Sirius', distLY: 8.6, color: 0xcad7ff, ra: 101.3, dec: -16.7, funFacts: [ "The brightest star in the night sky, also known as the 'Dog Star'.", "It has a tiny, dense white dwarf companion star called Sirius B."]}
-];
-
 
 // --- INITIALIZATION ---
 function init() {
     scene = new THREE.Scene();
     clock = new THREE.Clock();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5e8);
-    camera.position.set(0, 1.6, 0); // Player's height in VR
+    camera.position.set(0, 1.6, 0);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -208,11 +201,9 @@ function init() {
     listener = new THREE.AudioListener();
     camera.add(listener);
 
-    // solarGroup contains all celestial bodies and will be moved by the player
     solarGroup = new THREE.Group();
     scene.add(solarGroup);
     
-    // cockpit contains the static ship geometry and is NOT moved by player flight
     cockpit = new THREE.Group();
     scene.add(cockpit);
     
@@ -244,8 +235,6 @@ function loadAudio() {
     audioLoader.load('sounds/ambience.mp3', b => { (ambientSound = new THREE.Audio(listener)).setBuffer(b).setLoop(true).setVolume(0.2).play(); });
     audioLoader.load('sounds/warp.mp3', b => { (warpSound = new THREE.Audio(listener)).setBuffer(b).setVolume(0.8); });
     audioLoader.load('sounds/beep.mp3', b => { (uiBeepSound = new THREE.Audio(listener)).setBuffer(b).setVolume(0.4); });
-    // Note: 'launch.mp3' is not in the file list and was causing errors.
-    // audioLoader.load('sounds/launch.mp3', b => { (launchSound = new THREE.Audio(listener)).setBuffer(b).setVolume(0.6); });
 }
 
 // --- SCENE CREATION ---
@@ -269,7 +258,7 @@ function createSolarSystem() {
         const radius = bodyData.radius * BODY_SCALE * SIZE_MULTIPLIER;
         const geo = new THREE.SphereGeometry(radius, isSun ? 64 : 48, isSun ? 32 : 24);
         const mat = isSun 
-            ? new THREE.MeshBasicMaterial({ color: bodyData.color, map: textureLoader.load('textures/sun.jpg') })
+            ? new THREE.MeshBasicMaterial({ color: bodyData.color })
             : new THREE.MeshStandardMaterial({ color: bodyData.color });
         
         const mesh = new THREE.Mesh(geo, mat);
@@ -300,21 +289,18 @@ function createDeepSpaceProbes() {
         const raRad  = THREE.MathUtils.degToRad(probe.rightAscension);
         const decRad = THREE.MathUtils.degToRad(probe.declination);
         probeMesh.position.set(r * Math.cos(decRad) * Math.cos(raRad), r * Math.sin(decRad), r * Math.cos(decRad) * Math.sin(raRad));
-        probeMesh.userData = { type: 'probe', data: probe };
         solarGroup.add(probeMesh);
     });
 }
 
 // --- COCKPIT CREATION ---
 function createCockpit() {
-    // The player stands on the floor. It is part of the cockpit.
     const floorGeo = new THREE.CircleGeometry(1.2, 40);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
     floorMesh.rotation.x = -Math.PI / 2;
     cockpit.add(floorMesh);
 
-    // The canopy is a wireframe diamond shape around the player.
     const canopyGeo = new THREE.IcosahedronGeometry(4, 0);
     const canopyMat = new THREE.MeshStandardMaterial({ color: 0x6699ff, emissive: 0x224488, wireframe: true, transparent: true, opacity: 0.3 });
     const canopy = new THREE.Mesh(canopyGeo, canopyMat);
@@ -322,21 +308,19 @@ function createCockpit() {
     canopy.scale.set(1, 1.2, 1);
     cockpit.add(canopy);
 
-    // The main console is a curved desk in front of the player.
     const consoleMat = new THREE.MeshStandardMaterial({ color: 0x1c2129, metalness: 0.7, roughness: 0.3 });
     const consoleShape = new THREE.Shape().moveTo(-1.2, 0).absarc(0, 0, 1.2, Math.PI, Math.PI * 2, false).absarc(0, 0, 0.8, Math.PI * 2, Math.PI, true).closePath();
     const consoleGeo = new THREE.ExtrudeGeometry(consoleShape, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2 });
     const consoleMesh = new THREE.Mesh(consoleGeo, consoleMat);
     consoleMesh.rotation.x = -Math.PI / 2;
-    consoleMesh.position.set(0, 1.0, -0.7); // Placed at negative Z
+    consoleMesh.position.set(0, 1.0, -0.7);
     cockpit.add(consoleMesh);
 
-    // The UI panel sits on the console.
     const panelRadius = 0.99, panelHeight = 0.6, panelAngle = Math.PI * 0.9;
     const panelGeo = new THREE.CylinderGeometry(panelRadius, panelRadius, panelHeight, 64, 1, true, -panelAngle / 2, panelAngle);
-    mainPanel = new THREE.Mesh(panelGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95 }));
-    mainPanel.position.set(0, 1.15, -0.7); // Placed at negative Z
-    mainPanel.rotation.y = Math.PI; // Face the texture inward toward the center
+    mainPanel = new THREE.Mesh(panelGeo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
+    mainPanel.position.set(0, 1.15, -0.7);
+    mainPanel.rotation.y = Math.PI;
     mainPanel.userData.type = 'mainPanel';
     mainPanel.userData.canvas = document.createElement('canvas');
     mainPanel.userData.canvas.width = 1024;
@@ -346,12 +330,10 @@ function createCockpit() {
     mainPanel.material.map = mainPanel.userData.texture;
     cockpit.add(mainPanel);
 
-    // The central control pod for flight stick and throttle.
     const controlPod = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.4), new THREE.MeshStandardMaterial({ color: 0x111, metalness: 0.8, roughness: 0.4 }));
-    controlPod.position.set(0, 1.0, -0.4); // Placed at negative Z
+    controlPod.position.set(0, 1.0, -0.4);
     cockpit.add(controlPod);
     
-    // Throttle on the left of the pod.
     const throttleBase = new THREE.Group();
     throttleBase.position.set(-0.2, 0.05, 0);
     controlPod.add(throttleBase);
@@ -360,7 +342,6 @@ function createCockpit() {
     throttleLever.userData = { type: 'throttle', minZ: -0.15, maxZ: 0.15 };
     throttleBase.add(throttleLever);
 
-    // Flight stick on the right of the pod.
     const stickBase = new THREE.Group();
     stickBase.position.set(0.2, 0.05, 0);
     controlPod.add(stickBase);
@@ -375,43 +356,41 @@ function setupControllers() {
     controllerModelFactory = new XRControllerModelFactory();
     handModelFactory = new XRHandModelFactory();
 
-    // Setup for Controller 1 (Left)
+    // Left Controller
     controller1 = renderer.xr.getController(0);
     controller1.addEventListener('selectstart', onSelectStart);
     controller1.addEventListener('selectend', onSelectEnd);
-    camera.add(controller1); // Add to camera, NOT cockpit
+    camera.add(controller1); // Parent to camera
 
     const controllerGrip1 = renderer.xr.getControllerGrip(0);
     controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-    camera.add(controllerGrip1); // Add to camera
+    camera.add(controllerGrip1); // Parent to camera
 
     hand1 = renderer.xr.getHand(0);
     hand1.add(handModelFactory.createHandModel(hand1));
-    camera.add(hand1); // Add to camera
+    camera.add(hand1); // Parent to camera
 
-    // Setup for Controller 2 (Right)
+    // Right Controller
     controller2 = renderer.xr.getController(1);
     controller2.addEventListener('selectstart', onSelectStart);
     controller2.addEventListener('selectend', onSelectEnd);
-    camera.add(controller2); // Add to camera
+    camera.add(controller2); // Parent to camera
 
     const controllerGrip2 = renderer.xr.getControllerGrip(1);
     controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-    camera.add(controllerGrip2); // Add to camera
+    camera.add(controllerGrip2); // Parent to camera
 
     hand2 = renderer.xr.getHand(1);
     hand2.add(handModelFactory.createHandModel(hand2));
-    camera.add(hand2); // Add to camera
+    camera.add(hand2); // Parent to camera
 }
-
 
 function onSelectStart(event) {
     const controller = event.target;
     triggerHapticFeedback(controller);
 
-    const controllerMatrix = controller.matrixWorld;
-    raycaster.ray.origin.setFromMatrixPosition(controllerMatrix);
-    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(new THREE.Matrix4().extractRotation(controllerMatrix));
+    raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    raycaster.ray.direction.set(0, 0, -1).transformDirection(controller.matrixWorld);
 
     const intersections = raycaster.intersectObjects(cockpit.children, true);
 
@@ -470,46 +449,38 @@ function handleDirectControls(delta) {
             grabbedObject.position.y = 0.1;
             flightSpeed = ((grabbedObject.position.z - minZ) / (maxZ - minZ)) * 20;
         } else if (grabbedObject.userData.type === 'flightStick') {
+            // Stick provides visual feedback but does not control rotation for VR comfort
             targetLocalPos.z = 0;
             targetLocalPos.clampLength(0, 0.15);
             grabbedObject.position.copy(targetLocalPos);
             grabbedObject.lookAt(new THREE.Vector3(targetLocalPos.x, targetLocalPos.y, 1));
-            
-            // Apply rotation to the solarGroup, not the cockpit, for intuitive control
-            const pitch = grabbedObject.rotation.x * 1.5;
-            const yaw = grabbedObject.rotation.y * 1.5;
-            solarGroup.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), pitch * delta);
-            solarGroup.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), yaw * delta);
         }
     }
 
+    // "Head-steer" flight model: move in the direction the player is looking
     if (flightSpeed > 0) {
-        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-        solarGroup.position.addScaledVector(direction, flightSpeed * delta);
+        const direction = camera.getWorldDirection(new THREE.Vector3());
+        solarGroup.position.addScaledVector(direction, -flightSpeed * delta);
     }
 }
 
-
 // --- HAND & UI HELPERS ---
 function handleHandInteractions(hand) {
-    if (!hand.visible || !hand.joints['index-finger-tip']) return;
+    // FIX: Added robust checks to prevent crash on initialization
+    if (!hand.visible || !hand.joints || !hand.joints['index-finger-tip']) return;
     
     const tip = hand.joints['index-finger-tip'];
     const now = clock.getElapsedTime();
     if (now - lastHandPressTime < 0.4) return;
 
-    const tipWorld = new THREE.Vector3().setFromMatrixPosition(tip.matrixWorld);
-    
-    // Raycast from the fingertip to detect UI panels
-    const handMatrix = hand.matrixWorld;
-    raycaster.ray.origin.setFromMatrixPosition(handMatrix);
-    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(new THREE.Matrix4().extractRotation(handMatrix));
+    raycaster.ray.origin.setFromMatrixPosition(tip.matrixWorld);
+    raycaster.ray.direction.set(0, 0, -1).transformDirection(tip.matrixWorld);
 
-    const intersections = raycaster.intersectObjects([mainPanel], true);
+    const intersections = raycaster.intersectObjects([mainPanel], false);
 
     if(intersections.length > 0) {
         const intersection = intersections[0];
-        if(intersection.distance < 0.05) { // If tip is close to the panel
+        if(intersection.distance < 0.05) { // Check if fingertip is close
             lastHandPressTime = now;
              if (handleUIPress(intersection.uv.x * mainPanel.userData.canvas.width, (1 - intersection.uv.y) * mainPanel.userData.canvas.height)) {
                 processUIActivation(hand);
@@ -517,7 +488,6 @@ function handleHandInteractions(hand) {
         }
     }
 }
-
 
 function handleUIPress(px, py) {
     if (mainPanel.userData.navButtons) {
@@ -736,10 +706,10 @@ function animate() {
     const delta = clock.getDelta();
     const effDelta = delta * timeScale;
     
-    handleDirectControls(delta);
-    if(renderer.xr.isPresenting) {
-        handleHandInteractions(controller1);
-        handleHandInteractions(controller2);
+    if (renderer.xr.isPresenting) {
+        handleDirectControls(delta);
+        handleHandInteractions(hand1);
+        handleHandInteractions(hand2);
     }
     updatePhysics(effDelta);
     updateUIPanels();
