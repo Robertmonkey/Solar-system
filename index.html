@@ -46,12 +46,24 @@ let flightSpeed = 0;
 const celestialBodies = [];
 const launchableProbes = [];
 
+// Runtime parameters that can be adjusted via in‑game sliders.  `distanceMultiplier`
+// scales the distances between bodies without altering their relative sizes; a
+// value of 1 corresponds to real astronomical ratios (1 AU → 100 world units).
+// Increasing it stretches the emptiness of space (e.g. 2 makes Earth’s orbit
+// 200 units).  `timeScale` multiplies simulation speed: 1 is normal, 0 pauses,
+// values >1 accelerate orbits and probe motion.
+let distanceMultiplier = 1;
+let timeScale         = 1;
+
 // Fundamental constants
 const G = 6.67430e-11;               // Gravitational constant
 const KM_IN_AU = 149.6e6;            // Number of km in one AU
-const UNIVERSE_SCALE = 100;          // 1 AU = 100 world units
-const BODY_SCALE    = UNIVERSE_SCALE / KM_IN_AU;
-const SIZE_MULTIPLIER = 50;          // Enlarge all celestial bodies for VR visibility
+const UNIVERSE_SCALE = 100;          // 1 AU = 100 world units.  This maps physical distances into
+                                      // manageable VR units without altering the ratios between
+                                      // orbital radii.  For example, Earth’s orbit (1 AU) becomes
+                                      // 100 world units.
+const BODY_SCALE    = UNIVERSE_SCALE / KM_IN_AU; // km → world units conversion
+const SIZE_MULTIPLIER = 1;           // Use a multiplier of one to preserve correct relative sizes
 
 // Panels & helpers
 let navPanel, infoPanel, probePanel;
@@ -542,10 +554,29 @@ function createCockpit() {
     navPanel.userData.type = 'navigation';
     cockpit.add(navPanel);
 
-    // Information panel: displays details about selected body
-    infoPanel = createUIPanel(panelGeo, { x: 0, y: 1.2, z: -1.6 }, { y: 0.0 });
+    // Information panel on a lectern.  We build a small podium with a tilted
+    // display so that the player can look down at it like a monitor.
+    const lectern = new THREE.Group();
+    // Base of the lectern
+    const baseGeo = new THREE.CylinderGeometry(0.15, 0.2, 0.8, 16);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.7, roughness: 0.4 });
+    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+    baseMesh.position.y = 0.4;
+    lectern.add(baseMesh);
+    // Top surface where the panel sits
+    const topGeo = new THREE.BoxGeometry(0.9, 0.05, 0.6);
+    const topMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.3 });
+    const topMesh = new THREE.Mesh(topGeo, topMat);
+    topMesh.position.y = 0.8;
+    lectern.add(topMesh);
+    // Create the info panel and tilt it slightly towards the player
+    infoPanel = createUIPanel(panelGeo, { x: 0, y: 0.88, z: 0 }, { y: 0.0 });
     infoPanel.userData.type = 'information';
-    cockpit.add(infoPanel);
+    infoPanel.rotation.x = -Math.PI / 6; // Tilt the panel downwards
+    lectern.add(infoPanel);
+    // Position the lectern in front of the player
+    lectern.position.set(0, 0, -1.6);
+    cockpit.add(lectern);
 
     // Probe panel: shows probe status and launch
     probePanel = createUIPanel(panelGeo, { x: 1.2, y: 1.2, z: -1.5 }, { y: -0.3 });
@@ -602,7 +633,13 @@ function createLaunchableProbe() {
         new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 })
     );
 
-    const probe = { mesh: probeMesh, velocity: new THREE.Vector3(), trajectory: trajectoryLine };
+    const probe = {
+        mesh: probeMesh,
+        velocity: new THREE.Vector3(),
+        trajectory: trajectoryLine,
+        trailParticles: [],       // will hold meshes for the visual exhaust trail
+        timeSinceLastTrail: 0     // accumulate time between adding trail particles
+    };
     launchableProbes.push(probe);
     return probe;
 }
@@ -686,6 +723,31 @@ function onSelectStart(event) {
             if (uiBeepSound) uiBeepSound.play();
             return;
         }
+        // If the nav panel itself is clicked, handle slider interactions.  We use
+        // the intersection’s UV coordinates to find where the laser hit on the
+        // panel’s canvas.  Slider definitions were stored on navPanel.userData.
+        if (obj === navPanel && intersection.uv) {
+            const uv = intersection.uv;
+            // Convert UV to canvas pixel coordinates (origin at top left)
+            const px  = uv.x * navPanel.userData.canvas.width;
+            const py  = (1 - uv.y) * navPanel.userData.canvas.height;
+            // Distance slider
+            const dist = navPanel.userData.scaleSlider;
+            if (py >= dist.y && py <= dist.y + dist.h && px >= dist.x && px <= dist.x + dist.w) {
+                const ratio = (px - dist.x) / dist.w;
+                distanceMultiplier = dist.min + ratio * (dist.max - dist.min);
+                if (uiBeepSound) uiBeepSound.play();
+                return;
+            }
+            // Time slider
+            const tsl = navPanel.userData.timeSlider;
+            if (py >= tsl.y && py <= tsl.y + tsl.h && px >= tsl.x && px <= tsl.x + tsl.w) {
+                const ratio = (px - tsl.x) / tsl.w;
+                timeScale = tsl.min + ratio * (tsl.max - tsl.min);
+                if (uiBeepSound) uiBeepSound.play();
+                return;
+            }
+        }
     }
 }
 
@@ -760,6 +822,40 @@ function updateUIPanels() {
     });
     navPanel.userData.texture.needsUpdate = true;
 
+    // Define sliders for distance and time scaling on the nav panel.  These live
+    // near the bottom of the panel.  We store their metadata on the panel for
+    // hit detection during interaction.  Each slider covers the full width of
+    // the panel minus margins.
+    const sliderWidth  = 412;
+    const sliderHeight = 16;
+    // Distance slider: adjust how far apart bodies appear relative to their
+    // true scaled distance.  Range [1, 10].
+    const distSlider = {
+        label: 'Scale',
+        x: 50,
+        y: 360,
+        w: sliderWidth,
+        h: sliderHeight,
+        min: 1,
+        max: 10
+    };
+    // Time slider: adjust simulation speed.  Range [0, 20].
+    const timeSlider = {
+        label: 'Time',
+        x: 50,
+        y: 390,
+        w: sliderWidth,
+        h: sliderHeight,
+        min: 0,
+        max: 20
+    };
+    // Draw the sliders onto the navigation panel
+    drawSlider(navCtx, distSlider, distanceMultiplier);
+    drawSlider(navCtx, timeSlider, timeScale);
+    // Persist slider definitions so they can be hit-tested
+    navPanel.userData.scaleSlider = distSlider;
+    navPanel.userData.timeSlider  = timeSlider;
+
     // Info panel: display details about selected target
     const infoCtx = infoPanel.userData.context;
     drawPanelBackground(infoCtx, 'SYSTEM INFO');
@@ -812,17 +908,34 @@ function drawPanelBackground(ctx, title) {
     ctx.textAlign = 'left';
 }
 
+// Draw a horizontal slider with a label.  `slider` describes the position and
+// range of the slider in pixel coordinates relative to the panel canvas.
+function drawSlider(ctx, slider, currentValue) {
+    const { label, x, y, w, h, min, max } = slider;
+    // Draw label
+    ctx.fillStyle = '#00ffff';
+    ctx.font = '18px sans-serif';
+    ctx.fillText(`${label}: ${currentValue.toFixed(1)}`, x, y - 8);
+    // Draw bar
+    ctx.fillStyle = '#004060';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    // Draw knob
+    const ratio = (currentValue - min) / (max - min);
+    const knobX = x + ratio * w;
+    ctx.fillStyle = '#00bfff';
+    ctx.fillRect(knobX - 4, y - 2, 8, h + 4);
+}
+
 function drawButton(ctx, text, data, isActive) {
     ctx.fillStyle = isActive ? '#ffff00' : '#00ffff';
     ctx.font = '22px sans-serif';
     ctx.fillText(text, data.x + 10, data.y + 18);
     ctx.strokeStyle = isActive ? '#ffff00' : '#00ffff';
     ctx.strokeRect(data.x, data.y, data.w, data.h);
-    // store button metadata to mesh for hit-testing
-    const panel = ctx.canvas.parentNode?.__panel;
-    if (panel) {
-        panel.userData[data.type === 'nav_button' ? data.targetName : data.type] = data;
-    }
+    // Buttons are stored manually in updateUIPanels; nothing to do here
 }
 
 function narrate(text) {
@@ -860,15 +973,22 @@ function updatePhysics(delta) {
         body.currentMeanAnomaly += n * delta * 5e5;
         let pos;
         if (body.isMoon) {
-            // For moons: position relative to parent planet
+            // For moons: position relative to parent planet.  The semi-major axis `a` is in
+            // millions of kilometres.  We convert it to kilometres, then to world
+            // units using BODY_SCALE.  Add the radius of the parent so the moon orbits
+            // outside of the planet.  We avoid any artificial multipliers here to keep
+            // the ratio of lunar orbits correct.
             const parentRadius = body.parentBody.data.radius * BODY_SCALE * SIZE_MULTIPLIER;
             const a_km  = data.a * 1e6;
-            const aUnit = parentRadius + (a_km * BODY_SCALE * 50);
+            const aUnit = parentRadius + (a_km * BODY_SCALE);
             pos = getEllipsePosition(aUnit, data.e, body.currentMeanAnomaly);
         } else {
+            // Planets: standard conversion of semi-major axis to world units
             const aUnit = data.a * 1e6 * BODY_SCALE;
             pos = getEllipsePosition(aUnit, data.e, body.currentMeanAnomaly);
         }
+        // Apply distance multiplier so the user can stretch or compress the void
+        pos.multiplyScalar(distanceMultiplier);
         body.mesh.position.set(pos.x, 0, pos.z);
         // Simple rotation on own axis
         const rotationSpeed = (2 * Math.PI) / (data.period / 365.25);
@@ -898,6 +1018,35 @@ function updatePhysics(delta) {
             probe.mesh.userData.trajectoryPoints.shift();
         }
         probe.trajectory.geometry.setFromPoints(probe.mesh.userData.trajectoryPoints);
+
+        // --- Exhaust trail management ---
+        // Accumulate time since the last particle was added.  When this exceeds
+        // 0.05 seconds, add a new particle to the trail at the probe’s position.
+        probe.timeSinceLastTrail += delta;
+        if (probe.timeSinceLastTrail > 0.05) {
+            probe.timeSinceLastTrail = 0;
+            const particleGeo = new THREE.SphereGeometry(0.03, 8, 8);
+            const particleMat = new THREE.MeshBasicMaterial({ color: 0x0066ff, transparent: true, opacity: 0.6 });
+            const particle = new THREE.Mesh(particleGeo, particleMat);
+            particle.position.copy(probe.mesh.position);
+            particle.userData.birth = clock.elapsedTime;
+            probe.trailParticles.push(particle);
+            solarGroup.add(particle);
+        }
+        // Update existing particles: fade out and shrink over 2 seconds
+        probe.trailParticles = probe.trailParticles.filter(p => {
+            const age = clock.elapsedTime - p.userData.birth;
+            const maxLife = 2.0;
+            if (age > maxLife) {
+                solarGroup.remove(p);
+                return false;
+            }
+            const remaining = 1.0 - (age / maxLife);
+            p.material.opacity = remaining * 0.6;
+            p.scale.setScalar(remaining);
+            return true;
+        });
+
         // Update gravity arrow orientation
         if (probe === activeProbe) {
             const dir = netAcceleration.clone().normalize();
@@ -951,9 +1100,12 @@ function warpTo(destination) {
 // --- RENDER LOOP ---
 function animate() {
     const delta = clock.getDelta();
+    // Scale the time step according to the user's selected time scale.  A timeScale
+    // of zero freezes motion, values > 1 accelerate the simulation.
+    const effDelta = delta * timeScale;
     handleController(controller1);
     handleController(controller2);
-    updatePhysics(delta);
+    updatePhysics(effDelta);
     updateUIPanels();
     TWEEN.update();
     renderer.render(scene, camera);
