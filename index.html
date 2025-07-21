@@ -544,16 +544,14 @@ function createCockpit() {
     // inside an opaque cylinder.  We create a hemispherical floor with a
     // diameter of roughly 6 ft (~1.8 m).  The hemisphere is oriented so its
     // flat edge lies at Y=0, giving a gentle curved floor beneath the player.
-    // Create a hemisphere for the floor.  We use the lower half of a sphere and
-    // flip it so that the curved surface faces up toward the user.  This
-    // provides a subtle curved footing without blocking the view.  The
-    // hemisphere’s flat face remains at y=0.
-    const floorGeo = new THREE.SphereGeometry(1.8, 32, 32, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    // Create a simple circular floor to stand on.  Using a flat disc
+    // eliminates the feeling of being inside a cylinder.  The disc has
+    // radius 1.8 m and is double‑sided so it renders correctly from above.
+    const floorGeo = new THREE.CircleGeometry(1.8, 40);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-    // Flip it 180° around the x‑axis so the curvature faces upward
-    floorMesh.rotation.x = Math.PI;
-    floorMesh.position.y = 0.0;
+    floorMesh.rotation.x = -Math.PI / 2;
+    floorMesh.position.y = 0;
     cockpit.add(floorMesh);
 
     // Transparent diamond windows above the cockpit.  We use an octahedron
@@ -561,68 +559,67 @@ function createCockpit() {
     // physically based to give subtle refraction and tint without obscuring
     // the view.  This helps reduce VR sickness by providing a frame of
     // reference while remaining mostly transparent.
-    const diamondGeo = new THREE.OctahedronGeometry(2.8);
+    const diamondGeo = new THREE.OctahedronGeometry(2.5);
     const diamondMat = new THREE.MeshPhysicalMaterial({ color: 0x99bbff, metalness: 0.0, roughness: 0.05, transparent: true, transmission: 1.0, opacity: 0.6, thickness: 0.4 });
     const diamond = new THREE.Mesh(diamondGeo, diamondMat);
-    diamond.position.y = 2.4;
+    diamond.position.y = 2.2;
     cockpit.add(diamond);
 
-    // Unified wrap‑around UI panel.  This large surface contains navigation,
-    // information and probe controls in three sections.  We create a
-    // rectangular plane and tilt it slightly downward so it feels like a
-    // dashboard.  The resolution of the canvas backing this panel will
-    // later be increased for crisp text.  We set navPanel, infoPanel and
-    // probePanel to reference this same mesh so existing code that
-    // references them continues to function.
-    // Create the wrap‑around panel as a slightly smaller surface so it feels
-    // like a desktop rather than a wall.  Position it lower and closer to the
-    // player and tilt it downward more to encourage looking down rather than
-    // straight ahead.  Width 2.0, height 0.7.
-    const panelGeo = new THREE.PlaneGeometry(2.0, 0.7);
-    mainPanel = createUIPanel(panelGeo, { x: 0, y: 1.25, z: -1.4 }, { y: 0 });
-    mainPanel.rotation.x = -Math.PI / 5; // about -36°
+    // Desk and dashboard: create a pedestal and top to support the unified
+    // panel, and mount the flight controls.  The desk sits in front of
+    // the player and raises the dashboard to chest height, giving the
+    // impression of a lectern or workstation.
+    const desk = new THREE.Group();
+    const deskBaseGeo = new THREE.CylinderGeometry(0.25, 0.25, 1.0, 20);
+    const deskBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.5, roughness: 0.6 });
+    const deskBaseMesh = new THREE.Mesh(deskBaseGeo, deskBaseMat);
+    deskBaseMesh.position.y = 0.5;
+    desk.add(deskBaseMesh);
+    const deskTopGeo = new THREE.BoxGeometry(2.0, 0.05, 0.8);
+    const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.4, roughness: 0.4 });
+    const deskTop = new THREE.Mesh(deskTopGeo, deskTopMat);
+    deskTop.position.y = 1.0;
+    desk.add(deskTop);
+    desk.position.set(0, 0, -1.4);
+    cockpit.add(desk);
+    // Unified panel on top of the desk
+    const panelGeo2 = new THREE.PlaneGeometry(2.0, 0.7);
+    mainPanel = createUIPanel(panelGeo2, { x: 0, y: 0.05, z: -0.4 }, { y: 0 });
+    mainPanel.rotation.x = -Math.PI / 5;
     mainPanel.userData.type = 'mainPanel';
-    // Increase canvas resolution for the larger panel
     mainPanel.userData.canvas.width = 1024;
     mainPanel.userData.canvas.height = 384;
     mainPanel.userData.context = mainPanel.userData.canvas.getContext('2d');
     mainPanel.userData.texture = new THREE.CanvasTexture(mainPanel.userData.canvas);
     mainPanel.material.map = mainPanel.userData.texture;
-    cockpit.add(mainPanel);
-    // Legacy references for backwards compatibility
+    deskTop.add(mainPanel);
     navPanel = mainPanel;
     infoPanel = mainPanel;
     probePanel = mainPanel;
-
-    // Flight stick: repositioned closer to the centre and anchored to the
-    // cockpit floor.  We scale the base down and adjust its height so it
-    // feels like part of the console.  The controls are still interactive.
-    const stickBaseGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 20);
-    const stickBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
-    const stickBase = new THREE.Mesh(stickBaseGeo, stickBaseMat);
-    stickBase.position.set(0.6, 0.4, -0.6);
-    cockpit.add(stickBase);
-    const flightStickGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.45, 20);
-    const flightStickMat = new THREE.MeshStandardMaterial({ color: 0xaa3333 });
-    const flightStick = new THREE.Mesh(flightStickGeo, flightStickMat);
-    flightStick.position.y = 0.25;
-    flightStick.userData = { type: 'flightStick', baseRotation: new THREE.Quaternion() };
-    stickBase.add(flightStick);
-
-    // Throttle lever: reposition symmetrically on the left.  It uses a
-    // box geometry for the base and a vertical lever.  Travel range is
-    // reduced slightly for finer control.
-    const throttleBaseGeo = new THREE.BoxGeometry(0.14, 0.07, 0.45);
-    const throttleBaseMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
-    const throttleBase = new THREE.Mesh(throttleBaseGeo, throttleBaseMat);
-    throttleBase.position.set(-0.6, 0.4, -0.6);
-    cockpit.add(throttleBase);
-    const throttleLeverGeo = new THREE.BoxGeometry(0.09, 0.28, 0.09);
-    const throttleLeverMat = new THREE.MeshStandardMaterial({ color: 0x33aa33 });
-    const throttleLever = new THREE.Mesh(throttleLeverGeo, throttleLeverMat);
-    throttleLever.position.set(0, 0.15, 0.15);
-    throttleLever.userData = { type: 'throttle', minZ: -0.15, maxZ: 0.15 };
-    throttleBase.add(throttleLever);
+    // Flight stick mounted on the right side of the desk
+    const stickBaseGeo2 = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 20);
+    const stickBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
+    const stickBase2 = new THREE.Mesh(stickBaseGeo2, stickBaseMat2);
+    stickBase2.position.set(0.6, 1.05, 0.25);
+    cockpit.add(stickBase2);
+    const flightStickGeo2 = new THREE.CylinderGeometry(0.03, 0.03, 0.4, 20);
+    const flightStickMat2 = new THREE.MeshStandardMaterial({ color: 0xaa3333 });
+    const flightStick2 = new THREE.Mesh(flightStickGeo2, flightStickMat2);
+    flightStick2.position.y = 0.2;
+    flightStick2.userData = { type: 'flightStick', baseRotation: new THREE.Quaternion() };
+    stickBase2.add(flightStick2);
+    // Throttle lever mounted on the left side of the desk
+    const throttleBaseGeo2 = new THREE.BoxGeometry(0.14, 0.07, 0.45);
+    const throttleBaseMat2 = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.5 });
+    const throttleBase2 = new THREE.Mesh(throttleBaseGeo2, throttleBaseMat2);
+    throttleBase2.position.set(-0.6, 1.05, 0.25);
+    cockpit.add(throttleBase2);
+    const throttleLeverGeo2 = new THREE.BoxGeometry(0.09, 0.28, 0.09);
+    const throttleLeverMat2 = new THREE.MeshStandardMaterial({ color: 0x33aa33 });
+    const throttleLever2 = new THREE.Mesh(throttleLeverGeo2, throttleLeverMat2);
+    throttleLever2.position.set(0, 0.15, 0.15);
+    throttleLever2.userData = { type: 'throttle', minZ: -0.15, maxZ: 0.15 };
+    throttleBase2.add(throttleLever2);
 
     // Gravity vector indicator for probes remains unchanged
     gravityArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1.6, -2), 0.6, 0xffff00);
