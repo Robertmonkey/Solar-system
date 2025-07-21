@@ -26,7 +26,9 @@ import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
-import { TWEEN } from 'three/addons/libs/tween.module.min.js';
+// Tween.js is imported as a default export.  Importing named exports from
+// tween.module.min.js causes an error because the module doesn’t define them.
+// Tween.js is not used; warp transitions are implemented manually below.
 
 // --- GLOBALS & CONSTANTS ---
 let scene, camera, renderer, clock;
@@ -1076,25 +1078,38 @@ function getEllipsePosition(a, e, M) {
 }
 
 function warpTo(destination) {
+    // Play warp sound if available
     if (warpSound && !warpSound.isPlaying) warpSound.play();
     const endPos = destination.mesh.getWorldPosition(new THREE.Vector3()).negate();
-    // Fade effect overlay
+    // Create a fullscreen white overlay for the fade transition
     const overlay = new THREE.Mesh(
         new THREE.PlaneGeometry(2, 2),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
     );
     overlay.position.z = -0.1;
     camera.add(overlay);
-    new TWEEN.Tween(overlay.material).to({ opacity: 1.0 }, 500).yoyo(true).repeat(1)
-        .onUpdate((obj, elapsed) => {
-            if (elapsed > 0.5) {
+    const duration = 0.5; // half a second to fade in and another half to fade out
+    const startTime = performance.now();
+    function fade() {
+        const elapsed = (performance.now() - startTime) / 1000;
+        if (elapsed <= duration) {
+            // Fade in: opacity from 0 → 1
+            overlay.material.opacity = elapsed / duration;
+        } else if (elapsed <= duration * 2) {
+            // Fade out: call warp halfway through
+            if (elapsed - 0.016 < duration) {
+                // Move the solar group once when transitioning
                 solarGroup.position.copy(endPos);
             }
-        })
-        .onComplete(() => {
+            overlay.material.opacity = 1 - (elapsed - duration) / duration;
+        } else {
+            // Remove overlay after transition
             camera.remove(overlay);
-        })
-        .start();
+            return;
+        }
+        requestAnimationFrame(fade);
+    }
+    requestAnimationFrame(fade);
 }
 
 // --- RENDER LOOP ---
@@ -1107,7 +1122,6 @@ function animate() {
     handleController(controller2);
     updatePhysics(effDelta);
     updateUIPanels();
-    TWEEN.update();
     renderer.render(scene, camera);
 }
 
