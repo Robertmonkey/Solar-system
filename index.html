@@ -79,6 +79,11 @@ let infoPanel;
 let probePanel;
 let gravityArrow;
 
+// Timestamp of the last hand interaction to avoid accidental rapid
+// repeated triggers when a fingertip hovers on the UI.  Measured in
+// seconds according to the Three.js clock.
+let lastHandPressTime = 0;
+
 // Data definitions.  This array captures all of the major planets, dwarf planets,
 // and notable small bodies described by the user.  Semi-major axes (a) are in
 // millions of kilometers (M km); radius is in km.  The game will automatically
@@ -539,10 +544,15 @@ function createCockpit() {
     // inside an opaque cylinder.  We create a hemispherical floor with a
     // diameter of roughly 6 ft (~1.8 m).  The hemisphere is oriented so its
     // flat edge lies at Y=0, giving a gentle curved floor beneath the player.
-    const floorGeo = new THREE.SphereGeometry(1.8, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+    // Create a hemisphere for the floor.  We use the lower half of a sphere and
+    // flip it so that the curved surface faces up toward the user.  This
+    // provides a subtle curved footing without blocking the view.  The
+    // hemisphere’s flat face remains at y=0.
+    const floorGeo = new THREE.SphereGeometry(1.8, 32, 32, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2, roughness: 0.6, side: THREE.DoubleSide });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-    floorMesh.rotation.x = -Math.PI / 2;
+    // Flip it 180° around the x‑axis so the curvature faces upward
+    floorMesh.rotation.x = Math.PI;
     floorMesh.position.y = 0.0;
     cockpit.add(floorMesh);
 
@@ -564,9 +574,13 @@ function createCockpit() {
     // later be increased for crisp text.  We set navPanel, infoPanel and
     // probePanel to reference this same mesh so existing code that
     // references them continues to function.
-    const panelGeo = new THREE.PlaneGeometry(2.4, 0.8);
-    mainPanel = createUIPanel(panelGeo, { x: 0, y: 1.4, z: -1.8 }, { y: 0 });
-    mainPanel.rotation.x = -Math.PI / 6;
+    // Create the wrap‑around panel as a slightly smaller surface so it feels
+    // like a desktop rather than a wall.  Position it lower and closer to the
+    // player and tilt it downward more to encourage looking down rather than
+    // straight ahead.  Width 2.0, height 0.7.
+    const panelGeo = new THREE.PlaneGeometry(2.0, 0.7);
+    mainPanel = createUIPanel(panelGeo, { x: 0, y: 1.25, z: -1.4 }, { y: 0 });
+    mainPanel.rotation.x = -Math.PI / 5; // about -36°
     mainPanel.userData.type = 'mainPanel';
     // Increase canvas resolution for the larger panel
     mainPanel.userData.canvas.width = 1024;
@@ -830,6 +844,96 @@ function handleController(controller) {
         } else {
             laser.scale.z = 5;
         }
+    }
+}
+
+// --- HAND INTERACTIONS ---
+// Enable fingertip touch detection on the UI.  When the index finger tip of a
+// connected hand comes close to the main panel, we convert its local
+// coordinates into canvas pixel coordinates and dispatch a UI press.  A
+// short cooldown prevents repeated firing when the finger lingers on a
+// button or slider.
+function handleHandInteractions(hand) {
+    if (!hand || !mainPanel || !hand.joints) return;
+    const tip = hand.joints[ 'index-finger-tip' ];
+    if (!tip) return;
+    // Current time from Three.js clock
+    const now = clock.getElapsedTime();
+    const tipWorld = new THREE.Vector3();
+    tip.getWorldPosition(tipWorld);
+    // Transform fingertip into the local space of the main panel
+    const panelInverse = new THREE.Matrix4().copy(mainPanel.matrixWorld).invert();
+    const tipLocal = tipWorld.clone().applyMatrix4(panelInverse);
+    // The plane lies in the XY plane of its local space (z≈0).  Check
+    // proximity along z and bounds along x and y based on the panel’s
+    // geometry (halfWidth=1.2, halfHeight=0.4 for a 2.4×0.8 panel).
+    // Compute half dimensions based on the panel geometry.  The panel is
+    // created as 2.0×0.7, so half widths are 1.0 and 0.35 respectively.
+    const halfW = 1.0;
+    const halfH = 0.35;
+    // If the fingertip is close enough to the panel’s surface
+    if (Math.abs(tipLocal.z) < 0.03 && Math.abs(tipLocal.x) <= halfW && Math.abs(tipLocal.y) <= halfH) {
+        // Debounce: only register a press every 0.4 seconds
+        if (now - lastHandPressTime < 0.4) return;
+        lastHandPressTime = now;
+        // Convert local x,y to canvas pixel coordinates
+        const px = ((tipLocal.x + halfW) / (halfW * 2)) * mainPanel.userData.canvas.width;
+        const py = ((halfH - tipLocal.y) / (halfH * 2)) * mainPanel.userData.canvas.height;
+        handleUIPress(px, py);
+    }
+}
+
+// Centralised handler for UI presses.  Accepts pixel coordinates on the
+// main panel’s canvas and runs the same logic used in onSelectStart to
+// activate buttons and sliders.  Called both by hand interactions and
+// controller ray‑casting.
+function handleUIPress(px, py) {
+    // Navigation buttons
+    if (mainPanel.userData.navButtons) {
+        for (const btn of mainPanel.userData.navButtons) {
+            if (px >= btn.x && px <= btn.x + btn.w && py >= btn.y && py <= btn.y + btn.h) {
+                const targetBody = celestialBodies.find(b => b.data.name === btn.targetName);
+                if (targetBody) {
+                    selectedTarget = targetBody;
+                    warpTo(targetBody);
+                }
+                if (uiBeepSound) uiBeepSound.play();
+                return;
+            }
+        }
+    }
+    // Scale slider
+    const dist = mainPanel.userData.scaleSlider;
+    if (dist && py >= dist.y && py <= dist.y + dist.h && px >= dist.x && px <= dist.x + dist.w) {
+        const ratio = (px - dist.x) / dist.w;
+        distanceMultiplier = dist.min + ratio * (dist.max - dist.min);
+        if (uiBeepSound) uiBeepSound.play();
+        return;
+    }
+    // Time slider
+    const tsl = mainPanel.userData.timeSlider;
+    if (tsl && py >= tsl.y && py <= tsl.y + tsl.h && px >= tsl.x && px <= tsl.x + tsl.w) {
+        const ratio = (px - tsl.x) / tsl.w;
+        timeScale = tsl.min + ratio * (tsl.max - tsl.min);
+        if (uiBeepSound) uiBeepSound.play();
+        return;
+    }
+    // Narrate fun fact
+    const ttsBtn = mainPanel.userData.tts_button;
+    if (ttsBtn && px >= ttsBtn.x && px <= ttsBtn.x + ttsBtn.w && py >= ttsBtn.y && py <= ttsBtn.y + ttsBtn.h) {
+        if (selectedTarget && selectedTarget.data.funFacts) {
+            const fact = selectedTarget.data.funFacts[Math.floor(Math.random() * selectedTarget.data.funFacts.length)];
+            narrate(fact);
+        }
+        if (uiBeepSound) uiBeepSound.play();
+        return;
+    }
+    // Launch probe
+    const plb = mainPanel.userData.probe_launch_button;
+    if (plb && px >= plb.x && px <= plb.x + plb.w && py >= plb.y && py <= plb.y + plb.h) {
+        launchProbe();
+        if (uiBeepSound) uiBeepSound.play();
+        return;
     }
 }
 
@@ -1186,6 +1290,11 @@ function animate() {
     handleController(controller2);
     updatePhysics(effDelta);
     updateUIPanels();
+    // Process hand interactions after the UI has been drawn.  Both left and
+    // right hands can activate UI elements by touching them with the index
+    // fingertip.  This makes the interface feel like a physical touchscreen.
+    handleHandInteractions(hand1);
+    handleHandInteractions(hand2);
     renderer.render(scene, camera);
 }
 
