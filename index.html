@@ -16,12 +16,13 @@
             "imports": {
                 "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
                 "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
-                "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.10/build/index.module.js"
+                "three-bvh-csg": "https://unpkg.com/three-bvh-csg@0.0.7/build/index.module.js"
             }
         }
     </script>
     <script type="module">
         import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { VRButton } from 'three/addons/webxr/VRButton.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
         import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
@@ -30,26 +31,26 @@
         // Texture loader and planet textures
         const textureLoader = new THREE.TextureLoader();
         const planetTextures = {
-            Mercury: { map: textureLoader.load('textures/mercury.jpg', undefined, undefined, err => console.error('Error loading mercury.jpg:', err)) },
+            Mercury: { map: textureLoader.load('textures/mercury.jpg') },
             Venus: {
-                map: textureLoader.load('textures/venus_surface.jpg', undefined, undefined, err => console.error('Error loading venus_surface.jpg:', err)),
-                atmosphere: textureLoader.load('textures/venus_atmosphere.jpg', undefined, undefined, err => console.error('Error loading venus_atmosphere.jpg:', err))
+                map: textureLoader.load('textures/venus_surface.jpg'),
+                atmosphere: textureLoader.load('textures/venus_atmosphere.jpg')
             },
             Earth: {
-                map: textureLoader.load('textures/earth_daymap.jpg', undefined, undefined, err => console.error('Error loading earth_daymap.jpg:', err)),
-                nightMap: textureLoader.load('textures/earth_lights.png', undefined, undefined, err => console.error('Error loading earth_lights.png:', err)),
-                clouds: textureLoader.load('textures/earth_clouds.jpg', undefined, undefined, err => console.error('Error loading earth_clouds.jpg:', err)),
-                specular: textureLoader.load('textures/earth_specular_map.tif', undefined, undefined, err => console.error('Error loading earth_specular_map.tif:', err))
+                map: textureLoader.load('textures/earth_daymap.jpg'),
+                nightMap: textureLoader.load('textures/earth_lights.png'),
+                clouds: textureLoader.load('textures/earth_clouds.jpg'),
+                specular: textureLoader.load('textures/earth_specular_map.tif')
             },
-            Mars: { map: textureLoader.load('textures/mars.jpg', undefined, undefined, err => console.error('Error loading mars.jpg:', err)) },
-            Jupiter: { map: textureLoader.load('textures/jupiter.jpg', undefined, undefined, err => console.error('Error loading jupiter.jpg:', err)) },
+            Mars: { map: textureLoader.load('textures/mars.jpg') },
+            Jupiter: { map: textureLoader.load('textures/jupiter.jpg') },
             Saturn: {
-                map: textureLoader.load('textures/saturn.jpg', undefined, undefined, err => console.error('Error loading saturn.jpg:', err)),
-                ring: textureLoader.load('textures/saturn_ring_alpha.png', undefined, undefined, err => console.error('Error loading saturn_ring_alpha.png:', err))
+                map: textureLoader.load('textures/saturn.jpg'),
+                ring: textureLoader.load('textures/saturn_ring_alpha.png')
             },
-            Uranus: { map: textureLoader.load('textures/uranus.jpg', undefined, undefined, err => console.error('Error loading uranus.jpg:', err)) },
-            Neptune: { map: textureLoader.load('textures/neptune.jpg', undefined, undefined, err => console.error('Error loading neptune.jpg:', err)) },
-            Moon: { map: textureLoader.load('textures/moon.jpg', undefined, undefined, err => console.error('Error loading moon.jpg:', err)) }
+            Uranus: { map: textureLoader.load('textures/uranus.jpg') },
+            Neptune: { map: textureLoader.load('textures/neptune.jpg') },
+            Moon: { map: textureLoader.load('textures/moon.jpg') }
         };
 
         // Core setup
@@ -108,7 +109,6 @@
         let grabbedStick = null;
         let grabbedSlider = null;
         let flightSpeed = 0; // 0 to 10
-        let speedMultiplier = 1.0; // For orbit speed
 
         // Scales and constants
         const KM_IN_AU = 149.6e6;
@@ -124,114 +124,114 @@
         const dynamicRings = [];
         const probes = [];
 
-        // Data arrays from original
+        // Full data arrays from original
         const solarSystemData = [
-            { name: 'Sun', radius: 696340, color: 0xfff000, mass: 1.989e30, funFacts: [
+            { name: 'Sun', radius: 696340, color: 0xfff000, funFacts: [
                 "The Sun contains more than 99.8% of the mass of the solar system.",
                 "Its diameter is about 109 times that of Earth.",
-                "The core is over 27 million degrees Fahrenheit while the surface is about 10,000°F.",
-                "It formed around 4.6 billion years ago and will expand into a red giant in roughly five billion years.",
+                "The core is over 27 million degrees Fahrenheit while the surface is about 10,000 °F.",
+                "It formed around 4.6 billion years ago and will expand into a red giant in roughly five billion years.",
                 "Its gravitational pull keeps all planets, asteroids and comets bound in their orbits."
             ] },
-            { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, mass: 3.285e23, funFacts: [
+            { name: 'Mercury', radius: 2440, color: 0x9f9f9f, a: 57.9, e: 0.205, period: 88, inclination: 7.0, axialTilt: 0.03, lonAscNode: 48.3, argPeri: 29.1, meanAnomalyEpoch: 174.7, funFacts: [
                 "Mercury is the smallest and closest planet to the Sun.",
                 "A single day on Mercury (sunrise to sunrise) lasts 176 Earth days while a year is 88 days.",
-                "It is the second-densest planet after Earth despite its small size.",
+                "It is the second‑densest planet after Earth despite its small size.",
                 "Mercury has a global magnetic field about one percent as strong as Earth’s.",
-                "Temperatures swing from 427°C in sunlight to –173°C in darkness, yet water ice exists in permanently shadowed craters at its poles."
+                "Temperatures swing from 427 °C in sunlight to –173 °C in darkness, yet water ice exists in permanently shadowed craters at its poles."
             ] },
-            { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, mass: 4.867e24, funFacts: [
-                "A day on Venus (243 Earth days) is longer than its 225-day year.",
+            { name: 'Venus', radius: 6052, color: 0xdab36d, a: 108.2, e: 0.007, period: 224.7, inclination: 3.4, axialTilt: 177.4, lonAscNode: 76.7, argPeri: 54.9, meanAnomalyEpoch: 50.1, funFacts: [
+                "A day on Venus (243 Earth days) is longer than its 225‑day year.",
                 "It rotates backwards (retrograde) compared to most planets.",
-                "It is the hottest planet in the solar system at roughly 465°C due to a runaway greenhouse effect.",
+                "It is the hottest planet in the solar system at roughly 465 °C due to a runaway greenhouse effect.",
                 "Surface pressure on Venus is more than 90 times Earth’s atmospheric pressure.",
                 "Often called Earth’s sister planet because of its similar size and mass."
             ] },
-            { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, mass: 5.972e24, funFacts: [
+            { name: 'Earth', radius: 6371, color: 0x4f70a3, a: 149.6, e: 0.017, period: 365.2, inclination: 0.0, axialTilt: 23.4, lonAscNode: -11.2, argPeri: 114.2, meanAnomalyEpoch: 358.6, funFacts: [
                 "Earth is the only planet not named after a mythological deity.",
                 "It is the densest planet in the solar system.",
                 "Earth’s rotation is gradually slowing by about 17 milliseconds per century.",
                 "Roughly 70 percent of its surface is covered by water.",
                 "Its magnetic field shields the surface from harmful solar wind and cosmic radiation."
             ], moons: [
-                { name: 'Moon', radius: 1737, a: 0.384, e: 0.055, period: 27.3, color: 0xcccccc, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, mass: 7.342e22, funFacts: ["The Moon is drifting away from Earth by about 3.8 cm per year.", "It is the 5th largest moon in the solar system.", "The Moon has 'moonquakes' caused by the Earth's gravitational pull."] }
+                { name: 'Moon', radius: 1737, a: 0.384, e: 0.055, period: 27.3, color: 0xcccccc, inclination: 5.1, lonAscNode: 125.08, argPeri: 318.15, meanAnomalyEpoch: 115.36, funFacts: ["The Moon is drifting away from Earth by about 3.8 cm per year.", "It is the 5th largest moon in the solar system.", "The Moon has 'moonquakes' caused by the Earth's gravitational pull."] }
             ]},
-            { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, mass: 6.417e23, funFacts: [
+            { name: 'Mars', radius: 3390, color: 0xc1440e, a: 227.9, e: 0.094, period: 687, inclination: 1.8, axialTilt: 25.2, lonAscNode: 49.6, argPeri: 286.5, meanAnomalyEpoch: 19.4, funFacts: [
                 "Home to Olympus Mons, the tallest volcano and mountain in the solar system.",
                 "Its red colour comes from iron oxide (rust) in the soil and rocks.",
                 "Mars has the largest dust storms in the solar system, sometimes covering the entire planet.",
                 "The atmosphere is less than one percent as dense as Earth’s and composed mostly of carbon dioxide.",
                 "Evidence suggests Mars once had flowing liquid water and perhaps conditions suitable for life."
             ], moons: [
-                { name: 'Phobos', radius: 11.2, a: 0.00937, e: 0.015, period: 0.3, color: 0x8f8f8f, inclination: 1.1, mass: 1.0659e16, funFacts: ["Phobos is getting closer to Mars and will either crash into it or break up into a ring in about 50 million years.", "It is a 'captured' asteroid, not a naturally formed moon."]},
-                { name: 'Deimos', radius: 6.2, a: 0.0234, e: 0.0002, period: 1.26, color: 0xafafaf, inclination: 0.9, mass: 1.4762e15, funFacts: ["Deimos is one of the smallest known moons in the solar system.", "It is covered in a thick layer of fine dust, or regolith."] }
+                { name: 'Phobos', radius: 11.2, a: 0.00937, e: 0.015, period: 0.3, color: 0x8f8f8f, inclination: 1.1, funFacts: ["Phobos is getting closer to Mars and will either crash into it or break up into a ring in about 50 million years.", "It is a 'captured' asteroid, not a naturally formed moon."]},
+                { name: 'Deimos', radius: 6.2, a: 0.0234, e: 0.0002, period: 1.26, color: 0xafafaf, inclination: 0.9, funFacts: ["Deimos is one of the smallest known moons in the solar system.", "It is covered in a thick layer of fine dust, or regolith."] }
             ]},
-            { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, mass: 1.898e27, funFacts: [
+            { name: 'Jupiter', radius: 69911, color: 0xc8ab89, a: 778.6, e: 0.049, period: 4331, inclination: 1.3, axialTilt: 3.1, lonAscNode: 100.5, argPeri: 273.8, meanAnomalyEpoch: 20.0, funFacts: [
                 "Jupiter is the largest planet—more than twice as massive as all the other planets combined.",
                 "The Great Red Spot is a colossal storm that has raged for centuries.",
                 "It has the shortest day of any planet, rotating once every 10 hours.",
                 "Jupiter has at least 79 moons; its largest moon, Ganymede, is bigger than the planet Mercury.",
                 "The planet’s magnetic field is the strongest of any planet in the solar system."
             ], moons: [
-                { name: 'Amalthea', radius: 83.5, a: 0.181, e: 0.003, period: 0.5, color: 0x9b593c, inclination: 0.37, mass: 2.08e18, funFacts: ["Amalthea is irregularly shaped and reddish, likely from sulfur from Io.", "It radiates more heat than it receives from the Sun."] },
-                { name: 'Io', radius: 1821, a: 0.421, e: 0.004, period: 1.77, color: 0xf3d649, inclination: 0.05, mass: 8.932e22, funFacts: ["Io is the most volcanically active body in the solar system, with hundreds of volcanoes.", "Its surface is covered in sulfur in various colorful forms."] },
-                { name: 'Europa', radius: 1560, a: 0.671, e: 0.009, period: 3.55, color: 0x8f7f70, inclination: 0.47, mass: 4.7998e22, funFacts: ["Europa's icy surface may hide a global saltwater ocean underneath.", "Scientists believe this ocean could potentially harbor extraterrestrial life."] },
-                { name: 'Ganymede', radius: 2634, a: 1.070, e: 0.001, period: 7.15, color: 0x9e9990, inclination: 0.20, mass: 1.4819e23, funFacts: ["Ganymede is the largest moon in the solar system, bigger than the planet Mercury.", "It is the only moon known to have its own magnetic field."] },
-                { name: 'Callisto', radius: 2410, a: 1.882, e: 0.007, period: 16.69, color: 0x5a5651, inclination: 0.20, mass: 1.0759e23, funFacts: ["Callisto has the most heavily cratered surface of any object in the solar system.", "It is thought to have a 'dead' surface that hasn't changed much in 4 billion years."] },
-                { name: 'Himalia', radius: 85, a: 11.46, e: 0.16, period: 250.6, inclination: 27.5, color: 0x8b8081, mass: 4.2e18, funFacts: ["Himalia is the largest irregular moon of Jupiter.", "It may be the remnant of a captured asteroid."] }
+                { name: 'Amalthea', radius: 83.5, a: 0.181, e: 0.003, period: 0.5, color: 0x9b593c, inclination: 0.37, funFacts: ["Amalthea is irregularly shaped and reddish, likely from sulfur from Io.", "It radiates more heat than it receives from the Sun."] },
+                { name: 'Io', radius: 1821, a: 0.421, e: 0.004, period: 1.77, color: 0xf3d649, inclination: 0.05, funFacts: ["Io is the most volcanically active body in the solar system, with hundreds of volcanoes.", "Its surface is covered in sulfur in various colorful forms."] },
+                { name: 'Europa', radius: 1560, a: 0.671, e: 0.009, period: 3.55, color: 0x8f7f70, inclination: 0.47, funFacts: ["Europa's icy surface may hide a global saltwater ocean underneath.", "Scientists believe this ocean could potentially harbor extraterrestrial life."] },
+                { name: 'Ganymede', radius: 2634, a: 1.070, e: 0.001, period: 7.15, color: 0x9e9990, inclination: 0.20, funFacts: ["Ganymede is the largest moon in the solar system, bigger than the planet Mercury.", "It is the only moon known to have its own magnetic field."] },
+                { name: 'Callisto', radius: 2410, a: 1.882, e: 0.007, period: 16.69, color: 0x5a5651, inclination: 0.20, funFacts: ["Callisto has the most heavily cratered surface of any object in the solar system.", "It is thought to have a 'dead' surface that hasn't changed much in 4 billion years."] },
+                { name: 'Himalia', radius: 85, a: 11.46, e: 0.16, period: 250.6, inclination: 27.5, color: 0x8b8081, funFacts: ["Himalia is the largest irregular moon of Jupiter.", "It may be the remnant of a captured asteroid."] }
             ]},
-            { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, mass: 5.683e26, funFacts: [
+            { name: 'Saturn', radius: 58232, color: 0xe3d9b1, a: 1433.5, e: 0.057, period: 10747, inclination: 2.5, axialTilt: 26.7, lonAscNode: 113.7, argPeri: 339.3, meanAnomalyEpoch: 317.0, funFacts: [
                 "Saturn’s rings are made of billions of particles of ice and rock and are only about 10 metres thick on average.",
                 "The planet is less dense than water and would float in a bathtub large enough to hold it.",
                 "Winds on Saturn can reach speeds of around 1,800 kilometres per hour.",
                 "A persistent hexagonal storm rages at Saturn’s north pole.",
-                "It has more than 145 known moons; Titan, the largest, has a thick nitrogen-rich atmosphere."
+                "It has more than 145 known moons; Titan, the largest, has a thick nitrogen‑rich atmosphere."
             ], moons: [
-                { name: 'Mimas', radius: 198, a: 0.185, e: 0.02, period: 0.9, color: 0xb0b0b0, inclination: 1.5, mass: 3.7493e19, funFacts: ["Mimas is famous for its massive impact crater, Herschel, which makes it resemble the Death Star.", "The crater is 130 km wide, almost one-third of the moon's own diameter."] },
-                { name: 'Enceladus', radius: 252, a: 0.238, e: 0.005, period: 1.4, color: 0xe0e0e0, inclination: 0.02, mass: 1.08022e20, funFacts: ["Enceladus has huge geysers at its south pole that spray water ice into space, forming Saturn's E-ring.", "It is one of the most promising places to search for life."] },
-                { name: 'Tethys', radius: 533, a: 0.294, e: 0.0, period: 1.9, color: 0xd8d8d8, inclination: 1.1, mass: 6.17449e20, funFacts: ["Tethys has a gigantic canyon, Ithaca Chasma, that runs three-quarters of the way around the moon.", "It's composed almost entirely of water ice."] },
-                { name: 'Dione', radius: 561, a: 0.377, e: 0.002, period: 2.7, color: 0xc8c8c8, inclination: 0.02, mass: 1.095452e21, funFacts: ["Dione has bright, wispy ice cliffs on its trailing hemisphere.", "It may have a subsurface ocean, much like Enceladus."] },
-                { name: 'Rhea', radius: 764, a: 0.527, e: 0.001, period: 4.5, color: 0xb8b8b8, inclination: 0.3, mass: 2.306518e21, funFacts: ["Rhea is the second-largest moon of Saturn.", "Scientists once thought Rhea might have its own faint ring system, a first for a moon."] },
-                { name: 'Titan', radius: 2575, a: 1.221, e: 0.029, period: 15.9, color: 0xf5ad6f, inclination: 0.33, mass: 1.3452e23, funFacts: ["Titan is the only moon with a thick, dense atmosphere.", "It has rivers, lakes, and seas of liquid methane and ethane on its surface."] },
-                { name: 'Hyperion', radius: 135, a: 1.481, e: 0.1, period: 21.3, color: 0xa08c78, inclination: 0.43, mass: 5.5855e18, funFacts: ["Hyperion is one of the largest irregularly shaped moons.", "It tumbles chaotically through its orbit, with no stable rotation axis."] },
-                { name: 'Iapetus', radius: 735, a: 3.560, e: 0.028, period: 79.3, color: 0x909090, inclination: 15.4, mass: 1.805635e21, funFacts: ["Iapetus is a 'two-faced' moon, with one bright hemisphere and one dark one.", "It also has a mysterious, massive equatorial ridge."] },
-                { name: 'Phoebe', radius: 106.5, a: 12.952, e: 0.159, period: -550, color: 0x5a5a5a, inclination: 175.3, mass: 8.292e18, funFacts: ["Phoebe orbits Saturn in a retrograde (backwards) direction.", "It is thought to be a captured Kuiper Belt Object."] }
+                { name: 'Mimas', radius: 198, a: 0.185, e: 0.02, period: 0.9, color: 0xb0b0b0, inclination: 1.5, funFacts: ["Mimas is famous for its massive impact crater, Herschel, which makes it resemble the Death Star.", "The crater is 130 km wide, almost one-third of the moon's own diameter."] },
+                { name: 'Enceladus', radius: 252, a: 0.238, e: 0.005, period: 1.4, color: 0xe0e0e0, inclination: 0.02, funFacts: ["Enceladus has huge geysers at its south pole that spray water ice into space, forming Saturn's E-ring.", "It is one of the most promising places to search for life."] },
+                { name: 'Tethys', radius: 533, a: 0.294, e: 0.0, period: 1.9, color: 0xd8d8d8, inclination: 1.1, funFacts: ["Tethys has a gigantic canyon, Ithaca Chasma, that runs three-quarters of the way around the moon.", "It's composed almost entirely of water ice."] },
+                { name: 'Dione', radius: 561, a: 0.377, e: 0.002, period: 2.7, color: 0xc8c8c8, inclination: 0.02, funFacts: ["Dione has bright, wispy ice cliffs on its trailing hemisphere.", "It may have a subsurface ocean, much like Enceladus."] },
+                { name: 'Rhea', radius: 764, a: 0.527, e: 0.001, period: 4.5, color: 0xb8b8b8, inclination: 0.3, funFacts: ["Rhea is the second-largest moon of Saturn.", "Scientists once thought Rhea might have its own faint ring system, a first for a moon."] },
+                { name: 'Titan', radius: 2575, a: 1.221, e: 0.029, period: 15.9, color: 0xf5ad6f, inclination: 0.33, funFacts: ["Titan is the only moon with a thick, dense atmosphere.", "It has rivers, lakes, and seas of liquid methane and ethane on its surface."] },
+                { name: 'Hyperion', radius: 135, a: 1.481, e: 0.1, period: 21.3, color: 0xa08c78, inclination: 0.43, funFacts: ["Hyperion is one of the largest irregularly shaped moons.", "It tumbles chaotically through its orbit, with no stable rotation axis."] },
+                { name: 'Iapetus', radius: 735, a: 3.560, e: 0.028, period: 79.3, color: 0x909090, inclination: 15.4, funFacts: ["Iapetus is a 'two-faced' moon, with one bright hemisphere and one dark one.", "It also has a mysterious, massive equatorial ridge."] },
+                { name: 'Phoebe', radius: 106.5, a: 12.952, e: 0.159, period: -550, color: 0x5a5a5a, inclination: 175.3, funFacts: ["Phoebe orbits Saturn in a retrograde (backwards) direction.", "It is thought to be a captured Kuiper Belt Object."] }
             ]},
-            { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, mass: 8.681e25, funFacts: [
+            { name: 'Uranus', radius: 25362, color: 0xafdbd3, a: 2872.5, e: 0.046, period: 30589, inclination: 0.8, axialTilt: 97.8, lonAscNode: 74.0, argPeri: 98.9, meanAnomalyEpoch: 142.2, funFacts: [
                 "Uranus is tilted on its side by about 98°, likely the result of a giant impact in its distant past.",
                 "Its seasons each last more than 20 Earth years because it takes 84 years to orbit the Sun.",
-                "It is the coldest planet in the solar system, with temperatures dropping below −200°C.",
+                "It is the coldest planet in the solar system, with temperatures dropping below −200 °C.",
                 "Discovered by William Herschel in 1781, it was the first planet found with a telescope.",
                 "It has faint dark rings and moons named after characters from Shakespeare and Alexander Pope."
             ], moons: [
-                { name: 'Puck', radius: 81, a: 0.086, e: 0.0001, period: 0.76, color: 0x707070, inclination: 0.32, mass: 2.9e18, funFacts: ["Puck was the first inner moon of Uranus to be discovered by Voyager 2.", "Its surface is dark and covered with craters."] },
-                { name: 'Miranda', radius: 236, a: 0.129, e: 0.001, period: 1.4, color: 0xc0c0c0, inclination: 4.2, mass: 6.59e19, funFacts: ["Miranda has one of the most bizarre and varied landscapes in the solar system.", "It features enormous canyons, terraced layers, and a patchwork of different surfaces."] },
-                { name: 'Ariel', radius: 579, a: 0.191, e: 0.001, period: 2.5, color: 0xd0d0d0, inclination: 0.3, mass: 1.353e21, funFacts: ["Ariel has the brightest surface of Uranus's major moons.", "Its surface is marked by extensive fault valleys and canyons."] },
-                { name: 'Umbriel', radius: 585, a: 0.266, e: 0.004, period: 4.1, color: 0x888888, inclination: 0.3, mass: 1.172e21, funFacts: ["Umbriel is the darkest of Uranus's large moons.", "Its most prominent feature is a bright, mysterious ring on its equator called the 'Wunda crater'."] },
-                { name: 'Titania', radius: 788, a: 0.436, e: 0.002, period: 8.7, color: 0xb0a090, inclination: 0.1, mass: 3.527e21, funFacts: ["Titania is the largest moon of Uranus.", "It has a network of huge canyons and fault lines, suggesting past geological activity."] },
-                { name: 'Oberon', radius: 761, a: 0.583, e: 0.001, period: 13.5, color: 0x908080, inclination: 0.1, mass: 3.014e21, funFacts: ["Oberon is the outermost large moon of Uranus.", "Its old, icy surface is heavily cratered and shows little sign of internal activity."] }
+                { name: 'Puck', radius: 81, a: 0.086, e: 0.0001, period: 0.76, color: 0x707070, inclination: 0.32, funFacts: ["Puck was the first inner moon of Uranus to be discovered by Voyager 2.", "Its surface is dark and covered with craters."] },
+                { name: 'Miranda', radius: 236, a: 0.129, e: 0.001, period: 1.4, color: 0xc0c0c0, inclination: 4.2, funFacts: ["Miranda has one of the most bizarre and varied landscapes in the solar system.", "It features enormous canyons, terraced layers, and a patchwork of different surfaces."] },
+                { name: 'Ariel', radius: 579, a: 0.191, e: 0.001, period: 2.5, color: 0xd0d0d0, inclination: 0.3, funFacts: ["Ariel has the brightest surface of Uranus's major moons.", "Its surface is marked by extensive fault valleys and canyons."] },
+                { name: 'Umbriel', radius: 585, a: 0.266, e: 0.004, period: 4.1, color: 0x888888, inclination: 0.3, funFacts: ["Umbriel is the darkest of Uranus's large moons.", "Its most prominent feature is a bright, mysterious ring on its equator called the 'Wunda crater'."] },
+                { name: 'Titania', radius: 788, a: 0.436, e: 0.002, period: 8.7, color: 0xb0a090, inclination: 0.1, funFacts: ["Titania is the largest moon of Uranus.", "It has a network of huge canyons and fault lines, suggesting past geological activity."] },
+                { name: 'Oberon', radius: 761, a: 0.583, e: 0.001, period: 13.5, color: 0x908080, inclination: 0.1, funFacts: ["Oberon is the outermost large moon of Uranus.", "Its old, icy surface is heavily cratered and shows little sign of internal activity."] }
             ]},
-            { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, mass: 1.024e26, funFacts: [
+            { name: 'Neptune', radius: 24622, color: 0x3d5a9c, a: 4495.1, e: 0.011, period: 59800, inclination: 1.8, axialTilt: 28.3, lonAscNode: 131.8, argPeri: 276.3, meanAnomalyEpoch: 256.2, funFacts: [
                 "Neptune was predicted by mathematicians before it was observed through a telescope.",
                 "It has the strongest winds in the solar system, topping 2,100 kilometres per hour.",
                 "A Neptunian year lasts nearly 165 Earth years.",
                 "Neptune radiates more heat than it receives from the Sun.",
                 "Its largest moon, Triton, has nitrogen geysers and orbits the planet retrograde to its rotation."
             ], moons: [
-                { name: 'Proteus', radius: 210, a: 0.117, e: 0.0005, period: 1.1, color: 0x606060, inclination: 0.026, mass: 5.0e19, funFacts: ["Proteus is one of the darkest objects in the solar system, reflecting only 6% of the light that hits it.", "It is irregularly shaped, about as large as a body can be before gravity pulls it into a sphere."] },
-                { name: 'Triton', radius: 1353, a: 0.354, e: 0.0, period: -5.9, color: 0xced4da, inclination: 157, mass: 2.14e22, funFacts: ["Triton is the only large moon in the solar system that orbits in the opposite direction of its planet's rotation (retrograde orbit).", "It has geysers that erupt nitrogen frost and is one of the coldest objects in the solar system."] },
-                { name: 'Nereid', radius: 170, a: 5.513, e: 0.75, period: 360, color: 0xa0a0a0, inclination: 7.2, mass: 3.09e19, funFacts: ["Nereid has one of the most eccentric orbits of any moon in the solar system.", "Its distance from Neptune varies by a factor of 7."] }
+                { name: 'Proteus', radius: 210, a: 0.117, e: 0.0005, period: 1.1, color: 0x606060, inclination: 0.026, funFacts: ["Proteus is one of the darkest objects in the solar system, reflecting only 6% of the light that hits it.", "It is irregularly shaped, about as large as a body can be before gravity pulls it into a sphere."] },
+                { name: 'Triton', radius: 1353, a: 0.354, e: 0.0, period: -5.9, color: 0xced4da, inclination: 157, funFacts: ["Triton is the only large moon in the solar system that orbits in the opposite direction of its planet's rotation (retrograde orbit).", "It has geysers that erupt nitrogen frost and is one of the coldest objects in the solar system."] },
+                { name: 'Nereid', radius: 170, a: 5.513, e: 0.75, period: 360, color: 0xa0a0a0, inclination: 7.2, funFacts: ["Nereid has one of the most eccentric orbits of any moon in the solar system.", "Its distance from Neptune varies by a factor of 7."] }
             ]},
-            { name: 'Ceres', type: 'Dwarf Planet', radius: 476, color: 0xaaaaaa, a: 413.7, e: 0.076, period: 1682, inclination: 10.6, axialTilt: 4, lonAscNode: 80.3, argPeri: 73.6, meanAnomalyEpoch: 149.3, mass: 9.393e20, funFacts: ["The largest object in the asteroid belt.", "The bright spots on its surface are salt deposits, likely from an ancient subsurface ocean.", "It is the only dwarf planet in the inner solar system."] },
-            { name: 'Pluto', type: 'Dwarf Planet', radius: 1188, color: 0xead9c2, a: 5906.4, e: 0.249, period: 90560, inclination: 17.2, axialTilt: 122.5, lonAscNode: 110.3, argPeri: 113.8, meanAnomalyEpoch: 14.5, mass: 1.303e22, funFacts: ["Its orbit is so eccentric it's sometimes closer to the Sun than Neptune.", "Features a massive, heart-shaped nitrogen glacier named Tombaugh Regio.", "Its largest moon, Charon, is so big they orbit a common point in space outside of Pluto."], moons: [
-                { name: 'Charon', radius: 606, a: 0.0195, e: 0.0, period: 6.4, color: 0xb5a99d, inclination: 0.00, mass: 1.586e21, funFacts: ["Charon is so large relative to Pluto (about half its diameter) that they are considered a binary system.", "It has a reddish north pole, thought to be caused by gases escaping from Pluto's atmosphere and freezing on Charon's surface."] },
-                { name: 'Nix', radius: 22, a: 0.048, e: 0.002, period: 24.8, color: 0x909090, inclination: 0.13, mass: 4.5e16, funFacts: ["Nix and Hydra were discovered in 2005 from Hubble Space Telescope images.", "It has a reddish hue, possibly from tholins on its surface."] },
-                { name: 'Hydra', radius: 26, a: 0.064, e: 0.005, period: 38.2, color: 0xa0a0a0, inclination: 0.24, mass: 4.8e16, funFacts: ["Hydra is Pluto's outermost known moon.", "It is thought to be covered in nearly pure water ice."] }
+            { name: 'Ceres', type: 'Dwarf Planet', radius: 476, color: 0xaaaaaa, a: 413.7, e: 0.076, period: 1682, inclination: 10.6, axialTilt: 4, lonAscNode: 80.3, argPeri: 73.6, meanAnomalyEpoch: 149.3, funFacts: ["The largest object in the asteroid belt.", "The bright spots on its surface are salt deposits, likely from an ancient subsurface ocean.", "It is the only dwarf planet in the inner solar system."] },
+            { name: 'Pluto', type: 'Dwarf Planet', radius: 1188, color: 0xead9c2, a: 5906.4, e: 0.249, period: 90560, inclination: 17.2, axialTilt: 122.5, lonAscNode: 110.3, argPeri: 113.8, meanAnomalyEpoch: 14.5, funFacts: ["Its orbit is so eccentric it's sometimes closer to the Sun than Neptune.", "Features a massive, heart-shaped nitrogen glacier named Tombaugh Regio.", "Its largest moon, Charon, is so big they orbit a common point in space outside of Pluto."] , moons: [
+                { name: 'Charon', radius: 606, a: 0.0195, e: 0.0, period: 6.4, color: 0xb5a99d, inclination: 0.00, funFacts: ["Charon is so large relative to Pluto (about half its diameter) that they are considered a binary system.", "It has a reddish north pole, thought to be caused by gases escaping from Pluto's atmosphere and freezing on Charon's surface."] },
+                { name: 'Nix', radius: 22, a: 0.048, e: 0.002, period: 24.8, color: 0x909090, inclination: 0.13, funFacts: ["Nix and Hydra were discovered in 2005 from Hubble Space Telescope images.", "It has a reddish hue, possibly from tholins on its surface."] },
+                { name: 'Hydra', radius: 26, a: 0.064, e: 0.005, period: 38.2, color: 0xa0a0a0, inclination: 0.24, funFacts: ["Hydra is Pluto's outermost known moon.", "It is thought to be covered in nearly pure water ice."] }
             ]},
-            { name: 'Haumea', type: 'Dwarf Planet', radius: 620, color: 0xd1c7b7, a: 6452, e: 0.195, period: 103363, inclination: 28.2, axialTilt: 0, lonAscNode: 122.1, argPeri: 240.2, meanAnomalyEpoch: 201.7, mass: 4.006e21, funFacts: ["Haumea is one of the fastest rotating large objects in our solar system, spinning once every 4 hours.", "Its rapid spin has elongated it into a shape resembling a flattened football.", "It has its own ring system."] },
-            { name: 'Makemake', type: 'Dwarf Planet', radius: 715, color: 0xc18d66, a: 6847, e: 0.156, period: 112897, inclination: 29.0, axialTilt: 0, lonAscNode: 79.4, argPeri: 295.2, meanAnomalyEpoch: 359.8, mass: 3.1e21, funFacts: ["Makemake was discovered shortly after Easter in 2005, earning it the codename 'Easterbunny'.", "Its surface is covered with frozen methane, ethane, and nitrogen.", "It has a tiny, dark moon nicknamed MK2."] },
-            { name: 'Eris', type: 'Dwarf Planet', radius: 1163, color: 0xcec8c8, a: 10123, e: 0.436, period: 203830, inclination: 44.0, axialTilt: 0, lonAscNode: 35.9, argPeri: 151.9, meanAnomalyEpoch: 205.9, mass: 1.66e22, funFacts: ["The discovery of Eris, a body more massive than Pluto, directly led to the 2006 re-definition of a planet.", "It is the most distant dwarf planet from the Sun for most of its orbit.", "Its moon is named Dysnomia, the Greek goddess of lawlessness."] },
-            { name: 'Halley\'s Comet', type: 'Comet', radius: 5.5, a: 2667, e: 0.967, period: 27740, color: 0xffffff, inclination: 162.2, axialTilt: 0, lonAscNode: 58.4, argPeri: 111.3, meanAnomalyEpoch: 351.4, mass: 2.2e14, funFacts: ["The most famous comet, visible from Earth every 75-76 years.", "It is a 'periodic' comet and will next appear in mid-2061.", "Its tail always points away from the Sun due to solar wind."] }
+            { name: 'Haumea', type: 'Dwarf Planet', radius: 620, color: 0xd1c7b7, a: 6452, e: 0.195, period: 103363, inclination: 28.2, axialTilt: 0, lonAscNode: 122.1, argPeri: 240.2, meanAnomalyEpoch: 201.7, funFacts: ["Haumea is one of the fastest rotating large objects in our solar system, spinning once every 4 hours.", "Its rapid spin has elongated it into a shape resembling a flattened football.", "It has its own ring system."] },
+            { name: 'Makemake', type: 'Dwarf Planet', radius: 715, color: 0xc18d66, a: 6847, e: 0.156, period: 112897, inclination: 29.0, axialTilt: 0, lonAscNode: 79.4, argPeri: 295.2, meanAnomalyEpoch: 359.8, funFacts: ["Makemake was discovered shortly after Easter in 2005, earning it the codename 'Easterbunny'.", "Its surface is covered with frozen methane, ethane, and nitrogen.", "It has a tiny, dark moon nicknamed MK2."] },
+            { name: 'Eris', type: 'Dwarf Planet', radius: 1163, color: 0xcec8c8, a: 10123, e: 0.436, period: 203830, inclination: 44.0, axialTilt: 0, lonAscNode: 35.9, argPeri: 151.9, meanAnomalyEpoch: 205.9, funFacts: ["The discovery of Eris, a body more massive than Pluto, directly led to the 2006 re-definition of a planet.", "It is the most distant dwarf planet from the Sun for most of its orbit.", "Its moon is named Dysnomia, the Greek goddess of lawlessness."] },
+            { name: 'Halley\'s Comet', type: 'Comet', radius: 5.5, a: 2667, e: 0.967, period: 27740, color: 0xffffff, inclination: 162.2, axialTilt: 0, lonAscNode: 58.4, argPeri: 111.3, meanAnomalyEpoch: 351.4, funFacts: ["The most famous comet, visible from Earth every 75-76 years.", "It is a 'periodic' comet and will next appear in mid-2061.", "Its tail always points away from the Sun due to solar wind."] }
         ];
 
         const probesData = [
@@ -245,7 +245,7 @@
             { name: 'Proxima Centauri', distLY: 4.24, color: 0xff6a3d, ra: 222.9, dec: -62.6, funFacts: ["Our closest stellar neighbor.", "It's a red dwarf, much smaller and cooler than the Sun.", "Hosts at least one exoplanet, Proxima Centauri b."] },
             { name: 'Alpha Centauri A', distLY: 4.37, color: 0xfff4e1, ra: 219.9, dec: -60.8, funFacts: ["A star very similar to our Sun in size and type.", "Part of a triple star system with Alpha Centauri B and Proxima Centauri."] },
             { name: 'Alpha Centauri B', distLY: 4.37, color: 0xffd9a1, ra: 219.9, dec: -60.8, funFacts: ["A bit smaller and cooler than the Sun.", "Orbits its larger companion, Alpha Centauri A, every 80 years."] },
-            { name: 'Sirius', distLY: 8.6, color: 0xcad7ff, ra: 101.3, dec: -16.7, funFacts: ["The brightest star in the night sky, also known as the 'Dog Star'.", "It has a tiny, dense white dwarf companion star called Sirius B."] }
+            { name: 'Sirius', distLY: 8.6, color: 0xcad7ff, ra: 101.3, dec: -16.7, funFacts: ["The brightest star in the night sky, also known as the 'Dog Star'.", "It has a tiny, dense white dwarf companion star called Sirius B."] },
         ];
 
         // Generate star texture from original
@@ -272,35 +272,27 @@
 
         // Create cockpit procedurally
         function createCockpit() {
-            let cabinMesh;
-            try {
-                const evaluator = new BVHCSG.Evaluator();
-                const cabinGeo = new THREE.CylinderGeometry(2, 2, 3, 32);
-                const cabinBrush = new BVHCSG.Brush(cabinGeo);
-                cabinBrush.updateMatrixWorld(true);
+            const evaluator = new BVHCSG.Evaluator();
 
-                // Panoramic windows using ShapeGeometry and CSG subtraction
-                const windowShape = new THREE.Shape();
-                windowShape.moveTo(-1.8, -1.2);
-                windowShape.lineTo(1.8, -1.2);
-                windowShape.lineTo(1.8, 1.2);
-                windowShape.lineTo(-1.8, 1.2);
-                const windowGeo = new THREE.ExtrudeGeometry(windowShape, { depth: 0.1, bevelEnabled: false });
-                const windowBrush = new BVHCSG.Brush(windowGeo);
-                windowBrush.position.z = -2;
-                windowBrush.rotation.y = Math.PI / 2;
-                windowBrush.updateMatrixWorld(true);
+            const cabinGeo = new THREE.CylinderGeometry(2, 2, 3, 32);
+            const cabinBrush = new BVHCSG.Brush(cabinGeo);
+            cabinBrush.updateMatrixWorld(true);
 
-                const result = evaluator.evaluate(cabinBrush, windowBrush, BVHCSG.OPERATION.SUBTRACTION);
-                const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2, side: THREE.DoubleSide });
-                cabinMesh = new THREE.Mesh(result.geometry, cabinMaterial);
-            } catch (e) {
-                console.error('CSG failed, using fallback cockpit:', e);
-                // Fallback: simple cylinder without windows
-                const cabinGeo = new THREE.CylinderGeometry(2, 2, 3, 32);
-                const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2, side: THREE.DoubleSide });
-                cabinMesh = new THREE.Mesh(cabinGeo, cabinMaterial);
-            }
+            // Panoramic windows using ShapeGeometry and CSG subtraction
+            const windowShape = new THREE.Shape();
+            windowShape.moveTo(-1.8, -1.2);
+            windowShape.lineTo(1.8, -1.2);
+            windowShape.lineTo(1.8, 1.2);
+            windowShape.lineTo(-1.8, 1.2);
+            const windowGeo = new THREE.ExtrudeGeometry(windowShape, { depth: 0.1, bevelEnabled: false });
+            const windowBrush = new BVHCSG.Brush(windowGeo);
+            windowBrush.position.z = -2;
+            windowBrush.rotation.y = Math.PI / 2;
+            windowBrush.updateMatrixWorld(true);
+
+            const result = evaluator.evaluate(cabinBrush, windowBrush, BVHCSG.OPERATION.SUBTRACTION);
+            const cabinMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2, side: THREE.DoubleSide });
+            const cabinMesh = new THREE.Mesh(result.geometry, cabinMaterial);
             cockpit.add(cabinMesh);
 
             // Lighting
@@ -345,17 +337,18 @@
             navCtx.fillStyle = 'white';
             navCtx.font = 'bold 30px Arial';
             navCtx.fillText('Navigation', 100, 50);
-            const navItems = ['Sun', ...solarSystemData.filter(d => !d.type && d.name !== 'Sun').map(d => d.name), ...solarSystemData.filter(d => d.type === 'Dwarf Planet').map(d => d.name), ...solarSystemData.filter(d => d.type === 'Comet').map(d => d.name), ...probesData.map(d => d.name), ...starData.map(d => d.name)];
-            navItems.forEach((name, i) => {
-                navCtx.font = '20px Arial';
-                navCtx.fillText(name, 50, 80 + i * 30);
+            solarSystemData.forEach((d, i) => {
+                if (d.name !== 'Sun') {
+                    navCtx.font = '20px Arial';
+                    navCtx.fillText(d.name, 50, 80 + i * 30);
+                }
             });
             const navTexture = new THREE.CanvasTexture(navCanvas);
             const navMaterial = new THREE.MeshBasicMaterial({ map: navTexture, transparent: true });
             navPanel = new THREE.Mesh(navGeo, navMaterial);
             navPanel.position.set(-0.8, 1.2, -1.5);
             navPanel.rotation.y = 0.5;
-            navPanel.userData = { type: 'navigation', items: navItems };
+            navPanel.userData = { type: 'navigation' };
             cockpit.add(navPanel);
 
             // Fun fact panel
@@ -363,11 +356,6 @@
             factCanvas.width = 512;
             factCanvas.height = 512;
             const factCtx = factCanvas.getContext('2d');
-            factCtx.fillStyle = 'rgba(0,0,0,0.5)';
-            factCtx.fillRect(0, 0, 512, 512);
-            factCtx.fillStyle = 'white';
-            factCtx.font = 'bold 30px Arial';
-            factCtx.fillText('Fun Facts', 100, 50);
             const factTexture = new THREE.CanvasTexture(factCanvas);
             const factMaterial = new THREE.MeshBasicMaterial({ map: factTexture, transparent: true });
             factPanel = new THREE.Mesh(navGeo, factMaterial);
@@ -398,7 +386,7 @@
                 const probeModel = createProbeModel('Voyager');
                 probeModel.scale.setScalar(0.1);
                 probeModel.position.set(0.8 + (i * 0.1 - 0.2), 1.2, -1.5);
-                probeModel.userData = { isProbe: true, launched: false, name: 'Probe ' + (i+1) };
+                probeModel.userData = { isProbe: true, launched: false };
                 cockpit.add(probeModel);
                 probes.push({ mesh: probeModel, data: { name: 'Probe ' + (i+1) }, velocity: new THREE.Vector3() });
             }
@@ -414,19 +402,20 @@
             ambientSound.setVolume(0.3);
             ambientSound.play();
             cockpit.add(ambientSound);
-        }, undefined, err => console.error('Error loading ambience.mp3:', err));
+        });
 
         audioLoader.load('sounds/warp.mp3', (buffer) => {
             warpSound = new THREE.Audio(listener);
             warpSound.setBuffer(buffer);
             warpSound.setVolume(1.0);
-        }, undefined, err => console.error('Error loading warp.mp3:', err));
+        });
 
+        // UI sound for selections
         audioLoader.load('sounds/beep.mp3', (buffer) => {
             uiBeep = new THREE.Audio(listener);
             uiBeep.setBuffer(buffer);
             uiBeep.setVolume(0.5);
-        }, undefined, err => console.error('Error loading beep.mp3:', err));
+        });
 
         // TTS
         const speechSynthesis = window.speechSynthesis;
@@ -436,7 +425,6 @@
         };
 
         function narrate(text) {
-            speechSynthesis.cancel(); // Prevent overlap
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.voice = voices.find(v => v.name.includes('Female') || v.name.includes('Robot')) || voices[0];
             speechSynthesis.speak(utterance);
@@ -521,7 +509,7 @@
         // Celestial bodies creation from original, added to solarGroup
         const sunData = solarSystemData.find(d => d.name === 'Sun');
         const sunVisualRadius = sunData.radius * BODY_SCALE;
-        const sunTexture = textureLoader.load('textures/sun.jpg', undefined, undefined, err => console.error('Error loading sun.jpg:', err));
+        const sunTexture = textureLoader.load('textures/sun.jpg');
         const sunMaterial = new THREE.MeshBasicMaterial({ map: sunTexture, color: 0xffffff });
         const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(sunVisualRadius, 64, 32), sunMaterial);
         const sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 0);
@@ -567,7 +555,7 @@
         const starField = new THREE.Points(starGeometry, starMaterial);
         solarGroup.add(starField);
 
-        // Celestial body creation loop from original
+        // Full body creation loop from original
         solarSystemData.forEach(data => {
             if (data.name === 'Sun') return;
             const visualRadius = data.radius * BODY_SCALE;
@@ -709,6 +697,8 @@
                 });
                 const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
                 mesh.add(atmosMesh);
+            } else if (data.name === 'Earth') {
+                // Already handled
             } else if (data.name === 'Titan') {
                 const atmosGeo = new THREE.SphereGeometry(visualRadius * 1.01, 32, 16);
                 const atmosMat = new THREE.MeshPhongMaterial({ color: 0xffd700, transparent: true, opacity: 0.4 });
@@ -750,22 +740,17 @@
         function createBelt(count, color, minAU, maxAU, spreadY, minSize, maxSize) {
             const instancedMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: color, flatShading: true, roughness: 0.9 }), count);
             const dummy = new THREE.Object3D();
-            const minRad = minAU * UNIVERSE_SCALE; 
-            const maxRad = maxAU * UNIVERSE_SCALE;
+            const minRad = minAU * UNIVERSE_SCALE; const maxRad = maxAU * UNIVERSE_SCALE;
             for (let i = 0; i < count; i++) {
                 const a = THREE.MathUtils.randFloat(minRad, maxRad);
-                const e = Math.random() * 0.15; 
-                const focusOffset = a * e; 
-                const b = a * Math.sqrt(1 - e*e);
+                const e = Math.random() * 0.15; const focusOffset = a * e; const b = a * Math.sqrt(1 - e*e);
                 const angle = Math.random() * 2 * Math.PI;
                 const ySpread = Math.pow(Math.random(), 2) * spreadY * (Math.random() < 0.5 ? -1 : 1);
                 dummy.position.set(Math.cos(angle) * a - focusOffset, ySpread, Math.sin(angle) * b);
                 dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
                 dummy.scale.setScalar(BODY_SCALE * THREE.MathUtils.randFloat(minSize, maxSize));
-                dummy.updateMatrix(); 
-                instancedMesh.setMatrixAt(i, dummy.matrix);
-            } 
-            return instancedMesh;
+                dummy.updateMatrix(); instancedMesh.setMatrixAt(i, dummy.matrix);
+            } return instancedMesh;
         };
         solarGroup.add(createBelt(5000, 0x544434, 2.2, 3.2, 0.2 * UNIVERSE_SCALE, 50, 250)); // Asteroid Belt
         solarGroup.add(createBelt(8000, 0x344c54, 30, 50, 0.4 * UNIVERSE_SCALE, 100, 300)); // Kuiper Belt
@@ -827,7 +812,6 @@
         // Probe launching and physics
         function launchProbe(probe, handVelocity) {
             probe.launched = true;
-            cockpit.remove(probe.mesh);
             solarGroup.add(probe.mesh);
             probe.velocity = handVelocity.clone();
             probe.trajectory = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
@@ -839,17 +823,149 @@
                 if (!probe.launched) return;
                 const r = probe.mesh.position.clone().sub(sunMesh.position);
                 const r2 = r.lengthSq();
-                const aSun = -G * SUN_MASS / r2;
-                const aSunVec = r.normalize().multiplyScalar(aSun);
+                const a = -G * SUN_MASS / r2;
+                const aVec = r.normalize().multiplyScalar(a);
+                probe.velocity.add(aVec.multiplyScalar(delta));
+                probe.mesh.position.add(probe.velocity.clone().multiplyScalar(delta));
 
-                // Find nearest planet for additional gravity
-                let aPlanetVec = new THREE.Vector3();
-                let minDist = Infinity;
-                let nearestPlanet = null;
-                celestialBodies.forEach(body => {
-                    if (body.data.mass && !body.isMoon && !body.isSun && !body.isProbe && !body.isStar) {
-                        const rPlanet = probe.mesh.position.clone().sub(body.mesh.position);
-                        const dist = rPlanet.length();
-                        if (dist < minDist && dist > body.data.radius * BODY_SCALE) {
-                            minDist = dist;
-                            nearestPlanet = body;
+                // Update trajectory (simple afterglow with points)
+                const positions = probe.trajectory.geometry.attributes.position.array || new Float32Array(300);
+                for (let i = positions.length - 3; i >= 3; i -= 3) {
+                    positions[i] = positions[i - 3];
+                    positions[i + 1] = positions[i - 2];
+                    positions[i + 2] = positions[i - 1];
+                }
+                positions[0] = probe.mesh.position.x;
+                positions[1] = probe.mesh.position.y;
+                positions[2] = probe.mesh.position.z;
+                probe.trajectory.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                probe.trajectory.geometry.attributes.position.needsUpdate = true;
+            });
+        }
+
+        // Warp animation
+        function warpTo(destination) {
+            if (warpSound) warpSound.play();
+            const overlayGeo = new THREE.PlaneGeometry(10, 10);
+            const overlayMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+            const overlay = new THREE.Mesh(overlayGeo, overlayMat);
+            overlay.position.set(0, 0, -0.1);
+            camera.add(overlay);
+            new TWEEN.Tween(overlay.material).to({ opacity: 1 }, 500).onComplete(() => {
+                solarGroup.position.copy(destination.mesh.position.negate());
+                new TWEEN.Tween(overlay.material).to({ opacity: 0 }, 500).onComplete(() => camera.remove(overlay)).start();
+            }).start();
+
+            // Star streaks
+            const streakCount = 100;
+            const streakGeo = new THREE.BufferGeometry();
+            const streakPositions = new Float32Array(streakCount * 6);
+            for (let i = 0; i < streakCount; i++) {
+                const idx = i * 6;
+                const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, -1).normalize();
+                streakPositions[idx] = dir.x * 5;
+                streakPositions[idx + 1] = dir.y * 5;
+                streakPositions[idx + 2] = dir.z * 5;
+                streakPositions[idx + 3] = dir.x * 50;
+                streakPositions[idx + 4] = dir.y * 50;
+                streakPositions[idx + 5] = dir.z * 50;
+            }
+            streakGeo.setAttribute('position', new THREE.BufferAttribute(streakPositions, 3));
+            const streakMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+            const streaks = new THREE.LineSegments(streakGeo, streakMat);
+            camera.add(streaks);
+            setTimeout(() => camera.remove(streaks), 1000);
+        }
+
+        // Gesture detection and interaction
+        const raycaster = new THREE.Raycaster();
+        function handleGestures() {
+            [hand1, hand2].forEach((hand, index) => {
+                const indexTip = hand.joints['index-finger-tip'];
+                const thumbTip = hand.joints['thumb-tip'];
+                if (indexTip && thumbTip) {
+                    const dist = indexTip.position.distanceTo(thumbTip.position);
+                    const isPinch = dist < 0.02;
+                    const wasPinch = index === 0 ? pinchLeft : pinchRight;
+                    if (isPinch && !wasPinch) {
+                        // Start pinch - select
+                        raycaster.set(indexTip.position, camera.position.clone().sub(indexTip.position).normalize().negate());
+                        const intersects = raycaster.intersectObjects([navPanel, factPanel, probePanel, ...probes.map(p => p.mesh), ...cockpit.children.filter(c => c.userData.type === 'flightStick' || c.userData.type === 'impulseSlider')]);
+                        if (intersects.length > 0) {
+                            const obj = intersects[0].object;
+                            if (uiBeep) uiBeep.play();
+                            if (obj.userData.type === 'navigation') {
+                                const dest = celestialBodies.find(b => b.data.name === 'Earth'); // Example; use UV to select specific
+                                warpTo(dest);
+                            } else if (obj.userData.type === 'funfact') {
+                                narrate('Earth is the only planet known to support life.');
+                            } else if (obj.userData.isProbe && !obj.userData.launched) {
+                                selectedObject = obj;
+                                obj.parent.remove(obj);
+                                hand.add(obj);
+                                obj.position.set(0, 0, 0);
+                            } else if (obj.userData.type === 'flightStick') {
+                                grabbedStick = { hand, startRot: hand.rotation.clone(), startPos: indexTip.position.clone() };
+                            } else if (obj.userData.type === 'impulseSlider') {
+                                grabbedSlider = { hand, startPos: indexTip.position.clone(), startValue: obj.userData.value };
+                            }
+                        }
+                    } else if (!isPinch && wasPinch) {
+                        if (selectedObject) {
+                            const handVel = new THREE.Vector3(); // Approximate; track over frames in production
+                            hand.remove(selectedObject);
+                            launchProbe(selectedObject.userData, handVel);
+                            selectedObject = null;
+                        } else if (grabbedStick) {
+                            grabbedStick = null;
+                        } else if (grabbedSlider) {
+                            grabbedSlider = null;
+                        }
+                    }
+                    if (grabbedStick && grabbedStick.hand === hand) {
+                        // Control direction
+                        const deltaPos = indexTip.position.clone().sub(grabbedStick.startPos);
+                        cockpit.rotation.y += deltaPos.x * 2; // Yaw
+                        cockpit.rotation.x += deltaPos.y * 2; // Pitch
+                    } else if (grabbedSlider && grabbedSlider.hand === hand) {
+                        // Control speed
+                        const deltaX = indexTip.position.x - grabbedSlider.startPos.x;
+                        flightSpeed = THREE.MathUtils.clamp(grabbedSlider.startValue + deltaX * 10, 0, 10);
+                        // Update slider position/visual
+                        obj.position.x = grabbedSlider.startPos.x + deltaX;
+                    }
+                    if (index === 0) pinchLeft = isPinch;
+                    else pinchRight = isPinch;
+                }
+            });
+        }
+
+        // Update cockpit movement if flightSpeed > 0
+        function updateFlight(delta) {
+            if (flightSpeed > 0) {
+                const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(cockpit.quaternion);
+                cockpit.position.add(direction.multiplyScalar(flightSpeed * delta * 10)); // Adjust speed factor
+            }
+        }
+
+        // Animation loop
+        const clock = new THREE.Clock();
+        function animate() {
+            renderer.setAnimationLoop(animate);
+
+            const delta = clock.getDelta();
+            TWEEN.update();
+            handleGestures();
+            updateProbePhysics(delta);
+            updateFlight(delta);
+            // Update flares, rings, orbits from original
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize
+        createCockpit();
+        animate();
+    </script>
+</body>
+</html>
