@@ -1,51 +1,52 @@
 /*
- * cockpit.js
+ * cockpit.js (modified)
  *
- * Constructs the VR cockpit interior.  The cockpit provides a sense of
- * enclosure for the user, with a floor, a partially transparent
- * canopy to look out into space, a wrap‑around control desk with
- * surfaces for UI elements, and simple throttle and joystick
- * controls.  Sizes are chosen in real‑world metres rather than
- * astronomical units since the cockpit exists at human scale.
+ * Constructs the VR cockpit interior.  In this version the floor is
+ * larger, lighter and positioned beneath the user rather than behind
+ * them.  A visible cannon emerges from the front of the cockpit and a
+ * red fire button sits on the desk for launching probes.  The desk,
+ * canopy and panels retain their original layout but colours and
+ * opacity have been adjusted slightly for better visibility.  The
+ * returned object exposes the throttle and joystick pivots, panels,
+ * fireButton and cannon for downstream interaction.
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js';
 
 /**
  * Create the cockpit geometry and return a group containing all
- * components.  Individual control elements (throttle and joystick)
- * and panel surfaces are exposed on the returned object for later
- * interaction.  All dimensions are approximate and can be tuned for
- * ergonomics.
+ * components.  Individual control elements (throttle and joystick),
+ * panels, the fire button and the forward‑facing cannon are exposed
+ * on the returned object for later interaction.
  *
- * @returns {{ group: THREE.Group, throttle: THREE.Object3D, joystick: THREE.Object3D, panels: Array<THREE.Mesh> }}
+ * @returns {{ group: THREE.Group, throttle: THREE.Object3D, joystick: THREE.Object3D, panels: Array, fireButton: THREE.Object3D, cannon: THREE.Object3D }}
  */
 export function createCockpit() {
   const cockpit = new THREE.Group();
   cockpit.name = 'cockpit';
-  // Floor – a simple circular disk.
-  const floorRadius = 2.0;
+  // Floor – a larger, lighter circular disk positioned underfoot.  A bigger
+  // radius helps avoid the sensation of a tiny platform floating behind the
+  // user.
+  const floorRadius = 3.0;
   const floorGeom = new THREE.CylinderGeometry(floorRadius, floorRadius, 0.02, 64);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.2, roughness: 0.7 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.2, roughness: 0.7 });
   const floor = new THREE.Mesh(floorGeom, floorMat);
   floor.rotation.x = Math.PI / 2; // rotate so it's flat
-  floor.position.y = -0.01;
+  floor.position.y = 0.0;
   floor.receiveShadow = true;
   cockpit.add(floor);
 
-  // Canopy – an octahedral shell to give a faceted spaceship feel.  The
-  // material is semi‑transparent to provide an unobstructed view of
-  // space while still conveying the sense of being inside a craft.
+  // Canopy – a faceted shell to give a spaceship feel.  Increase opacity
+  // slightly and lighten colour so the cockpit interior is less gloomy.
   const canopyRadius = 2.3;
   const canopyGeom = new THREE.OctahedronGeometry(canopyRadius, 0);
-  const canopyMat = new THREE.MeshBasicMaterial({ color: 0x445566, transparent: true, opacity: 0.1, wireframe: true });
+  const canopyMat = new THREE.MeshBasicMaterial({ color: 0x556677, transparent: true, opacity: 0.2, wireframe: true });
   const canopy = new THREE.Mesh(canopyGeom, canopyMat);
   canopy.position.y = 1.5;
   cockpit.add(canopy);
 
-  // Desk – a curved control surface that wraps around the user.
-  // Use a partial cylinder to create the curved shape.  The desk is
-  // hollow on the inside (openEnded = true) and has a small height.
+  // Desk – a curved control surface that wraps around the user.  Colours
+  // are brightened slightly for contrast against the floor.
   const deskInnerRadius = 1.3;
   const deskThickness = 0.2;
   const deskHeight = 0.1;
@@ -61,7 +62,7 @@ export function createCockpit() {
     deskThetaStart,
     deskThetaLength
   );
-  const deskMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.4, roughness: 0.4, side: THREE.DoubleSide });
+  const deskMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.4, roughness: 0.4, side: THREE.DoubleSide });
   const desk = new THREE.Mesh(deskGeom, deskMat);
   desk.position.y = 0.9;
   desk.rotation.x = Math.PI / 2;
@@ -69,7 +70,7 @@ export function createCockpit() {
   cockpit.add(desk);
 
   // Desk top surface for UI panels: create planar meshes that sit on
-  // top of the curved desk and face upward.  We’ll place three panels
+  // top of the curved desk and face upward.  We place three panels
   // evenly spaced along the desk’s arc: left (warp/navigation), centre
   // (map/info) and right (probe control).  Each panel is a simple
   // rectangle with an unassigned texture.  Consumers of this module
@@ -80,7 +81,7 @@ export function createCockpit() {
   const panelHeight = 0.4;
   for (let i = 0; i < panelCount; i++) {
     const panelGeom = new THREE.PlaneGeometry(panelWidth, panelHeight);
-    const panelMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide });
+    const panelMat = new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.DoubleSide });
     const panel = new THREE.Mesh(panelGeom, panelMat);
     // Position panels along the arc.  Parameter u goes from -0.5 to 0.5.
     const u = (i - (panelCount - 1) / 2) / (panelCount - 1);
@@ -118,7 +119,7 @@ export function createCockpit() {
   cockpit.add(throttle);
 
   // Joystick – a vertical stick with a spherical top.  This control is
-  // also attached to a pivot to allow tilting in two axes.  For
+  // attached to a pivot to allow tilting in two axes.  For
   // simplicity the pivot is a single Object3D and the code that
   // manipulates the joystick can set its rotation.x and rotation.z.
   const stickBaseGeom = new THREE.CylinderGeometry(0.05, 0.05, 0.05, 16);
@@ -139,5 +140,23 @@ export function createCockpit() {
   joystick.position.set(0.6, desk.position.y + 0.05, -0.6);
   cockpit.add(joystick);
 
-  return { group: cockpit, throttle: throttlePivot, joystick: joystickPivot, panels };
+  // Cannon – a forward‑facing barrel that extends from beneath the floor.
+  // The cannon provides a visual reference for where probes will launch.
+  const cannonGeom = new THREE.CylinderGeometry(0.03, 0.03, 1.2, 12);
+  const cannonMat = new THREE.MeshStandardMaterial({ color: 0x7777ff, metalness: 0.5, roughness: 0.3 });
+  const cannon = new THREE.Mesh(cannonGeom, cannonMat);
+  cannon.rotation.x = Math.PI / 2; // point forward along -Z
+  // Position the cannon so that it appears to emerge from the floor in front of the user.
+  cannon.position.set(0.0, 0.6, -1.5);
+  cockpit.add(cannon);
+
+  // Fire Button – a red button on the desk used to launch probes.  It sits
+  // conveniently within reach near the centre of the control surface.
+  const fireButtonGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16);
+  const fireButtonMat = new THREE.MeshStandardMaterial({ color: 0xff3333, metalness: 0.3, roughness: 0.4 });
+  const fireButton = new THREE.Mesh(fireButtonGeom, fireButtonMat);
+  fireButton.position.set(0.0, desk.position.y + 0.08, -0.3);
+  cockpit.add(fireButton);
+
+  return { group: cockpit, throttle: throttlePivot, joystick: joystickPivot, panels, fireButton, cannon };
 }

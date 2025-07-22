@@ -1,13 +1,13 @@
 /*
- * main.js
+ * main.js (modified)
  *
- * Entry point for the VR solar system experience.  This script
- * constructs the Three.js scene, loads the solar system bodies,
- * builds the cockpit, UI and controllers, and starts the animation
- * loop.  The user can warp to different planets, view a simplified
- * solar system map, adjust travel speed and launch probes.  The
- * scene is rendered using WebXR for VR devices, but it also works
- * as a flat WebGL application when viewed on a desktop.
+ * Entry point for the VR solar system experience.  This version adds
+ * improved lighting, a session initialization enabling hand‑tracking and
+ * local/ bounded floor features, and small point lights illuminating the
+ * cockpit panels.  These changes address complaints about a dark
+ * cockpit with hard‑to‑read panels.  See cockpit.js and controls.js
+ * for additional enhancements including a physical cannon and fire
+ * button, and fully rendered VR hands with pinch/grab interactions.
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js';
@@ -39,8 +39,14 @@ async function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.xr.enabled = true;
+  // Enable shadows for richer lighting
+  renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
-  document.body.appendChild(VRButton.createButton(renderer));
+  // Configure the XR session to request hand tracking and floor detection.  Without
+  // this, many browsers will not provide XR hands.  The optional features fall
+  // back gracefully on devices that do not support them.
+  const sessionInit = { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] };
+  document.body.appendChild(VRButton.createButton(renderer, sessionInit));
 
   // Provide user‑friendly status messages and hide the overlay once XR is available.
   const overlay   = document.getElementById('overlay');
@@ -78,11 +84,12 @@ async function init() {
   camera.position.set(0, 1.6, 0);
   scene.add(camera);
 
-  // Lighting – ambient plus a directional light to highlight the cockpit
-  const ambient = new THREE.AmbientLight(0x404040);
+  // Lighting – increased ambient and directional light to brighten the cockpit
+  const ambient = new THREE.AmbientLight(0x808080, 1.5);
   scene.add(ambient);
-  const sunLight = new THREE.DirectionalLight(0xffffff, 1);
-  sunLight.position.set(10, 10, 10);
+  const sunLight = new THREE.DirectionalLight(0xffffff, 2.5);
+  sunLight.position.set(10, 20, 10);
+  sunLight.castShadow = true;
   scene.add(sunLight);
 
   // Starfield – fill the scene with small point lights for stars.
@@ -116,6 +123,14 @@ async function init() {
   // Build cockpit
   const cockpit = createCockpit();
   scene.add(cockpit.group);
+  // Add small lights above each UI panel to make them easier to read.  The point
+  // lights are attached to the cockpit group so they move with the user.
+  cockpit.panels.forEach((panel) => {
+    const pl = new THREE.PointLight(0xffffff, 0.8, 5);
+    const pos = panel.position.clone();
+    pl.position.set(pos.x, pos.y + 0.3, pos.z);
+    cockpit.group.add(pl);
+  });
 
   // UI
   // Set up callbacks for warp selection, speed changes and probe launches
@@ -141,10 +156,8 @@ async function init() {
   const controls = setupControls(renderer, scene, camera, cockpit, ui, audio);
 
   // Simulation state
-  let startTime = performance.now();
   let lastFrame = performance.now();
   let simTimeDays = 0; // simulation time measured in Earth days
-  let solarOffset = new THREE.Vector3(); // tracks translation of solar system for travel
 
   // Warp function: move the solarGroup so that the chosen body is
   // positioned a fixed distance in front of the cockpit.  We compute
@@ -152,16 +165,6 @@ async function init() {
   // group’s position so that the body ends up at targetOffset.
   function warpToBody(bodyIndex) {
     const bodyObj = bodies[bodyIndex];
-    // compute body world position at current simTime
-    const elements = {
-      a: bodyObj.data.a,
-      e: bodyObj.data.e,
-      i: bodyObj.data.inclination || 0,
-      omega: bodyObj.data.lonAscNode || 0,
-      w: bodyObj.data.argPeri || 0,
-      M0: bodyObj.data.meanAnomalyEpoch || 0,
-      period: bodyObj.data.period
-    };
     // update to ensure group has correct planetary positions
     updateSolarSystem([bodyObj], simTimeDays);
     // world position relative to solarGroup
@@ -174,7 +177,7 @@ async function init() {
     // Determine translation needed
     const delta = new THREE.Vector3().subVectors(target, bodyPos);
     solarGroup.position.add(delta);
-    // Reset probes (remove active) maybe; not implemented
+    // Play warp sound if available
     audio.playWarp && audio.playWarp();
   }
 
@@ -206,19 +209,19 @@ async function init() {
     updateProbes(dt, bodies);
     // Update UI
     // Provide top-level body positions relative to origin for map
-    const bodyPositions = bodies.map(obj => {
+    const bodyPositions = bodies.map((obj) => {
       const pos = new THREE.Vector3();
       obj.group.getWorldPosition(pos);
       return pos.clone();
     });
     ui.update(bodyPositions);
-    // Update controllers visuals
+    // Update controllers and hands visuals/interactions
     controls.update();
     // Render
     renderer.render(scene, camera);
   });
 }
 
-init().catch(err => {
+init().catch((err) => {
   console.error(err);
 });
