@@ -176,11 +176,9 @@ async function init() {
 
     const travelSpeed = speedFractionToWorldUnitsPerSec(ui.speedFraction);
     if (travelSpeed > 0) {
-      // Get the cockpit's forward direction in world space
-      const forward = new THREE.Vector3(0, 0, -1);
-      const worldQuaternion = new THREE.Quaternion();
-      cockpit.group.getWorldQuaternion(worldQuaternion);
-      forward.applyQuaternion(worldQuaternion);
+      // Get the cockpit's forward direction in world space without using a quaternion
+      const forward = new THREE.Vector3();
+      cockpit.group.getWorldDirection(forward);
       
       // Calculate the displacement for this frame
       const displacement = forward.multiplyScalar(travelSpeed * dt);
