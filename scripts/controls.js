@@ -1,8 +1,7 @@
 /*
  * controls.js (Corrected)
  *
- * This version fixes a crash that occurred on desktop browsers by adding a
- * more robust check to ensure hand-tracking joint data exists before trying to access it.
+ * This version enables reliable hand-tracking and interaction for Quest devices.
  */
 
 import * as THREE from 'three';
@@ -15,8 +14,6 @@ const GRAB_DISTANCE = 0.25; // Max distance to highlight/grab an object
 export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     const tempMatrix = new THREE.Matrix4();
     const controllerModelFactory = new XRControllerModelFactory();
-    // Use the default hand model path so hands load correctly
-    // REMOVED: const handModelFactory = new XRHandModelFactory();
 
     // State for each controller/hand
     const controllers = [];
@@ -32,9 +29,10 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
         hand.add(handModel);
 
         // --- Fingertip for Touch Interaction ---
+        // CHANGED: Made the touch sphere completely invisible to avoid visual artifacts.
         const touchSphere = new THREE.Mesh(
             new THREE.SphereGeometry(0.015), 
-            new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }) // Invisible
+            new THREE.MeshBasicMaterial({ visible: false })
         );
         touchSphere.name = "Fingertip";
         scene.add(touchSphere);
@@ -156,16 +154,13 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     }
 
     function handleTouch(data) {
-        // --- START OF CORRECTION ---
-        // This is a more robust check to ensure the entire joint hierarchy is ready.
-        // It uses optional chaining (?.) which safely stops if any part of the chain is null or undefined.
+        // This check ensures the entire joint hierarchy is ready.
         const fingerTip = data?.handModel?.joints?.['index-finger-tip'];
 
         // If fingerTip is not available for any reason, exit the function immediately.
         if (!fingerTip) {
             return;
         }
-        // --- END OF CORRECTION ---
 
         // This code will now only run if fingerTip is valid
         const tipPos = new THREE.Vector3();
