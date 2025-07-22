@@ -20,6 +20,8 @@ export function createDashboardCockpit() {
   const cockpitGroup = new THREE.Group();
   cockpitGroup.name = 'Cockpit';
   cockpitGroup.position.set(0, 0, 0);
+  // CHANGED: Scaled down the entire cockpit by 40% for better ergonomics
+  cockpitGroup.scale.set(0.6, 0.6, 0.6);
 
   const darkMetalMat = new THREE.MeshStandardMaterial({
     color: 0x1a1a20,
@@ -51,6 +53,9 @@ export function createDashboardCockpit() {
 
   // --- Pilot Seat ---
   const seatGroup = new THREE.Group();
+  // CHANGED: Flipped the seat 180 degrees and adjusted its position to face the dashboard.
+  seatGroup.rotation.y = Math.PI;
+  seatGroup.position.z = 0.2;
   const seatBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), seatMat);
   // Position the seat so it faces the dashboard (negative Z)
   seatBase.position.set(0, 0.55, -0.3);
@@ -86,7 +91,8 @@ export function createDashboardCockpit() {
   // --- Overhead Crossbar with Lights ---
   const crossbarGeom = new THREE.CylinderGeometry(0.02, 0.02, 2.2, 8);
   const crossbar = new THREE.Mesh(crossbarGeom, darkMetalMat);
-  crossbar.position.set(0, 1.8, -0.3);
+  // CHANGED: Moved the crossbar and lights higher up to be truly overhead.
+  crossbar.position.set(0, 2.2, -0.3);
   crossbar.rotation.z = Math.PI / 2;
   cockpitGroup.add(crossbar);
 
@@ -171,7 +177,8 @@ export function createDashboardCockpit() {
   const cannonGeom = new THREE.CylinderGeometry(0.1, 0.08, 2.0, 16);
   const cannonMat = new THREE.MeshStandardMaterial({ color: 0xbbbbff, metalness: 0.9, roughness: 0.2 });
   const cannon = new THREE.Mesh(cannonGeom, cannonMat);
-  cannon.position.set(0, 0.4, -2.5);
+  // CHANGED: Moved the cannon under the floor so it's out of the way.
+  cannon.position.set(0, -0.2, -2.5);
   cannon.rotation.x = Math.PI / 2;
   cockpitGroup.add(cannon);
 
