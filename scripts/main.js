@@ -48,8 +48,13 @@ async function init() {
   document.body.appendChild(renderer.domElement);
 
   // === WebXR Session Initialization ===
+  // Use only local-floor reference spaces. The bounded-floor reference space
+  // has been reported to cause a black screen when entering VR on the Meta
+  // Quest browser【115443265057812†L330-L340】. By omitting 'bounded-floor'
+  // here, we avoid triggering that browser bug. Hand tracking remains
+  // enabled as an optional feature.
   const sessionInit = {
-    optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
+    optionalFeatures: ['local-floor', 'hand-tracking']
   };
   document.body.appendChild(VRButton.createButton(renderer, sessionInit));
 
@@ -107,7 +112,6 @@ async function init() {
   const starStreaks = new THREE.LineSegments(streakGeometry, streakMaterial);
   starStreaks.visible = false;
   scene.add(starStreaks);
-
 
   // === Solar System Creation ===
   const { group: solarGroup, bodies } = await createSolarSystem(scene);
