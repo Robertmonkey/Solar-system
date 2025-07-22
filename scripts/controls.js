@@ -67,11 +67,14 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     // Visualize the physical controller grip (for non‑hand controllers)
     grip.add(controllerModelFactory.createControllerModel(grip));
 
-    // Load a high‑quality hand mesh.  Passing 'mesh' tells the factory to
-    // construct a fully rigged GLTF model instead of the primitive spheres or
-    // boxes.  The factory will fall back gracefully if the profile cannot be
-    // resolved on the client device.
-    const handModel = handModelFactory.createHandModel(hand, 'mesh');
+    // Create a visible hand representation.  Quest devices occasionally fail
+    // to load the GLTF hand mesh due to CORS restrictions, which results in
+    // invisible hands.  To guarantee a visible model on all devices we use
+    // the 'boxes' primitive profile instead of the high‑fidelity 'mesh'.
+    // This profile renders each finger joint as a small box and does not
+    // depend on external assets.  If you wish to try the high‑quality mesh
+    // again later, replace 'boxes' with 'mesh'.
+    const handModel = handModelFactory.createHandModel(hand, 'boxes');
     hand.add(handModel);
 
     // Invisible sphere used for precise finger tip collision testing.  This
