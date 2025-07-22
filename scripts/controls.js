@@ -26,8 +26,17 @@ import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 
-// Maximum distance from a controller to highlight or grab an object
-const GRAB_DISTANCE = 0.25;
+// Maximum distance from a controller to highlight or grab an object.
+//
+// The cockpit geometry was scaled up by ~20 % to give users more room.  As a
+// consequence the physical distance between the user’s hand and the controls
+// increased, and the original grab radius (0.25 m) made it impossible to
+// hover over or grab the throttle, joystick or fire button.  Increasing
+// the grab radius slightly restores the ability to highlight and pick up
+// these controls without requiring uncomfortable arm extension.  A value of
+// 0.35 was chosen experimentally to balance reach with avoiding accidental
+// grabs when merely reaching past a control.
+const GRAB_DISTANCE = 0.35;
 
 /**
  * Set up WebXR input for the scene.
