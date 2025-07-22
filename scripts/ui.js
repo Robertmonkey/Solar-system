@@ -16,7 +16,7 @@ import { C_KMPS, MPH_TO_KMPS } from './constants.js';
 const bgImage = new Image();
 bgImage.src = './textures/ui.png';
 
-export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchProbe, onToggleAutopilot, onFunFact) {
+export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchProbe, onToggleAutopilot, onToggleLabels, onFunFact) {
   // NEW: Using a larger canvas for the single dashboard layout
   const canvasSize = { width: 1024, height: 512 };
   const canvas = document.createElement('canvas');
@@ -48,6 +48,7 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     probeMassFraction: 0.1, // 0-1 fraction for mass slider
     probeSpeedFraction: 0.1, // 0-1 fraction for speed slider
     autopilot: false,
+    labels: true,
     needsRedraw: true,
   };
 
@@ -170,6 +171,12 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     context.fillRect(col3X, 350, 120, 24);
     drawText(state.autopilot ? 'ON' : 'OFF', col3X + 10, 368, 16, '#ffffff');
 
+    // Labels Toggle
+    drawText('LABELS', col3X, 390, 16);
+    context.fillStyle = state.labels ? '#226622' : '#662222';
+    context.fillRect(col3X, 410, 120, 24);
+    drawText(state.labels ? 'ON' : 'OFF', col3X + 10, 428, 16, '#ffffff');
+
     texture.needsUpdate = true;
     state.needsRedraw = false;
   }
@@ -238,6 +245,10 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
             state.autopilot = !state.autopilot;
             if (onToggleAutopilot) onToggleAutopilot(state.autopilot);
         }
+        else if (y > 400 && y < 434) {
+            state.labels = !state.labels;
+            if (onToggleLabels) onToggleLabels(state.labels);
+        }
     }
   }
 
@@ -253,6 +264,7 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     get probeMass() { return 10 + Math.pow(state.probeMassFraction, 3) * 1e6; },
     get probeLaunchSpeed() { return state.probeSpeedFraction * C_KMPS; },
     get autopilot() { return state.autopilot; },
-    get warpTargetIndex() { return state.warpTargetIndex; }
+    get warpTargetIndex() { return state.warpTargetIndex; },
+    get labelsVisible() { return state.labels; }
   };
 }

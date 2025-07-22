@@ -33,6 +33,29 @@ const textures = {
   neptune: textureLoader.loadAsync('./textures/neptune.jpg'),
 };
 
+function createLabelSprite(text) {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  context.font = '64px Orbitron';
+  const metrics = context.measureText(text);
+  canvas.width = metrics.width + 40;
+  canvas.height = 80;
+  context.font = '64px Orbitron';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#aaddff';
+  context.shadowColor = '#ffffff';
+  context.shadowBlur = 8;
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.encoding = THREE.sRGBEncoding;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  const scaleFactor = 0.05;
+  sprite.scale.set(canvas.width * scaleFactor, canvas.height * scaleFactor, 1);
+  return sprite;
+}
+
 /**
  * Creates a mesh for a celestial body, applying appropriate textures.
  * Special cases for Earth and Saturn are handled.
@@ -42,8 +65,13 @@ const textures = {
 async function buildBody(bodyData) {
   const group = new THREE.Group();
   group.name = bodyData.name;
-
+  
   const radiusWorld = (bodyData.radius / KM_PER_WORLD_UNIT) * SIZE_MULTIPLIER;
+  const label = createLabelSprite(bodyData.name);
+  label.position.set(0, radiusWorld * 1.3, 0);
+  group.add(label);
+  group.userData.label = label;
+
   const sphereGeom = new THREE.SphereGeometry(radiusWorld, 64, 64);
   let bodyMesh;
 
