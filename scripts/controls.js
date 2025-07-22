@@ -14,7 +14,8 @@ const GRAB_DISTANCE = 0.25; // Max distance to highlight/grab an object
 export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     const tempMatrix = new THREE.Matrix4();
     const controllerModelFactory = new XRControllerModelFactory();
-    const handModelFactory = new XRHandModelFactory().setPath("https://cdn.jsdelivr.net/npm/three@0.155.0/examples/models/fbx/");
+    // Use the default hand model path so hands load correctly
+    const handModelFactory = new XRHandModelFactory();
 
     // State for each controller/hand
     const controllers = [];

@@ -105,7 +105,9 @@ export function createDashboardCockpit() {
   const dashboard = new THREE.Mesh(dashboardGeom, dashboardMat);
   dashboard.name = "DashboardPanel";
   dashboard.position.set(0, 1.05, -0.65);
-  dashboard.rotation.set(-0.35, Math.PI, 0);
+  // Orient the dashboard so text isn't mirrored when viewed from inside
+  dashboard.rotation.set(-0.35, 0, 0);
+  dashboard.scale.z = -1; // flip to display correctly from the cockpit
   cockpitGroup.add(dashboard);
 
   // --- Side Consoles ---
