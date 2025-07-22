@@ -149,8 +149,9 @@ export function getOrbitalPosition(elements, t) {
  * units/s² we divide by KM_PER_WORLD_UNIT.
  *
  * @param {THREE.Vector3} posWorld position of the test particle in world units
- * @param {Array<Object>} bodies array of objects with `mass` (kg) and
- *        `mesh` or `group` property exposing `.position` in world units
+ * @param {Array<Object>} bodies array of objects containing mass information
+ *        either as `mass` or nested under `data.mass`, and a `mesh` or `group`
+ *        property exposing `.position` in world units
  * @returns {THREE.Vector3} acceleration vector in world units/s²
  */
 export function computeGravity(posWorld, bodies) {
@@ -175,7 +176,10 @@ export function computeGravity(posWorld, bodies) {
     // Avoid singularities – skip if extremely close.
     if (distanceWorld < 1e-6) continue;
     const distanceKm = distanceWorld * KM_PER_WORLD_UNIT;
-    const accMagKm = G * body.mass / (distanceKm * distanceKm); // km/s²
+    // Mass may be stored directly on the object or within a `data` field.
+    const mass = body.mass !== undefined ? body.mass : body.data && body.data.mass;
+    if (!mass) continue;
+    const accMagKm = G * mass / (distanceKm * distanceKm); // km/s²
     const accWorld = accMagKm / KM_PER_WORLD_UNIT; // world units/s²
     rVec.normalize().multiplyScalar(accWorld);
     acc.add(rVec);
