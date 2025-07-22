@@ -2,17 +2,16 @@
  * main.js (Refactored)
  *
  * Entry point for the VR solar system experience. This version introduces:
- * - Improved scene lighting with ambient and directional sources.
- * - XR session initialization that requests 'hand-tracking' and 'local-floor'.
- * - Point lights attached to the cockpit to illuminate the UI panels.
- * - A refined animation loop that updates all new systems.
- * - A more realistic starfield using THREE.Points.
+ * - A call to the new createDashboardCockpit for an ergonomic layout.
+ * - Integration with the single-panel UI system.
+ * - Slightly boosted lighting to complement the glowing dashboard.
  */
 
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
-import { createCockpit } from './cockpit.js';
+// CHANGED: Using the new dashboard-style cockpit
+import { createDashboardCockpit } from './cockpit.js';
 import { createUI } from './ui.js';
 import { setupControls } from './controls.js';
 import { launchProbe, updateProbes } from './probes.js';
@@ -44,11 +43,10 @@ async function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.xr.enabled = true;
-  renderer.shadowMap.enabled = true; // Enable shadows for more depth
+  renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
 
   // === WebXR Session Initialization ===
-  // Request optional features like hand-tracking for a richer experience.
   const sessionInit = {
     optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
   };
@@ -73,18 +71,14 @@ async function init() {
 
   // === Scene, Camera, and Lighting ===
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000005); // Deep space blue/black
+  scene.background = new THREE.Color(0x000005);
 
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 10000);
-  // The camera's base position. In VR, the headset's pose will override this.
-  // We place it at average eye height.
   camera.position.set(0, 1.6, 0);
 
-  // Add a base level of light to the entire scene
-  const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+  const ambientLight = new THREE.AmbientLight(0x404060, 0.7); // CHANGED: Slightly increased ambient light
   scene.add(ambientLight);
 
-  // A bright, distant light source to simulate the Sun's light
   const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
   sunLight.position.set(500, 500, 500);
   sunLight.castShadow = true;
@@ -110,67 +104,65 @@ async function init() {
   scene.add(solarGroup);
 
   // === Cockpit Creation ===
-  const cockpit = createCockpit();
-  // IMPORTANT: The camera is inside the cockpit, so add the cockpit to the camera's parent (the scene).
-  // Do NOT add the cockpit as a child of the camera.
+  // NEW: Using the new, more ergonomic cockpit design.
+  const cockpit = createDashboardCockpit();
   scene.add(cockpit.group);
 
-  // Add point lights above each UI panel for readability
-  cockpit.panels.forEach(panel => {
-    const light = new THREE.PointLight(0xffffff, 0.5, 2);
-    // Position the light slightly above and in front of the panel
-    panel.getWorldPosition(light.position);
-    light.position.y += 0.3;
-    cockpit.group.add(light);
-  });
+  // Add a point light to illuminate the controls.
+  const controlLight = new THREE.PointLight(0xaabbee, 0.8, 5);
+  controlLight.position.set(0, 2.0, -0.5); // Position above and slightly in front of the user
+  cockpit.group.add(controlLight);
 
   // === Audio System ===
   const audio = await initAudio(camera);
 
   // === UI System ===
+  // CHANGED: Now passes the single dashboard panel to the UI system.
   const ui = createUI(
-    cockpit.panels,
+    cockpit.dashboard,
     (bodyIndex) => { // onWarpSelect
       warpToBody(bodyIndex);
       if (audio) audio.playWarp();
     },
     (newSpeedFraction) => { /* onSpeedChange is handled by the control system */ },
-    () => { // onLaunchProbe
-      const aimDirection = new THREE.Vector3();
-      cockpit.cannon.getWorldDirection(aimDirection);
-      const launchPosition = new THREE.Vector3();
-      cockpit.cannon.getWorldPosition(launchPosition);
-      
-      launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
-      if (audio) audio.playBeep(); // Placeholder for a launch sound
+    () => { // onLaunchProbe from UI button
+        // The fire button on the console is now the primary method, but this can be a backup.
+        const aimDirection = new THREE.Vector3();
+        cockpit.cannon.getWorldDirection(aimDirection);
+        const launchPosition = new THREE.Vector3();
+        cockpit.cannon.getWorldPosition(launchPosition);
+        launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
+        if (audio) audio.playBeep();
     }
   );
-
+  
   // === Control System ===
-  const controls = setupControls(renderer, scene, cockpit, ui, audio);
+  // NEW: Pass a dedicated fire function for the physical button.
+  const fireProbe = () => {
+    const aimDirection = new THREE.Vector3();
+    cockpit.cannon.getWorldDirection(aimDirection);
+    const launchPosition = new THREE.Vector3();
+    cockpit.cannon.getWorldPosition(launchPosition);
+    launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
+    if (audio) audio.playBeep();
+  };
+  const controls = setupControls(renderer, scene, cockpit, ui, fireProbe);
 
   // === Simulation State ===
   let lastFrameTime = performance.now();
   let simulationTimeDays = 0;
 
-  // Warp function repositions the solar system relative to the ship.
   function warpToBody(bodyIndex) {
       const targetBody = bodies[bodyIndex];
-      // Ensure orbital positions are current before warping
       updateSolarSystem(bodies, simulationTimeDays);
-      
       const bodyWorldPos = new THREE.Vector3();
       targetBody.group.getWorldPosition(bodyWorldPos);
-      
-      // Desired position: 50 world units in front of the cockpit
       const offset = new THREE.Vector3(0, 0, -50);
       const warpTargetPos = cockpit.group.localToWorld(offset);
-      
       const delta = new THREE.Vector3().subVectors(warpTargetPos, bodyWorldPos);
       solarGroup.position.add(delta);
   }
 
-  // Handle window resizing
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -180,40 +172,31 @@ async function init() {
   // === Animation Loop ===
   renderer.setAnimationLoop(() => {
     const now = performance.now();
-    const dt = (now - lastFrameTime) / 1000; // delta time in seconds
+    const dt = (now - lastFrameTime) / 1000;
     lastFrameTime = now;
 
-    // 1. Update Simulation Time
     simulationTimeDays += dt * DAYS_PER_SECOND * ui.timeScale;
     updateSolarSystem(bodies, simulationTimeDays);
 
-    // 2. Update Ship Movement
     const travelSpeed = speedFractionToWorldUnitsPerSec(ui.speedFraction);
     if (travelSpeed > 0) {
       const forward = new THREE.Vector3(0, 0, -1);
-      // Get the cockpit's world direction
       cockpit.group.getWorldQuaternion(forward.applyQuaternion.bind(forward));
       const displacement = forward.multiplyScalar(travelSpeed * dt);
-      // Move the solar system *opposite* to the ship's travel
       solarGroup.position.sub(displacement);
     }
     
-    // 3. Update Probes
     updateProbes(dt, bodies, solarGroup.position);
+    controls.update(dt);
 
-    // 4. Update Controls
-    controls.update();
-
-    // 5. Update UI
     const bodyPositions = bodies.map(b => {
       const pos = new THREE.Vector3();
       b.group.getWorldPosition(pos);
       return pos;
     });
-    // Find the closest body to the ship for the info panel
     let closestBodyIndex = -1;
     let minDistanceSq = Infinity;
-    const shipPos = new THREE.Vector3(); // Assumes ship is at world origin
+    const shipPos = new THREE.Vector3();
     bodyPositions.forEach((pos, i) => {
         const distSq = pos.distanceToSquared(shipPos);
         if (distSq < minDistanceSq) {
@@ -223,8 +206,6 @@ async function init() {
     });
 
     ui.update(bodyPositions, closestBodyIndex);
-
-    // 6. Render Scene
     renderer.render(scene, camera);
   });
 }
