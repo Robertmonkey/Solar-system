@@ -52,6 +52,10 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     needsRedraw: true,
   };
 
+  // If the background image loads after initialization, trigger a redraw so it
+  // becomes visible.
+  bgImage.addEventListener('load', () => { state.needsRedraw = true; });
+
   const warpTargets = solarBodies.map((b, idx) => ({ name: b.name, index: idx }));
 
   // --- Drawing Helpers ---
