@@ -1,19 +1,22 @@
 /*
  * controls.js (Corrected)
  *
- * This version enables reliable hand-tracking and interaction for Quest devices.
+ * This version restores the high-quality mesh-based hands and fixes the
+ * model loading call to ensure they are visible and functional.
  */
 
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-// CHANGED: Replaced the faulty XRHandModelFactory with XRHandPrimitiveModel for reliable hand tracking.
-import { XRHandPrimitiveModel } from 'three/addons/webxr/XRHandPrimitiveModel.js';
+// CHANGED: Reverting to XRHandModelFactory to load high-quality hand meshes.
+import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 
 const GRAB_DISTANCE = 0.25; // Max distance to highlight/grab an object
 
 export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     const tempMatrix = new THREE.Matrix4();
     const controllerModelFactory = new XRControllerModelFactory();
+    // CHANGED: Re-instantiate the XRHandModelFactory.
+    const handModelFactory = new XRHandModelFactory();
 
     // State for each controller/hand
     const controllers = [];
@@ -24,12 +27,12 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
         
         // --- Models ---
         grip.add(controllerModelFactory.createControllerModel(grip));
-        // CHANGED: Instantiate a primitive-based hand model which works reliably.
-        const handModel = new XRHandPrimitiveModel(hand);
+        
+        // CHANGED: Using the correct call to create the detailed hand model.
+        const handModel = handModelFactory.createHandModel(hand);
         hand.add(handModel);
 
         // --- Fingertip for Touch Interaction ---
-        // CHANGED: Made the touch sphere completely invisible to avoid visual artifacts.
         const touchSphere = new THREE.Mesh(
             new THREE.SphereGeometry(0.015), 
             new THREE.MeshBasicMaterial({ visible: false })
@@ -98,7 +101,6 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     function onGrabEnd(data) {
         if (data.grabbedObject) {
             if(data.grabbedObject.type === 'joystick') {
-                // Smoothly return joystick to center
                 cockpit.joystickPivot.rotation.set(0, 0, 0);
             }
             data.grabbedObject = null;
@@ -116,7 +118,6 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
             item.object.getWorldPosition(itemPos);
             const distance = handPos.distanceTo(itemPos);
 
-            // Make the joystick and throttle easier to grab from above
             const verticalBias = (item.name === 'joystick' || item.name === 'throttle') ? 0.1 : 0;
             if (distance < minDistance + verticalBias) {
                 minDistance = distance;
@@ -125,11 +126,9 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
         });
         
         if (data.hoveredObject !== closestHover) {
-            // Un-highlight old object if it exists
             if (data.hoveredObject) {
                 setObjectEmissive(data.hoveredObject.object, 0);
             }
-            // Highlight new object
             if (closestHover) {
                 setObjectEmissive(closestHover.object, 0.5);
             }
@@ -144,7 +143,7 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
                     if(child.material.originalEmissive === undefined) {
                         child.material.originalEmissive = child.material.emissive.getHex();
                     }
-                    child.material.emissive.setHex(0xffff00); // Highlight color
+                    child.material.emissive.setHex(0xffff00);
                 } else {
                     child.material.emissive.setHex(child.material.originalEmissive || 0x000000);
                 }
@@ -154,33 +153,28 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     }
 
     function handleTouch(data) {
-        // This check ensures the entire joint hierarchy is ready.
+        // The hand model returned by the factory has a .joints property.
         const fingerTip = data?.handModel?.joints?.['index-finger-tip'];
 
-        // If fingerTip is not available for any reason, exit the function immediately.
         if (!fingerTip) {
             return;
         }
 
-        // This code will now only run if fingerTip is valid
         const tipPos = new THREE.Vector3();
         fingerTip.getWorldPosition(tipPos);
         data.touchSphere.position.copy(tipPos);
 
         if (data.isSelecting) {
-            // Simple bounding box check is often enough for touch
             const dashboardBox = new THREE.Box3().setFromObject(cockpit.dashboard);
             if (dashboardBox.intersectsSphere(data.touchSphere.geometry.boundingSphere.clone().translate(data.touchSphere.position))) {
                 
-                // Fire button is special
                 const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
                 if (fireButtonBox.intersectsSphere(data.touchSphere.geometry.boundingSphere.clone().translate(data.touchSphere.position))) {
                     fireProbe();
-                    data.isSelecting = false; // Prevent repeated firing
+                    data.isSelecting = false;
                     return;
                 }
 
-                // For the dashboard, we need UV coordinates to know where the touch happened
                 const tempRay = new THREE.Raycaster();
                 const handPos = new THREE.Vector3();
                 data.hand.getWorldPosition(handPos);
@@ -190,7 +184,7 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
                 
                 if(dashboardIntersects.length > 0) {
                     ui.handlePointer(dashboardIntersects[0].uv);
-                    data.isSelecting = false; // Consume the select event
+                    data.isSelecting = false;
                 }
             }
         }
@@ -218,7 +212,6 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
                     grab.object.rotation.x = THREE.MathUtils.clamp(grab.initialObjectRotation.x + deltaEuler.x * 2.0, -maxAngle, maxAngle);
                     grab.object.rotation.z = THREE.MathUtils.clamp(grab.initialObjectRotation.z - deltaEuler.y * 2.0, -maxAngle, maxAngle);
 
-                    // Aim the cannon based on joystick rotation
                     cockpit.cannon.rotation.y = -grab.object.rotation.z;
                     cockpit.cannon.rotation.x = Math.PI / 2 - grab.object.rotation.x;
                 }
@@ -228,12 +221,10 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
             }
         });
         
-        // When not grabbed, throttle visually matches UI state
         if (!controllers.some(c => c.grabbedObject?.type === 'throttle')) {
             const maxAngle = Math.PI / 3;
             cockpit.throttlePivot.rotation.x = -ui.speedFraction * maxAngle;
         }
-        // When joystick not grabbed, return to neutral and point cannon forward
         if (!controllers.some(c => c.grabbedObject?.type === 'joystick')) {
             cockpit.joystickPivot.rotation.x = cockpit.joystickPivot.rotation.x * (1-10*dt);
             cockpit.joystickPivot.rotation.z = cockpit.joystickPivot.rotation.z * (1-10*dt);
