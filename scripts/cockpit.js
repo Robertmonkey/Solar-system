@@ -1,26 +1,35 @@
 /*
  * cockpit.js (Major Refactor)
  *
- * This module is completely redesigned to build a stylish and ergonomic dashboard-style cockpit.
- * - Replaces the old floor, desk, and panels with a cohesive design.
- * - Features a large, curved central dashboard for the main UI.
- * - Includes angled side-consoles for the throttle and joystick.
- * - The floor is now a larger hexagonal plate, correctly positioned under the user.
+ * This module defines the dashboard style cockpit for the solar system
+ * experience.  The previous implementation used a scale of 0.6 for the
+ * cockpitGroup which made the entire cockpit rather cramped.  Users
+ * requested that the cockpit be roughly twenty‑percent larger so the
+ * controls and canopy feel more spacious.  To achieve this the group
+ * scaling values have been increased from 0.6 to 0.72 on all axes.  No
+ * other geometry needed to be changed because the entire cockpit is
+ * contained within the group — scaling the group uniformly enlarges
+ * everything, including the floor, seat, consoles and canopy.
  */
 
 import * as THREE from 'three';
 
 /**
- * Creates a new dashboard-style cockpit.
+ * Creates a new dashboard‑style cockpit.
+ *
  * @returns An object containing the main cockpit group and references to
- * interactive parts like the dashboard panel, throttle, joystick, fire button,
- * and cannon for external manipulation.
+ *          interactive parts like the dashboard panel, throttle, joystick,
+ *          fire button and cannon for external manipulation.
  */
 export function createDashboardCockpit() {
   const cockpitGroup = new THREE.Group();
   cockpitGroup.name = 'Cockpit';
   cockpitGroup.position.set(0, 0, 0);
-  cockpitGroup.scale.set(0.6, 0.6, 0.6);
+  // ENLARGED: The cockpit used to be scaled to 0.6 on each axis.  A 20 % increase
+  // means multiplying by 1.2, yielding a scale of 0.72.  This gives more
+  // headroom and makes the dashboard easier to reach without altering the
+  // relative proportions of individual components.
+  cockpitGroup.scale.set(0.72, 0.72, 0.72);
 
   const darkMetalMat = new THREE.MeshStandardMaterial({
     color: 0x1a1a20,
@@ -105,7 +114,7 @@ export function createDashboardCockpit() {
   const dashboardGeom = new THREE.CylinderGeometry(1.4, 1.4, 0.9, 40, 1, true, -0.9, 1.8);
   const dashboardMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const dashboard = new THREE.Mesh(dashboardGeom, dashboardMat);
-  dashboard.name = "DashboardPanel";
+  dashboard.name = 'DashboardPanel';
   dashboard.position.set(0, 1.05, -0.65);
   dashboard.rotation.set(-0.35, 0, 0);
   dashboard.scale.z = -1;
@@ -133,7 +142,7 @@ export function createDashboardCockpit() {
   const throttlePivot = new THREE.Object3D();
   throttlePivot.add(throttleLever);
   throttleGroup.add(throttleBase, throttlePivot);
-  throttleGroup.name = "Throttle";
+  throttleGroup.name = 'Throttle';
   leftConsole.add(throttleGroup);
   throttleGroup.position.set(0, 0.05, 0);
 
@@ -146,14 +155,14 @@ export function createDashboardCockpit() {
   const joystickPivot = new THREE.Object3D();
   joystickPivot.add(stick, stickTop);
   joystickGroup.add(stickBase, joystickPivot);
-  joystickGroup.name = "Joystick";
+  joystickGroup.name = 'Joystick';
   rightConsole.add(joystickGroup);
   joystickGroup.position.set(0, 0.05, 0);
-  
+
   const fireButtonGeom = new THREE.CylinderGeometry(0.07, 0.07, 0.04, 32);
   const fireButtonMat = new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.5, roughness: 0.5, emissive: 0x550000 });
   const fireButton = new THREE.Mesh(fireButtonGeom, fireButtonMat);
-  fireButton.name = "FireButton";
+  fireButton.name = 'FireButton';
   rightConsole.add(fireButton);
   fireButton.position.set(0, 0.07, 0.25);
 
@@ -177,5 +186,8 @@ export function createDashboardCockpit() {
   };
 }
 
-// Export the new function
+// Export the new function with a friendly alias.  This preserves the
+// external API expected by main.js while allowing the implementation
+// details to evolve over time.  Note: the alias is re‑exported at
+// the bottom so consumers can continue to import { createCockpit }.
 export { createDashboardCockpit as createCockpit };
