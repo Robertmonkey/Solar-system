@@ -34,9 +34,9 @@ import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 // hover over or grab the throttle, joystick or fire button.  Increasing
 // the grab radius slightly restores the ability to highlight and pick up
 // these controls without requiring uncomfortable arm extension.  A value of
-// 0.35 was chosen experimentally to balance reach with avoiding accidental
+// 0.45 was chosen experimentally to balance reach with avoiding accidental
 // grabs when merely reaching past a control.
-const GRAB_DISTANCE = 0.35;
+const GRAB_DISTANCE = 0.45;
 
 /**
  * Set up WebXR input for the scene.
@@ -102,6 +102,7 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
       isSelecting: false,
       grabbedObject: null,
       hoveredObject: null,
+      lastTouchTime: 0,
     };
     controllers.push(controllerData);
 
@@ -124,10 +125,16 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
   // --- Event Handlers ---
   function onSelectStart(data) {
     data.isSelecting = true;
+    if (!data.grabbedObject && data.hoveredObject) {
+      onGrabStart(data);
+    }
   }
 
   function onSelectEnd(data) {
     data.isSelecting = false;
+    if (data.grabbedObject) {
+      onGrabEnd(data);
+    }
   }
 
   function onGrabStart(data) {
@@ -244,32 +251,29 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     fingerTip.getWorldPosition(tipPos);
     data.touchSphere.position.copy(tipPos);
 
-    if (data.isSelecting) {
-      // If the user is holding the trigger while touching the dashboard we
-      // first check for the fire button.  Firing is triggered when the
-      // fingertip intersects the fire button bounding box.
-      const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
-      if (fireButtonBox.containsPoint(tipPos)) {
-        fireProbe();
-        data.isSelecting = false;
-        return;
-      }
-      // Otherwise test against the dashboard for UI interactions.
-      const dashboardBox = new THREE.Box3().setFromObject(cockpit.dashboard);
-      if (dashboardBox.containsPoint(tipPos)) {
-        // Raycast from the fingertip toward the palm to find the UV on the
-        // dashboard panel.  This is used to translate the 3D tap into a
-        // 2D coordinate on the UI canvas.
-        const tempRay = new THREE.Raycaster();
-        const handPos = new THREE.Vector3();
-        data.hand.getWorldPosition(handPos);
-        const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
-        tempRay.set(tipPos, dir);
-        const dashboardIntersects = tempRay.intersectObject(cockpit.dashboard);
-        if (dashboardIntersects.length > 0) {
-          ui.handlePointer(dashboardIntersects[0].uv);
-          data.isSelecting = false;
-        }
+    const now = performance.now();
+    if (now - data.lastTouchTime < 300) return;
+
+    // Check fire button first
+    const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
+    if (fireButtonBox.containsPoint(tipPos)) {
+      fireProbe();
+      data.lastTouchTime = now;
+      return;
+    }
+
+    // Then check the dashboard panel
+    const dashboardBox = new THREE.Box3().setFromObject(cockpit.dashboard);
+    if (dashboardBox.containsPoint(tipPos)) {
+      const tempRay = new THREE.Raycaster();
+      const handPos = new THREE.Vector3();
+      data.hand.getWorldPosition(handPos);
+      const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
+      tempRay.set(tipPos, dir);
+      const dashboardIntersects = tempRay.intersectObject(cockpit.dashboard);
+      if (dashboardIntersects.length > 0) {
+        ui.handlePointer(dashboardIntersects[0].uv);
+        data.lastTouchTime = now;
       }
     }
   }
