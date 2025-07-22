@@ -20,7 +20,6 @@ export function createDashboardCockpit() {
   const cockpitGroup = new THREE.Group();
   cockpitGroup.name = 'Cockpit';
   cockpitGroup.position.set(0, 0, 0);
-  // CHANGED: Scaled down the entire cockpit by 40% for better ergonomics
   cockpitGroup.scale.set(0.6, 0.6, 0.6);
 
   const darkMetalMat = new THREE.MeshStandardMaterial({
@@ -53,14 +52,14 @@ export function createDashboardCockpit() {
 
   // --- Pilot Seat ---
   const seatGroup = new THREE.Group();
-  // CHANGED: Flipped the seat 180 degrees and adjusted its position to face the dashboard.
+  // CHANGED: Flipped the seat 180 degrees to face the dashboard.
   seatGroup.rotation.y = Math.PI;
   seatGroup.position.z = 0.2;
   const seatBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), seatMat);
-  // Position the seat so it faces the dashboard (negative Z)
   seatBase.position.set(0, 0.55, -0.3);
-  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.1), seatMat);
-  seatBack.position.set(0, 0.975, 0.0);
+  // CHANGED: Made the seat back taller and adjusted its position.
+  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.1), seatMat);
+  seatBack.position.set(0, 1.075, 0.0);
   const seatLeftArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.5), seatMat);
   seatLeftArm.position.set(-0.35, 0.7, -0.05);
   const seatRightArm = seatLeftArm.clone();
@@ -84,14 +83,14 @@ export function createDashboardCockpit() {
     opacity: 0.15,
   });
   const canopy = new THREE.Mesh(canopyGeom, canopyMat);
-  canopy.position.y = -0.1;
+  // CHANGED: Raised the canopy to provide more headroom.
+  canopy.position.y = 1.7;
   canopy.rotation.x = Math.PI / 2;
   cockpitGroup.add(canopy);
 
   // --- Overhead Crossbar with Lights ---
   const crossbarGeom = new THREE.CylinderGeometry(0.02, 0.02, 2.2, 8);
   const crossbar = new THREE.Mesh(crossbarGeom, darkMetalMat);
-  // CHANGED: Moved the crossbar and lights higher up to be truly overhead.
   crossbar.position.set(0, 2.2, -0.3);
   crossbar.rotation.z = Math.PI / 2;
   cockpitGroup.add(crossbar);
@@ -107,12 +106,10 @@ export function createDashboardCockpit() {
   // --- Main Dashboard ---
   // A single, large, curved panel for the main UI.
   const dashboardGeom = new THREE.CylinderGeometry(1.4, 1.4, 0.9, 40, 1, true, -0.9, 1.8);
-  // NEW: A basic material that will be made to glow in ui.js
   const dashboardMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const dashboard = new THREE.Mesh(dashboardGeom, dashboardMat);
   dashboard.name = "DashboardPanel";
   dashboard.position.set(0, 1.05, -0.65);
-  // Orient the dashboard so text isn't mirrored when viewed from inside
   dashboard.rotation.set(-0.35, 0, 0);
   dashboard.scale.z = -1; // flip to display correctly from the cockpit
   cockpitGroup.add(dashboard);
@@ -122,7 +119,6 @@ export function createDashboardCockpit() {
 
   // Left Console (for Throttle)
   const leftConsole = new THREE.Mesh(consoleGeom, darkMetalMat);
-  // Bring the console closer for easy reach
   leftConsole.position.set(-0.55, 0.8, -0.25);
   leftConsole.rotation.y = 0.25;
   cockpitGroup.add(leftConsole);
@@ -132,8 +128,6 @@ export function createDashboardCockpit() {
   rightConsole.position.set(0.55, 0.8, -0.25);
   rightConsole.rotation.y = -0.25;
   cockpitGroup.add(rightConsole);
-
-  // Removed obsolete floating panels
 
   // --- Controls ---
   // Throttle
@@ -148,7 +142,7 @@ export function createDashboardCockpit() {
   throttlePivot.add(throttleLever);
   throttleGroup.add(throttleBase, throttlePivot);
   throttleGroup.name = "Throttle";
-  leftConsole.add(throttleGroup); // Attach to the console
+  leftConsole.add(throttleGroup);
   throttleGroup.position.set(0, 0.05, 0);
 
   // Joystick
@@ -162,7 +156,7 @@ export function createDashboardCockpit() {
   joystickPivot.add(stick, stickTop);
   joystickGroup.add(stickBase, joystickPivot);
   joystickGroup.name = "Joystick";
-  rightConsole.add(joystickGroup); // Attach to the console
+  rightConsole.add(joystickGroup);
   joystickGroup.position.set(0, 0.05, 0);
   
   // Fire Button (now on the right console)
@@ -177,14 +171,13 @@ export function createDashboardCockpit() {
   const cannonGeom = new THREE.CylinderGeometry(0.1, 0.08, 2.0, 16);
   const cannonMat = new THREE.MeshStandardMaterial({ color: 0xbbbbff, metalness: 0.9, roughness: 0.2 });
   const cannon = new THREE.Mesh(cannonGeom, cannonMat);
-  // CHANGED: Moved the cannon under the floor so it's out of the way.
   cannon.position.set(0, -0.2, -2.5);
   cannon.rotation.x = Math.PI / 2;
   cockpitGroup.add(cannon);
 
   return {
     group: cockpitGroup,
-    dashboard: dashboard, // Single dashboard panel
+    dashboard: dashboard,
     throttle: throttleGroup,
     joystick: joystickGroup,
     throttlePivot,
