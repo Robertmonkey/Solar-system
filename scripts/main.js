@@ -141,6 +141,7 @@ async function init() {
         if (audio) audio.playBeep();
     },
     (enabled) => { autopilotEnabled = enabled; },
+    (visible) => { labelsVisible = visible; },
     (fact) => { if (audio) audio.speak(fact); }
   );
 
@@ -159,6 +160,7 @@ async function init() {
   let lastFrameTime = performance.now();
   let simulationTimeDays = 0;
   let autopilotEnabled = false;
+  let labelsVisible = true;
   let warpAnim = null;
 
   function warpToBody(bodyIndex) {
@@ -256,6 +258,12 @@ async function init() {
       const pos = new THREE.Vector3();
       b.group.getWorldPosition(pos);
       return pos;
+    });
+    bodies.forEach(b => {
+      if (b.group.userData.label) {
+        b.group.userData.label.quaternion.copy(camera.quaternion);
+        b.group.userData.label.visible = labelsVisible;
+      }
     });
     let closestBodyIndex = -1;
     let minDistanceSq = Infinity;
