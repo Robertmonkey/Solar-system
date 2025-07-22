@@ -16,6 +16,10 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.m
 import { solarBodies } from './data.js';
 import { KM_PER_WORLD_UNIT, C_KMPS, MPH_TO_KMPS } from './constants.js';
 
+// Background nebula image used for all UI panels
+const bgImage = new Image();
+bgImage.src = './textures/ui.png';
+
 /**
  * Create the UI associated with the three cockpit panels.
  *
@@ -76,13 +80,22 @@ export function createUI(panels, onWarpSelect = () => {}, onSpeedChange = () => 
     return `${fractionOfC.toFixed(4)} c`;
   }
 
+  // Draw nebula background image if loaded
+  function drawBackground(ctx) {
+    if (bgImage.complete && bgImage.naturalWidth > 0) {
+      ctx.drawImage(bgImage, 0, 0, canvasSize.width, canvasSize.height);
+    } else {
+      ctx.fillStyle = '#101010';
+      ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    }
+  }
+
   /**
    * Draw the warp selection list on the first panel.
    */
   function drawWarpPanel(ctx) {
     ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
-    ctx.fillStyle = '#101010';
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    drawBackground(ctx);
     ctx.font = '28px sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.fillText('Warp To:', 20, 40);
@@ -92,11 +105,11 @@ export function createUI(panels, onWarpSelect = () => {}, onSpeedChange = () => 
     warpTargets.forEach((target, i) => {
       const y = startY + i * lineHeight;
       if (i === selectedWarpIndex) {
-        ctx.fillStyle = '#3355aa';
+        ctx.fillStyle = '#6633cc';
         ctx.fillRect(15, y - 18, canvasSize.width - 30, lineHeight);
         ctx.fillStyle = '#ffffff';
       } else {
-        ctx.fillStyle = '#aaaaaa';
+        ctx.fillStyle = '#ddddff';
       }
       ctx.fillText(target.name, 25, y);
     });
@@ -115,8 +128,7 @@ export function createUI(panels, onWarpSelect = () => {}, onSpeedChange = () => 
   function drawMapPanel(ctx, bodyPositions) {
     ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
     // Background
-    ctx.fillStyle = '#101010';
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    drawBackground(ctx);
     // Map area (top half)
     const mapHeight = canvasSize.height * 0.55;
     ctx.save();
@@ -143,7 +155,7 @@ export function createUI(panels, onWarpSelect = () => {}, onSpeedChange = () => 
       }
       // Body marker
       ctx.beginPath();
-      ctx.fillStyle = (i === selectedWarpIndex ? '#ffcc33' : '#88aaff');
+      ctx.fillStyle = (i === selectedWarpIndex ? '#ff6699' : '#66ccff');
       ctx.arc(x, y, 4, 0, 2 * Math.PI);
       ctx.fill();
     }
@@ -186,8 +198,7 @@ export function createUI(panels, onWarpSelect = () => {}, onSpeedChange = () => 
    */
   function drawSpeedPanel(ctx) {
     ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
-    ctx.fillStyle = '#101010';
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    drawBackground(ctx);
     // Slider label and value
     ctx.fillStyle = '#ffffff';
     ctx.font = '24px sans-serif';
@@ -207,14 +218,14 @@ export function createUI(panels, onWarpSelect = () => {}, onSpeedChange = () => 
     const knobR = 8;
     ctx.beginPath();
     ctx.arc(knobX, sliderY + sliderH / 2, knobR, 0, 2 * Math.PI);
-    ctx.fillStyle = '#ffaa00';
+    ctx.fillStyle = '#ff66cc';
     ctx.fill();
     // Launch probe button
     const btnX = (canvasSize.width - 160) / 2;
     const btnY = 140;
     const btnW = 160;
     const btnH = 40;
-    ctx.fillStyle = '#3355aa';
+    ctx.fillStyle = '#6633cc';
     ctx.fillRect(btnX, btnY, btnW, btnH);
     ctx.fillStyle = '#ffffff';
     ctx.font = '20px sans-serif';
