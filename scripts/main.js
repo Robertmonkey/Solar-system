@@ -98,6 +98,15 @@ async function init() {
   const stars = new THREE.Points(starGeometry, starMaterial);
   scene.add(stars);
 
+  // Additional line segments to show streaks when travelling fast
+  const streakPositions = new Float32Array(starVertices.length * 2);
+  const streakGeometry = new THREE.BufferGeometry();
+  streakGeometry.setAttribute('position', new THREE.BufferAttribute(streakPositions, 3));
+  const streakMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true });
+  const starStreaks = new THREE.LineSegments(streakGeometry, streakMaterial);
+  starStreaks.visible = false;
+  scene.add(starStreaks);
+
 
   // === Solar System Creation ===
   const { group: solarGroup, bodies } = await createSolarSystem(scene);
@@ -150,6 +159,7 @@ async function init() {
   let lastFrameTime = performance.now();
   let simulationTimeDays = 0;
   let autopilotEnabled = false;
+  let warpAnim = null;
 
   function warpToBody(bodyIndex) {
       const targetBody = bodies[bodyIndex];
@@ -158,8 +168,8 @@ async function init() {
       targetBody.group.getWorldPosition(bodyWorldPos);
       const offset = new THREE.Vector3(0, 0, -50);
       const warpTargetPos = cockpit.group.localToWorld(offset);
-      const delta = new THREE.Vector3().subVectors(warpTargetPos, bodyWorldPos);
-      solarGroup.position.add(delta);
+      const targetPos = new THREE.Vector3().subVectors(warpTargetPos, bodyWorldPos).add(solarGroup.position);
+      warpAnim = { start: solarGroup.position.clone(), end: targetPos, t: 0, duration: 2.0 };
   }
 
   window.addEventListener('resize', () => {
@@ -191,6 +201,27 @@ async function init() {
 
       // Move the solar system *opposite* to the ship's travel to simulate motion
       solarGroup.position.sub(displacement);
+
+      // Update star streaks based on speed
+      const speedFraction = ui.speedFraction;
+      const length = speedFraction * speedFraction * 50;
+      const posAttr = streakGeometry.attributes.position;
+      for (let i = 0; i < starVertices.length; i += 3) {
+        const sx = starVertices[i];
+        const sy = starVertices[i + 1];
+        const sz = starVertices[i + 2];
+        const idx = i * 2;
+        posAttr.array[idx] = sx;
+        posAttr.array[idx + 1] = sy;
+        posAttr.array[idx + 2] = sz;
+        posAttr.array[idx + 3] = sx - forward.x * length;
+        posAttr.array[idx + 4] = sy - forward.y * length;
+        posAttr.array[idx + 5] = sz - forward.z * length;
+      }
+      posAttr.needsUpdate = true;
+      starStreaks.visible = speedFraction > 0.5;
+    } else {
+      starStreaks.visible = false;
     }
 
     // Autopilot movement toward selected warp target
@@ -210,6 +241,14 @@ async function init() {
       }
     }
     
+    if (warpAnim) {
+      warpAnim.t += dt / warpAnim.duration;
+      const p = Math.min(warpAnim.t, 1);
+      const smooth = p * p * (3 - 2 * p);
+      solarGroup.position.lerpVectors(warpAnim.start, warpAnim.end, smooth);
+      if (p >= 1) warpAnim = null;
+    }
+
     updateProbes(dt, bodies, solarGroup.position);
     controls.update(dt);
 
