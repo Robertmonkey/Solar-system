@@ -7,7 +7,8 @@
 
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
+// CHANGED: Replaced the faulty XRHandModelFactory with XRHandPrimitiveModel for reliable hand tracking.
+import { XRHandPrimitiveModel } from 'three/addons/webxr/XRHandPrimitiveModel.js';
 
 const GRAB_DISTANCE = 0.25; // Max distance to highlight/grab an object
 
@@ -15,7 +16,7 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     const tempMatrix = new THREE.Matrix4();
     const controllerModelFactory = new XRControllerModelFactory();
     // Use the default hand model path so hands load correctly
-    const handModelFactory = new XRHandModelFactory();
+    // REMOVED: const handModelFactory = new XRHandModelFactory();
 
     // State for each controller/hand
     const controllers = [];
@@ -26,8 +27,8 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
         
         // --- Models ---
         grip.add(controllerModelFactory.createControllerModel(grip));
-        // Use the generic mesh hand model so hands are visible in most devices
-        const handModel = handModelFactory.createHandModel(hand, 'mesh');
+        // CHANGED: Instantiate a primitive-based hand model which works reliably.
+        const handModel = new XRHandPrimitiveModel(hand);
         hand.add(handModel);
 
         // --- Fingertip for Touch Interaction ---
