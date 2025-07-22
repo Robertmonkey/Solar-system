@@ -17,6 +17,7 @@ import { setupControls } from './controls.js';
 import { launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
 import { KM_PER_WORLD_UNIT, C_KMPS, MPH_TO_KMPS } from './constants.js';
+import { createOrrery } from './orrery.js';
 
 // Simulation timing: how many Earth days elapse per real second.
 const DAYS_PER_SECOND = 10.0;
@@ -116,6 +117,10 @@ async function init() {
   const cockpit = createCockpit();
   scene.add(cockpit.group);
 
+  // Miniature orrery displayed on the dashboard
+  const orrery = createOrrery(renderer);
+  cockpit.group.add(orrery.mesh);
+
   // Add a point light to illuminate the controls.
   const controlLight = new THREE.PointLight(0xaabbee, 0.8, 5);
   controlLight.position.set(0, 2.0, -0.5);
@@ -154,7 +159,7 @@ async function init() {
     launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
     if (audio) audio.playBeep();
   };
-  const controls = setupControls(renderer, scene, cockpit, ui, fireProbe);
+  const controls = setupControls(renderer, scene, cockpit, ui, fireProbe, orrery);
 
   // === Simulation State ===
   let lastFrameTime = performance.now();
@@ -259,6 +264,7 @@ async function init() {
       b.group.getWorldPosition(pos);
       return pos;
     });
+    orrery.update(bodyPositions);
     bodies.forEach(b => {
       if (b.group.userData.label) {
         b.group.userData.label.quaternion.copy(camera.quaternion);

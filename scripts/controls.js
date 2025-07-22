@@ -46,8 +46,9 @@ const GRAB_DISTANCE = 0.35;
  * @param {object} cockpit An object containing interactive cockpit parts.
  * @param {object} ui The UI system for processing pointer interactions.
  * @param {Function} fireProbe Callback invoked when the fire button is pressed.
+ * @param {object} [orrery] Optional orrery helper for warp target selection.
  */
-export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
+export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
   const controllerModelFactory = new XRControllerModelFactory();
   const handModelFactory = new XRHandModelFactory();
   // Point the hand model factory at the WebXR input profiles CDN.  Use the
@@ -266,14 +267,24 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
       // Otherwise test against the dashboard for UI interactions.
       const dashboardBox = new THREE.Box3().setFromObject(cockpit.dashboard);
       if (dashboardBox.containsPoint(tipPos)) {
-        // Raycast from the fingertip toward the palm to find the UV on the
-        // dashboard panel.  This is used to translate the 3D tap into a
-        // 2D coordinate on the UI canvas.
         const tempRay = new THREE.Raycaster();
         const handPos = new THREE.Vector3();
         data.hand.getWorldPosition(handPos);
         const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
         tempRay.set(tipPos, dir);
+
+        // Check for intersections with the orrery planets first
+        if (orrery) {
+          const hits = tempRay.intersectObjects(orrery.planetMeshes);
+          if (hits.length > 0) {
+            const idx = orrery.planetMeshes.indexOf(hits[0].object);
+            ui.selectWarpTarget(idx);
+            data.isSelecting = false;
+            return;
+          }
+        }
+
+        // Otherwise fall back to the 2D dashboard UI
         const dashboardIntersects = tempRay.intersectObject(cockpit.dashboard);
         if (dashboardIntersects.length > 0) {
           ui.handlePointer(dashboardIntersects[0].uv);
