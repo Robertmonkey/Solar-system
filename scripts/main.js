@@ -106,11 +106,11 @@ async function init() {
     }
   );
 
-  // Controls
-  const controls = setupControls(renderer, scene, camera, cockpit, ui);
-
-  // Audio (stubbed)
+  // Audio
   const audio = await initAudio(camera);
+
+  // Controls
+  const controls = setupControls(renderer, scene, camera, cockpit, ui, audio);
 
   // Simulation state
   let startTime = performance.now();
