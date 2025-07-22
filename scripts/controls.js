@@ -2,7 +2,7 @@
  * controls.js (Corrected)
  *
  * This version fixes a crash that occurred on desktop browsers by adding a
- * check to ensure hand-tracking joint data exists before trying to access it.
+ * more robust check to ensure hand-tracking joint data exists before trying to access it.
  */
 
 import * as THREE from 'three';
@@ -140,7 +140,9 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
         object.traverse(child => {
             if (child.isMesh && child.material.emissive) {
                 if (intensity > 0) {
-                    child.material.originalEmissive = child.material.emissive.getHex();
+                    if(child.material.originalEmissive === undefined) {
+                        child.material.originalEmissive = child.material.emissive.getHex();
+                    }
                     child.material.emissive.setHex(0xffff00); // Highlight color
                 } else {
                     child.material.emissive.setHex(child.material.originalEmissive || 0x000000);
@@ -152,13 +154,16 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
 
     function handleTouch(data) {
         // --- START OF CORRECTION ---
-        // First, check if hand tracking is active and joints are available.
-        if (!data.handModel || !data.handModel.joints || !data.handModel.joints['index-finger-tip']) {
-            return; // Exit the function if no hand tracking data exists
+        // This is a more robust check to ensure the entire joint hierarchy is ready.
+        // It uses optional chaining (?.) which safely stops if any part of the chain is null or undefined.
+        const fingerTip = data?.handModel?.joints?.['index-finger-tip'];
+
+        // If fingerTip is not available for any reason, exit the function immediately.
+        if (!fingerTip) {
+            return;
         }
         // --- END OF CORRECTION ---
 
-        const fingerTip = data.handModel.joints['index-finger-tip'];
         // This code will now only run if fingerTip is valid
         const tipPos = new THREE.Vector3();
         fingerTip.getWorldPosition(tipPos);
