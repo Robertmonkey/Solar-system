@@ -2,7 +2,7 @@
  * main.js (Refactored & Corrected)
  *
  * Entry point for the VR solar system experience. This version introduces:
- * - A call to the new createDashboardCockpit for an ergonomic layout.
+ * - Creates a cockpit via createCockpit with the redesigned layout.
  * - Integration with the single-panel UI system.
  * - Slightly boosted lighting to complement the glowing dashboard.
  * - A critical fix in the animation loop to prevent an endless loading screen.
@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
-import { createDashboardCockpit } from './cockpit.js';
+import { createCockpit } from './cockpit.js';
 import { createUI } from './ui.js';
 import { setupControls } from './controls.js';
 import { launchProbe, updateProbes } from './probes.js';
@@ -113,7 +113,7 @@ async function init() {
   scene.add(solarGroup);
 
   // === Cockpit Creation ===
-  const cockpit = createDashboardCockpit();
+  const cockpit = createCockpit();
   scene.add(cockpit.group);
 
   // Add a point light to illuminate the controls.
