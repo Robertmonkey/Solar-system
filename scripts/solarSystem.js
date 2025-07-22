@@ -21,14 +21,18 @@ import { getOrbitalPosition } from './utils.js';
 // resolution maps.  To conserve bandwidth we only provide maps for
 // the most prominent bodies.
 const TEXTURE_MAP = {
-  'Earth': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/earth_daymap.jpg',
-  'Moon': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/moon_map.jpg',
-  'Mars': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/mars.jpg',
-  'Jupiter': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/jupiter.jpg',
-  'Saturn': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/saturn.jpg',
-  'Uranus': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/uranus.jpg',
-  'Neptune': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/neptune.jpg',
-  'Pluto': 'https://raw.githubusercontent.com/Robertmonkey/Solar-system/main/textures/pluto.jpg'
+  // Local texture assets shipped with the project.  These avoid
+  // cross‑origin requests and work offline.
+  'Sun': './textures/sun.jpg',
+  'Mercury': './textures/mercury.jpg',
+  'Venus': './textures/venus_surface.jpg',
+  'Earth': './textures/earth_daymap.jpg',
+  'Moon': './textures/moon.jpg',
+  'Mars': './textures/mars.jpg',
+  'Jupiter': './textures/jupiter.jpg',
+  'Saturn': './textures/saturn.jpg',
+  'Uranus': './textures/uranus.jpg',
+  'Neptune': './textures/neptune.jpg'
 };
 
 /**

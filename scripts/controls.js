@@ -26,9 +26,9 @@ import { XRControllerModelFactory } from 'https://cdn.jsdelivr.net/npm/three@0.1
  * @param {THREE.Camera} camera main camera
  * @param {Object} cockpit object returned from createCockpit() { throttle, joystick, panels }
  * @param {Object} ui UI controller returned from createUI()
- * @param {function():void} onLaunchProbe callback for launching probes
+ * @param {Object} audio optional audio helper with playBeep()
  */
-export function setupControls(renderer, scene, camera, cockpit, ui, onLaunchProbe) {
+export function setupControls(renderer, scene, camera, cockpit, ui, audio) {
   const raycaster = new THREE.Raycaster();
   const workingMatrix = new THREE.Matrix4();
   const pointerColor = new THREE.Color(0xffaa00);
@@ -75,6 +75,9 @@ export function setupControls(renderer, scene, camera, cockpit, ui, onLaunchProb
         // If not hitting UI, maybe the throttle or joystick or probe button?  For
         // now treat as launch probe if pointing near the launch button.  The
         // UI code already calls onLaunchProbe() when appropriate via handlePointer.
+      }
+      if (audio && audio.playBeep) {
+        audio.playBeep();
       }
     });
     controller.addEventListener('selectend', () => {
