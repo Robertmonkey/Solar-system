@@ -42,16 +42,32 @@ async function init() {
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(VRButton.createButton(renderer));
 
-  // If XR is supported, remove the overlay hint so the VR button is visible.
-  const overlay = document.getElementById('overlay');
-  if (overlay && navigator.xr && navigator.xr.isSessionSupported) {
-    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-      if (supported) {
-        overlay.remove();
+  // Provide user‑friendly status messages and hide the overlay once XR is available.
+  const overlay   = document.getElementById('overlay');
+  const xrMessage = document.getElementById('xr-message');
+  if (overlay && xrMessage) {
+    if ('xr' in navigator) {
+      navigator.xr.isSessionSupported('immersive-vr')
+        .then((supported) => {
+          if (supported) {
+            // XR is supported; hide the overlay to reveal the VR button.
+            overlay.classList.add('hidden');
+          } else {
+            xrMessage.textContent = 'VR NOT SUPPORTED';
+          }
+        })
+        .catch((err) => {
+          console.warn('Error checking isSessionSupported:', err);
+          xrMessage.textContent = 'VR NOT ALLOWED';
+        });
+    } else {
+      // WebXR API not available – show appropriate hint
+      if (!window.isSecureContext) {
+        xrMessage.textContent = 'WEBXR NEEDS HTTPS';
+      } else {
+        xrMessage.textContent = 'WEBXR NOT AVAILABLE';
       }
-    }).catch(() => {
-      /* ignore */
-    });
+    }
   }
 
   // Scene
