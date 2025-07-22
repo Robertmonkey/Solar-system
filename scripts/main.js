@@ -2,7 +2,7 @@
  * main.js (Refactored & Corrected)
  *
  * Entry point for the VR solar system experience. This version introduces:
- * - Creates a cockpit via createCockpit with the redesigned layout.
+ * - Creates a cockpit via createCockpit with a sleeker neon-themed layout.
  * - Integration with the single-panel UI system.
  * - Slightly boosted lighting to complement the glowing dashboard.
  * - A critical fix in the animation loop to prevent an endless loading screen.
