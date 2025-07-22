@@ -16,7 +16,7 @@ import { C_KMPS, MPH_TO_KMPS } from './constants.js';
 const bgImage = new Image();
 bgImage.src = './textures/ui.png';
 
-export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchProbe, onToggleAutopilot) {
+export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchProbe, onToggleAutopilot, onFunFact) {
   // NEW: Using a larger canvas for the single dashboard layout
   const canvasSize = { width: 1024, height: 512 };
   const canvas = document.createElement('canvas');
@@ -216,6 +216,14 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     // Column 2: Info
     else if (x > 280 && x < 700) {
         state.funFactIndex++;
+        if (onFunFact) {
+          const body = solarBodies[state.infoBodyIndex] || solarBodies[0];
+          const facts = body.funFacts || [];
+          if (facts.length > 0) {
+            const fact = facts[state.funFactIndex % facts.length];
+            onFunFact(fact);
+          }
+        }
     }
     // Column 3: Sliders
     else if (x > 720 && x < 1000) {

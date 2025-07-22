@@ -113,7 +113,7 @@ async function init() {
   cockpit.group.add(controlLight);
 
   // === Audio System ===
-  const audio = await initAudio(camera);
+  const audio = await initAudio(camera, cockpit.dashboard);
 
   // === UI System ===
   const ui = createUI(
@@ -131,7 +131,8 @@ async function init() {
         launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
         if (audio) audio.playBeep();
     },
-    (enabled) => { autopilotEnabled = enabled; }
+    (enabled) => { autopilotEnabled = enabled; },
+    (fact) => { if (audio) audio.speak(fact); }
   );
 
   // === Control System ===

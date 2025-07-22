@@ -1,17 +1,15 @@
 /*
  * audio.js
  *
- * Provides simple audio feedback for the VR experience.  For the
- * purposes of this refactoring the audio system is left as a stub
- * because the original sound assets are not present in this project.
- * You can extend this module to load actual audio files using
- * THREE.AudioLoader and play them on user interactions such as warp
- * events or probe launches.
+ * Provides audio feedback for the VR experience. Sound effects are
+ * loaded and attached to a positional source so they emanate from the
+ * cockpit dashboard. A simple text‑to‑speech helper is also exposed so
+ * the UI can read fun facts aloud.
  */
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js';
 
-export async function initAudio(camera) {
+export async function initAudio(camera, sourceObject) {
   // Attach an audio listener so positional audio works in VR.
   const listener = new THREE.AudioListener();
   camera.add(listener);
@@ -25,11 +23,16 @@ export async function initAudio(camera) {
     loader.loadAsync('./sounds/ambience.mp3')
   ]);
 
-  const warpSound = new THREE.Audio(listener);
+  // Use positional audio so sounds originate from their source object.
+  const warpSound = new THREE.PositionalAudio(listener);
   warpSound.setBuffer(warpBuf);
+  warpSound.setRefDistance(2);
+  sourceObject.add(warpSound);
 
-  const beepSound = new THREE.Audio(listener);
+  const beepSound = new THREE.PositionalAudio(listener);
   beepSound.setBuffer(beepBuf);
+  beepSound.setRefDistance(2);
+  sourceObject.add(beepSound);
 
   const ambience = new THREE.Audio(listener);
   ambience.setBuffer(ambienceBuf);
@@ -39,6 +42,13 @@ export async function initAudio(camera) {
 
   return {
     playWarp() { warpSound.isPlaying && warpSound.stop(); warpSound.play(); },
-    playBeep() { beepSound.isPlaying && beepSound.stop(); beepSound.play(); }
+    playBeep() { beepSound.isPlaying && beepSound.stop(); beepSound.play(); },
+    speak(text) {
+      if ('speechSynthesis' in window) {
+        const utter = new SpeechSynthesisUtterance(text);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utter);
+      }
+    }
   };
 }
