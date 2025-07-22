@@ -26,7 +26,8 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
         
         // --- Models ---
         grip.add(controllerModelFactory.createControllerModel(grip));
-        const handModel = handModelFactory.createHandModel(hand, 'oculus');
+        // Use the generic mesh hand model so hands are visible in most devices
+        const handModel = handModelFactory.createHandModel(hand, 'mesh');
         hand.add(handModel);
 
         // --- Fingertip for Touch Interaction ---
