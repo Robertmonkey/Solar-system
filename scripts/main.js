@@ -130,9 +130,10 @@ async function init() {
         cockpit.cannon.getWorldPosition(launchPosition);
         launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
         if (audio) audio.playBeep();
-    }
+    },
+    (enabled) => { autopilotEnabled = enabled; }
   );
-  
+
   // === Control System ===
   const fireProbe = () => {
     const aimDirection = new THREE.Vector3();
@@ -147,6 +148,7 @@ async function init() {
   // === Simulation State ===
   let lastFrameTime = performance.now();
   let simulationTimeDays = 0;
+  let autopilotEnabled = false;
 
   function warpToBody(bodyIndex) {
       const targetBody = bodies[bodyIndex];
@@ -182,12 +184,29 @@ async function init() {
       // This is the corrected, standard way to get the world quaternion
       cockpit.group.getWorldQuaternion(worldQuaternion);
       forward.applyQuaternion(worldQuaternion);
-      
+
       // Calculate the displacement for this frame
       const displacement = forward.multiplyScalar(travelSpeed * dt);
-      
+
       // Move the solar system *opposite* to the ship's travel to simulate motion
       solarGroup.position.sub(displacement);
+    }
+
+    // Autopilot movement toward selected warp target
+    if (autopilotEnabled && ui.warpTargetIndex !== undefined) {
+      const targetBody = bodies[ui.warpTargetIndex];
+      const bodyPos = new THREE.Vector3();
+      targetBody.group.getWorldPosition(bodyPos);
+      const shipPos = new THREE.Vector3();
+      cockpit.group.getWorldPosition(shipPos);
+      const toTarget = bodyPos.sub(shipPos);
+      const distance = toTarget.length();
+      if (distance > 1) {
+        const direction = toTarget.normalize();
+        const autoSpeed = travelSpeed;
+        const move = Math.min(distance, autoSpeed * dt);
+        solarGroup.position.sub(direction.multiplyScalar(move));
+      }
     }
     
     updateProbes(dt, bodies, solarGroup.position);

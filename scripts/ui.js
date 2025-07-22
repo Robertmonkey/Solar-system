@@ -16,7 +16,7 @@ import { C_KMPS, MPH_TO_KMPS } from './constants.js';
 const bgImage = new Image();
 bgImage.src = './textures/ui.png';
 
-export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchProbe) {
+export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchProbe, onToggleAutopilot) {
   // NEW: Using a larger canvas for the single dashboard layout
   const canvasSize = { width: 1024, height: 512 };
   const canvas = document.createElement('canvas');
@@ -47,6 +47,7 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     timeScale: 1.0,     // Simulation speed
     probeMassFraction: 0.1, // 0-1 fraction for mass slider
     probeSpeedFraction: 0.1, // 0-1 fraction for speed slider
+    autopilot: false,
     needsRedraw: true,
   };
 
@@ -163,6 +164,12 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     context.fillStyle = '#ff8888';
     context.fillRect(col3X, 290, sliderWidth * state.probeSpeedFraction, 8);
 
+    // Autopilot Toggle
+    drawText('AUTOPILOT', col3X, 330, 16);
+    context.fillStyle = state.autopilot ? '#226622' : '#662222';
+    context.fillRect(col3X, 350, 120, 24);
+    drawText(state.autopilot ? 'ON' : 'OFF', col3X + 10, 368, 16, '#ffffff');
+
     texture.needsUpdate = true;
     state.needsRedraw = false;
   }
@@ -219,6 +226,10 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
         else if (y > 160 && y < 200) state.timeScale = 0.1 + fraction * 49.9;
         else if (y > 220 && y < 260) state.probeMassFraction = fraction;
         else if (y > 280 && y < 320) state.probeSpeedFraction = fraction;
+        else if (y > 340 && y < 374) {
+            state.autopilot = !state.autopilot;
+            if (onToggleAutopilot) onToggleAutopilot(state.autopilot);
+        }
     }
   }
 
@@ -233,5 +244,7 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     get timeScale() { return state.timeScale; },
     get probeMass() { return 10 + Math.pow(state.probeMassFraction, 3) * 1e6; },
     get probeLaunchSpeed() { return state.probeSpeedFraction * C_KMPS; },
+    get autopilot() { return state.autopilot; },
+    get warpTargetIndex() { return state.warpTargetIndex; }
   };
 }
