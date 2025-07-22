@@ -1,206 +1,231 @@
 /*
- * solarSystem.js
+ * solarSystem.js (Refactored)
  *
- * This module is responsible for instantiating and updating the
- * planetary system.  It reads the descriptive data from data.js,
- * builds Three.js meshes for the Sun, planets, moons and dwarf
- * planets, and positions them according to Keplerian orbits.  An
- * update function recomputes the positions at each animation frame.
+ * This module creates and updates the celestial bodies. Key enhancements:
+ * - Creates a high-fidelity Earth with multiple layers: surface, night lights,
+ * clouds with transparency, and a procedural atmospheric glow (Fresnel shader).
+ * - Adds rings for Saturn using a transparent texture.
+ * - Loads textures asynchronously for all major bodies.
+ * - Calculates orbital positions using Keplerian elements from data.js.
  */
 
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js';
+import * as THREE from 'three';
 import { solarBodies } from './data.js';
 import { KM_PER_WORLD_UNIT, SIZE_MULTIPLIER } from './constants.js';
 import { getOrbitalPosition } from './utils.js';
 
-// Map of body names to texture image URLs.  If a texture exists
-// for a given body the corresponding sphere will be textured with
-// realistic imagery.  Otherwise a solid colour is used.  The images
-// are pulled directly from the original GitHub repository via
-// RawGitHub URLs.  Feel free to replace these with your own high
-// resolution maps.  To conserve bandwidth we only provide maps for
-// the most prominent bodies.
-const TEXTURE_MAP = {
-  // Local texture assets shipped with the project.  These avoid
-  // cross‑origin requests and work offline.
-  'Sun': './textures/sun.jpg',
-  'Mercury': './textures/mercury.jpg',
-  'Venus': './textures/venus_surface.jpg',
-  'Earth': './textures/earth_daymap.jpg',
-  'Moon': './textures/moon.jpg',
-  'Mars': './textures/mars.jpg',
-  'Jupiter': './textures/jupiter.jpg',
-  'Saturn': './textures/saturn.jpg',
-  'Uranus': './textures/uranus.jpg',
-  'Neptune': './textures/neptune.jpg'
+const textureLoader = new THREE.TextureLoader();
+
+// Asynchronously load all necessary textures at once.
+const textures = {
+  sun: textureLoader.loadAsync('./textures/sun.jpg'),
+  mercury: textureLoader.loadAsync('./textures/mercury.jpg'),
+  venus: textureLoader.loadAsync('./textures/venus_surface.jpg'),
+  earthDay: textureLoader.loadAsync('./textures/earth_daymap.jpg'),
+  earthNight: textureLoader.loadAsync('./textures/earth_lights.png'),
+  earthClouds: textureLoader.loadAsync('./textures/earth_clouds.jpg'),
+  moon: textureLoader.loadAsync('./textures/moon.jpg'),
+  mars: textureLoader.loadAsync('./textures/mars.jpg'),
+  jupiter: textureLoader.loadAsync('./textures/jupiter.jpg'),
+  saturn: textureLoader.loadAsync('./textures/saturn.jpg'),
+  saturnRing: textureLoader.loadAsync('./textures/saturn_ring_alpha.png'),
+  uranus: textureLoader.loadAsync('./textures/uranus.jpg'),
+  neptune: textureLoader.loadAsync('./textures/neptune.jpg'),
 };
 
 /**
- * Recursively build a mesh for a solar body (planet or moon) and its
- * descendants.  The returned object contains a Three.js Group with
- * the spherical mesh and any nested moons attached.  Each object
- * stores a reference to its descriptive data and its children.  The
- * group’s position is updated each frame during the animation.
- *
- * @param {Object} bodyData entry from solarBodies array
- * @param {THREE.TextureLoader} loader texture loader for asynchronous
- *        image loading
- * @param {boolean} showOrbit whether to draw an orbital line
- * @returns {Promise<Object>} resolved with an object containing the
- *          Three.js group, mesh and data
+ * Creates a mesh for a celestial body, applying appropriate textures.
+ * Special cases for Earth and Saturn are handled.
+ * @param {object} bodyData - The data object for the celestial body.
+ * @returns {Promise<THREE.Group>} A promise that resolves to a Three.js Group for the body.
  */
-async function buildBody(bodyData, loader, showOrbit = true) {
+async function buildBody(bodyData) {
   const group = new THREE.Group();
   group.name = bodyData.name;
-  // Determine sphere radius in world units.  Multiply by size
-  // multiplier to enhance visibility.
-  const radiusWorld = (bodyData.radius / KM_PER_WORLD_UNIT) * SIZE_MULTIPLIER;
-  let material;
-  // Try to load a texture if one is specified in TEXTURE_MAP.
-  const texURL = TEXTURE_MAP[bodyData.name];
-  if (texURL) {
-    try {
-      const texture = await loader.loadAsync(texURL);
-      texture.anisotropy = 4;
-      material = new THREE.MeshPhongMaterial({ map: texture });
-    } catch (err) {
-      // Fallback to plain colour if the texture fails to load.
-      material = new THREE.MeshPhongMaterial({ color: bodyData.color, flatShading: false });
-    }
-  } else {
-    material = new THREE.MeshPhongMaterial({ color: bodyData.color, flatShading: false });
-  }
-  const sphereGeo = new THREE.SphereGeometry(radiusWorld, 64, 64);
-  const sphereMesh = new THREE.Mesh(sphereGeo, material);
-  sphereMesh.castShadow = false;
-  sphereMesh.receiveShadow = false;
-  group.add(sphereMesh);
 
-  // Build orbit line if this body orbits another body (i.e. it has
-  // semi‑major axis defined).  The Sun has no orbit line.  We use
-  // 256 segments for smooth ellipses.
-  let orbitLine = null;
-  if (showOrbit && bodyData.a && bodyData.e !== undefined) {
-    const segments = 256;
+  const radiusWorld = (bodyData.radius / KM_PER_WORLD_UNIT) * SIZE_MULTIPLIER;
+  const sphereGeom = new THREE.SphereGeometry(radiusWorld, 64, 64);
+  let bodyMesh;
+
+  // --- Special Case: Earth ---
+  if (bodyData.name === 'Earth') {
+    const earthGroup = new THREE.Group();
+    
+    // 1. Earth Surface (Day/Night)
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: await textures.earthDay,
+      emissiveMap: await textures.earthNight,
+      emissive: new THREE.Color(0xffffff),
+      emissiveIntensity: 1.0,
+      specular: new THREE.Color('grey'),
+    });
+    const earthSurface = new THREE.Mesh(sphereGeom, earthMat);
+    earthGroup.add(earthSurface);
+
+    // 2. Clouds
+    const cloudGeom = new THREE.SphereGeometry(radiusWorld * 1.01, 64, 64);
+    const cloudMat = new THREE.MeshPhongMaterial({
+      map: await textures.earthClouds,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending,
+    });
+    const clouds = new THREE.Mesh(cloudGeom, cloudMat);
+    earthGroup.add(clouds);
+    // Animate clouds separately in the main loop if desired for more realism
+    group.userData.clouds = clouds;
+
+    // 3. Atmospheric Glow (Fresnel Shader)
+    const atmosGeom = new THREE.SphereGeometry(radiusWorld * 1.04, 64, 64);
+    const atmosMat = new THREE.ShaderMaterial({
+      uniforms: {
+        'c': { value: 0.5 },
+        'p': { value: 4.0 },
+        glowColor: { value: new THREE.Color(0x87ceeb) },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        void main() {
+          vNormal = normalize( normalMatrix * normal );
+          gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+        }
+      `,
+      fragmentShader: `
+        uniform float c;
+        uniform float p;
+        uniform vec3 glowColor;
+        varying vec3 vNormal;
+        void main() {
+          float intensity = pow( c - dot( vNormal, vec3( 0.0, 0.0, 1.0 ) ), p );
+          gl_FragColor = vec4( glowColor, 1.0 ) * intensity;
+        }
+      `,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      transparent: true
+    });
+    const atmosphere = new THREE.Mesh(atmosGeom, atmosMat);
+    earthGroup.add(atmosphere);
+    
+    bodyMesh = earthGroup;
+  } 
+  // --- Special Case: Saturn ---
+  else if (bodyData.name === 'Saturn') {
+    const saturnMat = new THREE.MeshPhongMaterial({ map: await textures.saturn });
+    const saturnMesh = new THREE.Mesh(sphereGeom, saturnMat);
+
+    const ringGeom = new THREE.RingGeometry(radiusWorld * 1.2, radiusWorld * 2.1, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      map: await textures.saturnRing,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9
+    });
+    const pos = ringGeom.attributes.position;
+    const v3 = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++){
+        v3.fromBufferAttribute(pos, i);
+        ringGeom.attributes.uv.setXY(i, v3.length() < radiusWorld * 1.6 ? 0 : 1, 1);
+    }
+
+    const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+    ringMesh.rotation.x = Math.PI / 2;
+    
+    const saturnGroup = new THREE.Group();
+    saturnGroup.add(saturnMesh, ringMesh);
+    bodyMesh = saturnGroup;
+  }
+  // --- Special Case: Sun ---
+  else if (bodyData.name === 'Sun') {
+    const sunMat = new THREE.MeshBasicMaterial({ map: await textures.sun });
+    bodyMesh = new THREE.Mesh(sphereGeom, sunMat);
+    // Add a lens flare or glow effect for the sun
+    const pointLight = new THREE.PointLight(0xffffff, 1.5, 2000);
+    bodyMesh.add(pointLight);
+  }
+  // --- Default Case: All other bodies ---
+  else {
+    const textureKey = bodyData.name.toLowerCase();
+    const material = new THREE.MeshPhongMaterial({
+      color: textures[textureKey] ? 0xffffff : bodyData.color,
+      map: textures[textureKey] ? await textures[textureKey] : null,
+    });
+    bodyMesh = new THREE.Mesh(sphereGeom, material);
+  }
+
+  group.add(bodyMesh);
+
+  // Add orbit line
+  if (bodyData.a) { // If it has an orbit
     const points = [];
-    // Construct points along the orbit by sampling mean anomaly.
-    for (let j = 0; j <= segments; j++) {
-      const tFrac = j / segments;
-      const M = 2 * Math.PI * tFrac;
-      // Build a fake elements object to reuse getOrbitalPosition.  Use
-      // period of 1 day so t parameter is interpreted as mean anomaly.
-      const elements = {
-        a: bodyData.a,
-        e: bodyData.e,
-        i: bodyData.inclination || 0,
-        omega: bodyData.lonAscNode || 0,
-        w: bodyData.argPeri || 0,
-        M0: 0,
-        period: 1
-      };
-      // We pass M in place of t by converting M to t fraction of the
-      // fictitious period.  getOrbitalPosition multiplies t by n to
-      // obtain mean anomaly, so to get M directly we need t = M/(2π).
-      const pos = getOrbitalPosition(elements, M / (2 * Math.PI));
+    for (let i = 0; i <= 360; i++) {
+      const M = (i / 360) * 2 * Math.PI;
+      const elements = { ...bodyData, M0: M, period: 1, i: bodyData.inclination, omega: bodyData.lonAscNode, w: bodyData.argPeri };
+      const pos = getOrbitalPosition(elements, 0);
       points.push(pos);
     }
-    const orbitGeometry = new THREE.BufferGeometry().setFromPoints(points);
-    const orbitMaterial = new THREE.LineBasicMaterial({ color: 0x404040 });
-    orbitLine = new THREE.LineLoop(orbitGeometry, orbitMaterial);
-    orbitLine.position.set(0, 0, 0);
+    const orbitGeom = new THREE.BufferGeometry().setFromPoints(points);
+    const orbitMat = new THREE.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.5 });
+    const orbitLine = new THREE.Line(orbitGeom, orbitMat);
     group.add(orbitLine);
   }
 
-  const children = [];
-  if (Array.isArray(bodyData.moons)) {
-    for (const moon of bodyData.moons) {
-      const child = await buildBody(moon, loader, false);
-      group.add(child.group);
-      children.push(child);
+  // Recursively build moons
+  if (bodyData.moons) {
+    for (const moonData of bodyData.moons) {
+      const moonObj = await buildBody(moonData);
+      group.add(moonObj);
+      bodyData.moonObjects = bodyData.moonObjects || [];
+      bodyData.moonObjects.push({ group: moonObj, data: moonData });
     }
   }
-  return { group, mesh: sphereMesh, data: bodyData, children, orbitLine };
+
+  return group;
 }
+
 
 /**
  * Build the entire solar system hierarchy.
- *
- * This asynchronous function loads textures and constructs all bodies
- * recursively.  The returned object contains the root Group that can
- * be added to the Three.js scene and a flat array of body objects for
- * updating.  Passing showOrbits = true draws faint lines along the
- * orbital paths of planets and moons for visual reference.
- *
- * @param {boolean} showOrbits whether to draw orbital guides
- * @returns {Promise<{ group: THREE.Group, bodies: Array }>} solar system representation
+ * @param {THREE.Scene} scene - The main scene.
+ * @returns {Promise<object>} An object with the root group and a flat list of body objects.
  */
-export async function createSolarSystem(showOrbits = true) {
+export async function createSolarSystem(scene) {
   const rootGroup = new THREE.Group();
-  const loader = new THREE.TextureLoader();
   const bodies = [];
+
   for (const bodyData of solarBodies) {
-    const bodyObj = await buildBody(bodyData, loader, showOrbits);
-    rootGroup.add(bodyObj.group);
-    bodies.push(bodyObj);
+    const bodyGroup = await buildBody(bodyData);
+    rootGroup.add(bodyGroup);
+    bodies.push({ group: bodyGroup, data: bodyData });
   }
+
   return { group: rootGroup, bodies };
 }
 
 /**
- * Update the positions of all bodies in the system.
- *
- * At each animation frame we compute the new position of each body
- * according to its Keplerian elements and the current simulation
- * time.  Planets and dwarf planets orbit the Sun; moons orbit their
- * parent planet’s local coordinate frame.  Time is measured in Earth
- * days and may be advanced faster or slower depending on the user’s
- * speed setting.  The returned positions are expressed relative to
- * the rootGroup (origin at the Sun).
- *
- * @param {Array} bodies array of objects returned from buildBody()
- * @param {number} t simulation time in Earth days
+ * Update the positions of all bodies in the system based on time.
+ * @param {Array<object>} bodies - The array of body objects.
+ * @param {number} t - The current simulation time in Earth days.
  */
 export function updateSolarSystem(bodies, t) {
-  for (const bodyObj of bodies) {
-    // Skip the Sun – it is stationary at the origin.
-    if (!bodyObj.data.a) {
-      bodyObj.group.position.set(0, 0, 0);
-    } else {
-      const elements = {
-        a: bodyObj.data.a,
-        e: bodyObj.data.e,
-        i: bodyObj.data.inclination || 0,
-        omega: bodyObj.data.lonAscNode || 0,
-        w: bodyObj.data.argPeri || 0,
-        M0: bodyObj.data.meanAnomalyEpoch || 0,
-        period: bodyObj.data.period
-      };
-      const pos = getOrbitalPosition(elements, t);
+  bodies.forEach(bodyObj => {
+    // Animate cloud rotation on Earth
+    if (bodyObj.data.name === 'Earth' && bodyObj.group.userData.clouds) {
+      bodyObj.group.userData.clouds.rotation.y += 0.0001;
+    }
+
+    // Update position of planets relative to the Sun (rootGroup)
+    if (bodyObj.data.a) { // If it has orbital parameters
+      const pos = getOrbitalPosition(bodyObj.data, t);
       bodyObj.group.position.copy(pos);
     }
-    // Update the moons recursively.  Each moon’s orbital parameters
-    // are relative to its parent planet, so we treat the parent group
-    // as the local coordinate frame.
-    function updateMoons(children, parentT) {
-      for (const child of children) {
-        if (!child.data.a) {
-          child.group.position.set(0, 0, 0);
-        } else {
-          const elements = {
-            a: child.data.a,
-            e: child.data.e,
-            i: child.data.inclination || 0,
-            omega: child.data.lonAscNode || 0,
-            w: child.data.argPeri || 0,
-            M0: child.data.meanAnomalyEpoch || 0,
-            period: child.data.period
-          };
-          const posRel = getOrbitalPosition(elements, t);
-          child.group.position.copy(posRel);
-        }
-        updateMoons(child.children, t);
-      }
+
+    // Update moons relative to their parent planet
+    if (bodyObj.data.moonObjects) {
+      bodyObj.data.moonObjects.forEach(moonObj => {
+        const pos = getOrbitalPosition(moonObj.data, t);
+        moonObj.group.position.copy(pos);
+      });
     }
-    updateMoons(bodyObj.children, t);
-  }
+  });
 }
