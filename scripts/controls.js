@@ -41,12 +41,12 @@ const GRAB_DISTANCE = 0.25;
 export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
   const controllerModelFactory = new XRControllerModelFactory();
   const handModelFactory = new XRHandModelFactory();
-  // Point the hand model factory at the WebXR input profiles CDN so it can
-  // download the generic hand meshes for both left and right hands.  Without
-  // this call the factory uses a default path that isn’t always resolvable
-  // when served from a custom origin.
+  // Point the hand model factory at the WebXR input profiles CDN.  Use the
+  // default version (@1.0) rather than @1.0.0; some versions of Three.js
+  // expect this exact path.  Without setting a path the loader falls back
+  // to the same default, but we specify it here for clarity.
   handModelFactory.setPath(
-    'https://cdn.jsdelivr.net/npm/@webxr-input-profiles/assets@1.0.0/dist/profiles/generic-hand/'
+    'https://cdn.jsdelivr.net/npm/@webxr-input-profiles/assets@1.0/dist/profiles/generic-hand/'
   );
 
   // Array storing per‑hand state
@@ -67,14 +67,11 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     // Visualize the physical controller grip (for non‑hand controllers)
     grip.add(controllerModelFactory.createControllerModel(grip));
 
-    // Create a visible hand representation.  Quest devices occasionally fail
-    // to load the GLTF hand mesh due to CORS restrictions, which results in
-    // invisible hands.  To guarantee a visible model on all devices we use
-    // the 'boxes' primitive profile instead of the high‑fidelity 'mesh'.
-    // This profile renders each finger joint as a small box and does not
-    // depend on external assets.  If you wish to try the high‑quality mesh
-    // again later, replace 'boxes' with 'mesh'.
-    const handModel = handModelFactory.createHandModel(hand, 'boxes');
+    // Load the high‑fidelity GLTF hand mesh.  Using the 'mesh' profile
+    // creates a fully rigged hand model with skinned meshes for each
+    // finger.  This matches the behaviour of the earlier proof‑of‑concept
+    // code and relies on the assets hosted on the WebXR input profiles CDN.
+    const handModel = handModelFactory.createHandModel(hand, 'mesh');
     hand.add(handModel);
 
     // Invisible sphere used for precise finger tip collision testing.  This
