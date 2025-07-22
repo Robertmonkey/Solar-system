@@ -99,21 +99,7 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
     const body = solarBodies[state.infoBodyIndex] || solarBodies[0];
     drawText(body.name.toUpperCase(), col2X, 70, 20, '#ffffaa');
     
-    // Map
-    const mapCenterX = col2X + 100, mapCenterY = 200, mapRadius = 120;
-    context.save();
-    context.translate(mapCenterX, mapCenterY);
-    const maxDist = bodyPositions.reduce((max, p) => Math.max(max, p.length()), 0);
-    const scale = maxDist > 0 ? mapRadius / maxDist : 1;
-    bodyPositions.forEach((pos, i) => {
-      const x = pos.x * scale;
-      const z = pos.z * scale;
-      context.beginPath();
-      context.arc(x, z, i === state.infoBodyIndex ? 5 : 3, 0, 2 * Math.PI);
-      context.fillStyle = i === state.infoBodyIndex ? '#ff88aa' : '#88ccff';
-      context.fill();
-    });
-    context.restore();
+    // The 2D map was replaced by a 3D orrery rendered separately.
 
     // Info Text
     const fact = body.funFacts ? body.funFacts[state.funFactIndex % body.funFacts.length] : 'No data.';
@@ -262,6 +248,15 @@ export function createUI(dashboardPanel, onWarpSelect, onSpeedChange, onLaunchPr
   return {
     update,
     handlePointer,
+    selectWarpTarget(index) {
+      if (index >= 0 && index < warpTargets.length) {
+        state.warpTargetIndex = index;
+        state.infoBodyIndex = index;
+        state.funFactIndex = 0;
+        if (onWarpSelect) onWarpSelect(index);
+        state.needsRedraw = true;
+      }
+    },
     get speedFraction() { return state.speedFraction; },
     set speedFraction(f) { if (state.speedFraction !== f) { state.speedFraction = f; state.needsRedraw = true; }},
     get timeScale() { return state.timeScale; },
