@@ -1,12 +1,10 @@
 /*
- * probes.js (Refactored)
+ * probes.js (Corrected)
  *
- * Handles the creation and physics of probes. Key changes:
- * - Probes are launched from a specific position and direction (the cannon).
- * - `launchProbe` now accepts initial velocity and mass from the UI.
- * - `updateProbes` now accounts for the movement of the solar system itself,
- * keeping the probe's trajectory correct relative to the moving bodies.
- * - Probes now collide with celestial bodies.
+ * This version fixes a critical bug that caused the renderer to fail.
+ * - The probe trail's curve (CatmullRomCurve3) is now correctly initialized
+ * with two points, preventing the creation of invalid geometry (NaN values)
+ * that was causing the black screen and console errors.
  */
 
 import * as THREE from 'three';
@@ -27,8 +25,12 @@ const MAX_PROBES = 50;
 export function launchProbe(position, direction, launchSpeedKmps, mass, scene) {
   if (activeProbes.length >= MAX_PROBES) {
     const oldestProbe = activeProbes.shift();
-    scene.remove(oldestProbe.mesh);
-    scene.remove(oldestProbe.trail);
+    if (oldestProbe.mesh.parent) oldestProbe.mesh.parent.remove(oldestProbe.mesh);
+    if (oldestProbe.trail.parent) oldestProbe.trail.parent.remove(oldestProbe.trail);
+    oldestProbe.mesh.geometry.dispose();
+    oldestProbe.mesh.material.dispose();
+    oldestProbe.trail.geometry.dispose();
+    oldestProbe.trail.material.dispose();
   }
 
   const speedWorld = launchSpeedKmps / KM_PER_WORLD_UNIT;
@@ -40,7 +42,14 @@ export function launchProbe(position, direction, launchSpeedKmps, mass, scene) {
   mesh.position.copy(position);
   scene.add(mesh);
 
-  const trailGeom = new THREE.TubeGeometry(new THREE.CatmullRomCurve3([mesh.position]), 64, 0.02, 8, false);
+  // --- START OF CORRECTION ---
+  // A CatmullRomCurve3 needs at least two points to be valid.
+  // Initialize the trail with two identical points at the start position.
+  const initialTrailPoints = [position.clone(), position.clone()];
+  const trailPath = new THREE.CatmullRomCurve3(initialTrailPoints);
+  const trailGeom = new THREE.TubeGeometry(trailPath, 2, 0.02, 8, false); // Start with minimal segments
+  // --- END OF CORRECTION ---
+
   const trailMat = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.7 });
   const trail = new THREE.Mesh(trailGeom, trailMat);
   scene.add(trail);
@@ -50,7 +59,7 @@ export function launchProbe(position, direction, launchSpeedKmps, mass, scene) {
     velocity,
     mass,
     trail,
-    trailPath: new THREE.CatmullRomCurve3([mesh.position.clone(), mesh.position.clone()]),
+    trailPath, // Use the valid, corrected path
     alive: true,
   };
   activeProbes.push(probe);
@@ -67,53 +76,56 @@ export function updateProbes(dt, bodies, solarSystemOffset) {
     const probe = activeProbes[i];
     if (!probe.alive) continue;
     
-    // Account for the ship's movement by adjusting the probe's position
-    probe.mesh.position.add(solarSystemOffset);
+    // To calculate physics correctly, we need the probe's absolute world position.
+    // The mesh's position is relative to the scene origin, but the planets have moved.
+    // So, we get the probe's true world position by adding the solar system's offset.
+    const probeWorldPos = new THREE.Vector3().copy(probe.mesh.position).add(solarSystemOffset);
     
-    const probeWorldPos = probe.mesh.position.clone();
+    // Now calculate gravity based on the true world position.
     const acceleration = computeGravity(probeWorldPos, bodies);
 
+    // Apply physics
     probe.velocity.addScaledVector(acceleration, dt);
+    // Update the mesh's position (which is relative to the ship)
     probe.mesh.position.addScaledVector(probe.velocity, dt);
-    
-    // Subtract the ship's movement to keep the probe in the correct relative position
-    probe.mesh.position.sub(solarSystemOffset);
     
     // Update trail
     probe.trailPath.points.push(probe.mesh.position.clone());
     if (probe.trailPath.points.length > 100) {
       probe.trailPath.points.shift();
     }
-    probe.trail.geometry.dispose();
-    probe.trail.geometry = new THREE.TubeGeometry(probe.trailPath, 64, 0.02, 8, false);
+    // In-place update is more efficient, but recreating is simpler for now.
+    if (probe.trailPath.points.length > 1) {
+        probe.trail.geometry.dispose();
+        probe.trail.geometry = new THREE.TubeGeometry(probe.trailPath, 64, 0.02, 8, false);
+    }
 
     // Collision detection
     for (const body of bodies) {
-        const bodyWorldPos = new THREE.Vector3();
-        body.group.getWorldPosition(bodyWorldPos);
+        // The body's world position is simply its group's position within the solar system,
+        // plus the solar system's overall offset.
+        const bodyWorldPos = new THREE.Vector3().copy(body.group.position).add(solarSystemOffset);
         const bodyRadius = (body.data.radius / KM_PER_WORLD_UNIT) * SIZE_MULTIPLIER;
         
-        if (probe.mesh.position.distanceTo(bodyWorldPos) < bodyRadius) {
+        if (probeWorldPos.distanceTo(bodyWorldPos) < bodyRadius) {
             probe.alive = false;
-            probe.mesh.visible = false;
-            probe.trail.visible = false;
             // TODO: Add an explosion effect here.
             break;
         }
     }
     
     // Remove if it flies too far away
-    if (probe.mesh.position.length() > 10000) {
+    if (probe.mesh.position.length() > 20000) {
       probe.alive = false;
     }
 
     if (!probe.alive) {
+        if (probe.mesh.parent) probe.mesh.parent.remove(probe.mesh);
+        if (probe.trail.parent) probe.trail.parent.remove(probe.trail);
         probe.mesh.geometry.dispose();
         probe.mesh.material.dispose();
         probe.trail.geometry.dispose();
         probe.trail.material.dispose();
-        probe.mesh.parent.remove(probe.mesh);
-        probe.trail.parent.remove(probe.trail);
         activeProbes.splice(i, 1);
     }
   }
