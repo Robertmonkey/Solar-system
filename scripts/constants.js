@@ -1,5 +1,7 @@
 // Constants used throughout the solar system VR experience
-export const G = 6.67430e-11; // gravitational constant
+// Gravitational constant expressed in km^3/(kg·s²) to match the rest of the
+// code which performs physics calculations using kilometres.
+export const G = 6.67430e-20;
 export const AU_IN_KM = 149_597_870.7; // astronomical unit in kilometres
 
 // Base conversion for world units.  One world unit corresponds to this many kilometres.
