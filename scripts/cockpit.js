@@ -26,6 +26,19 @@ export function createDashboardCockpit() {
     metalness: 0.9,
     roughness: 0.3,
   });
+  // Materials for new decorative elements
+  const seatMat = new THREE.MeshStandardMaterial({
+    color: 0x222233,
+    metalness: 0.7,
+    roughness: 0.5,
+  });
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: 0x224466,
+    metalness: 0.9,
+    roughness: 0.2,
+    emissive: 0x112244,
+    emissiveIntensity: 0.5,
+  });
 
   // --- Floor ---
   // NEW: A larger hexagonal platform to feel more stable.
@@ -35,6 +48,26 @@ export function createDashboardCockpit() {
   floor.position.y = -0.05; // Center the cylinder so its top is at y=0
   floor.receiveShadow = true;
   cockpitGroup.add(floor);
+
+  // --- Pilot Seat ---
+  const seatGroup = new THREE.Group();
+  const seatBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), seatMat);
+  seatBase.position.set(0, 0.55, 0.3);
+  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.1), seatMat);
+  seatBack.position.set(0, 0.975, 0.0);
+  const seatLeftArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.5), seatMat);
+  seatLeftArm.position.set(-0.35, 0.7, 0.05);
+  const seatRightArm = seatLeftArm.clone();
+  seatRightArm.position.x = 0.35;
+  seatGroup.add(seatBase, seatBack, seatLeftArm, seatRightArm);
+  cockpitGroup.add(seatGroup);
+
+  // Floor accent ring
+  const ringGeom = new THREE.TorusGeometry(1.8, 0.02, 8, 32);
+  const floorRing = new THREE.Mesh(ringGeom, accentMat);
+  floorRing.rotation.x = Math.PI / 2;
+  floorRing.position.y = 0.01;
+  cockpitGroup.add(floorRing);
 
   // --- Canopy ---
   const canopyGeom = new THREE.SphereGeometry(3.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -48,6 +81,21 @@ export function createDashboardCockpit() {
   canopy.position.y = -0.1;
   canopy.rotation.x = Math.PI / 2;
   cockpitGroup.add(canopy);
+
+  // --- Overhead Crossbar with Lights ---
+  const crossbarGeom = new THREE.CylinderGeometry(0.02, 0.02, 2.2, 8);
+  const crossbar = new THREE.Mesh(crossbarGeom, darkMetalMat);
+  crossbar.position.set(0, 1.8, -0.3);
+  crossbar.rotation.z = Math.PI / 2;
+  cockpitGroup.add(crossbar);
+
+  const cabinLightLeft = new THREE.PointLight(0x66ccff, 0.5, 4);
+  cabinLightLeft.position.set(-1.0, 0, 0);
+  crossbar.add(cabinLightLeft);
+
+  const cabinLightRight = new THREE.PointLight(0x66ccff, 0.5, 4);
+  cabinLightRight.position.set(1.0, 0, 0);
+  crossbar.add(cabinLightRight);
 
   // --- Main Dashboard ---
   // A single, large, curved panel for the main UI.
@@ -74,6 +122,14 @@ export function createDashboardCockpit() {
   rightConsole.position.set(1.1, 0.9, -0.6);
   rightConsole.rotation.y = -0.5;
   cockpitGroup.add(rightConsole);
+
+  // Extra instrument clusters
+  const instrumentGeom = new THREE.BoxGeometry(0.4, 0.1, 0.2);
+  const instrumentLeft = new THREE.Mesh(instrumentGeom, accentMat);
+  instrumentLeft.position.set(-0.6, 1.3, -0.8);
+  const instrumentRight = instrumentLeft.clone();
+  instrumentRight.position.x = 0.6;
+  cockpitGroup.add(instrumentLeft, instrumentRight);
 
   // --- Controls ---
   // Throttle
