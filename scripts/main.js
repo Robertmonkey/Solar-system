@@ -117,9 +117,9 @@ async function init() {
   const cockpit = createCockpit();
   scene.add(cockpit.group);
 
-  // Miniature orrery displayed on the dashboard
+  // Miniature orrery displayed on the centre screen
   const orrery = createOrrery(renderer);
-  cockpit.group.add(orrery.mesh);
+  cockpit.orreryMount.add(orrery.mesh);
 
   // Add a point light to illuminate the controls.
   const controlLight = new THREE.PointLight(0xaabbee, 0.8, 5);
@@ -127,11 +127,12 @@ async function init() {
   cockpit.group.add(controlLight);
 
   // === Audio System ===
-  const audio = await initAudio(camera, cockpit.dashboard);
+  const audio = await initAudio(camera, cockpit.orreryMount);
 
   // === UI System ===
   const ui = createUI(
-    cockpit.dashboard,
+    cockpit.leftPanel,
+    cockpit.rightPanel,
     (bodyIndex) => { // onWarpSelect
       warpToBody(bodyIndex);
       if (audio) audio.playWarp();

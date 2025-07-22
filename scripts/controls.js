@@ -264,9 +264,14 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
         data.isSelecting = false;
         return;
       }
-      // Otherwise test against the dashboard for UI interactions.
-      const dashboardBox = new THREE.Box3().setFromObject(cockpit.dashboard);
-      if (dashboardBox.containsPoint(tipPos)) {
+      // Otherwise test against the dashboard panels for UI interactions.
+      const panels = [
+        { mesh: cockpit.leftPanel, name: 'left' },
+        { mesh: cockpit.rightPanel, name: 'right' }
+      ];
+      for (const panel of panels) {
+        const box = new THREE.Box3().setFromObject(panel.mesh);
+        if (!box.containsPoint(tipPos)) continue;
         const tempRay = new THREE.Raycaster();
         const handPos = new THREE.Vector3();
         data.hand.getWorldPosition(handPos);
@@ -284,11 +289,12 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
           }
         }
 
-        // Otherwise fall back to the 2D dashboard UI
-        const dashboardIntersects = tempRay.intersectObject(cockpit.dashboard);
-        if (dashboardIntersects.length > 0) {
-          ui.handlePointer(dashboardIntersects[0].uv);
+        // Otherwise fall back to the 2D dashboard UI for that panel
+        const hits = tempRay.intersectObject(panel.mesh);
+        if (hits.length > 0) {
+          ui.handlePointer(panel.name, hits[0].uv);
           data.isSelecting = false;
+          break;
         }
       }
     }

@@ -2,10 +2,11 @@
  * cockpit.js
  *
  * Implements a compact standing console instead of the original seated
- * cockpit.  The new layout resembles a high-tech lectern: a single table with
- * an angled screen and the joystick, throttle and fire button mounted on top.
- * The intent is for players to stand at the console and control everything
- * without moving around the room.
+ * cockpit.  The previous revision used a single large dashboard panel which
+ * looked somewhat like a blank "black hole".  This update splits the dashboard
+ * into three smaller screens arranged in a command-centre style layout.  It
+ * better resembles the multi-panel look of a sci‑fi bridge while keeping the
+ * lectern form factor so players can stand comfortably at the console.
  */
 
 import * as THREE from 'three';
@@ -13,7 +14,7 @@ import * as THREE from 'three';
 /**
  * Creates the lectern-style cockpit.
  *
- * @returns {object} References to the cockpit group, dashboard and controls.
+ * @returns {object} References to the cockpit group, panels and controls.
  */
 export function createLecternCockpit() {
   const cockpitGroup = new THREE.Group();
@@ -60,31 +61,48 @@ export function createLecternCockpit() {
   tableTop.rotation.x = -0.15;
   cockpitGroup.add(tableTop);
 
-  // Dashboard panel
-  const dashboardGeom = new THREE.PlaneGeometry(1.4, 0.8);
-  const dashboardMat = new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    side: THREE.DoubleSide,
-  });
-  const dashboard = new THREE.Mesh(dashboardGeom, dashboardMat);
-  dashboard.name = 'DashboardPanel';
-  dashboard.position.set(0, 1.5, -0.3);
-  dashboard.rotation.x = -0.3;
-  cockpitGroup.add(dashboard);
+  // --- Dashboard Panels -------------------------------------------------
+  // Instead of one large dashboard there are now two side panels and a
+  // central screen for the orrery.  The panels use basic black materials and a
+  // subtle glow so the UI textures can be swapped in by the main application.
 
-  const dashGlow = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.5, 0.9),
-    new THREE.MeshBasicMaterial({
-      color: GLOW_COLOR,
-      transparent: true,
-      opacity: 0.15,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    })
-  );
-  dashGlow.position.set(0, 1.5, -0.31);
-  dashGlow.rotation.x = -0.3;
-  cockpitGroup.add(dashGlow);
+  const panelGeom = new THREE.PlaneGeometry(0.7, 0.8);
+  const createPanel = (name, x) => {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(panelGeom, mat);
+    mesh.name = name;
+    mesh.position.set(x, 1.5, -0.3);
+    mesh.rotation.x = -0.3;
+    cockpitGroup.add(mesh);
+
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.75, 0.85),
+      new THREE.MeshBasicMaterial({
+        color: GLOW_COLOR,
+        transparent: true,
+        opacity: 0.15,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      })
+    );
+    glow.position.set(x, 1.5, -0.31);
+    glow.rotation.x = -0.3;
+    cockpitGroup.add(glow);
+
+    return mesh;
+  };
+
+  const leftPanel = createPanel('LeftPanel', -0.8);
+  const rightPanel = createPanel('RightPanel', 0.8);
+
+  // Central orrery screen
+  const orreryGeom = new THREE.PlaneGeometry(0.6, 0.6);
+  const orreryMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+  const orreryMount = new THREE.Mesh(orreryGeom, orreryMat);
+  orreryMount.name = 'OrreryScreen';
+  orreryMount.position.set(0, 1.5, -0.32);
+  orreryMount.rotation.x = -0.3;
+  cockpitGroup.add(orreryMount);
 
   // Throttle control
   const throttleGroup = new THREE.Group();
@@ -173,7 +191,9 @@ export function createLecternCockpit() {
 
   return {
     group: cockpitGroup,
-    dashboard,
+    leftPanel,
+    rightPanel,
+    orreryMount,
     throttle: throttleGroup,
     joystick: joystickGroup,
     throttlePivot,
