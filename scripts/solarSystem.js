@@ -216,14 +216,29 @@ export function updateSolarSystem(bodies, t) {
 
     // Update position of planets relative to the Sun (rootGroup)
     if (bodyObj.data.a) { // If it has orbital parameters
-      const pos = getOrbitalPosition(bodyObj.data, t);
+      // Map the data fields to the parameter names expected by getOrbitalPosition
+      const elements = {
+        ...bodyObj.data,
+        i: bodyObj.data.inclination,
+        omega: bodyObj.data.lonAscNode,
+        w: bodyObj.data.argPeri,
+        M0: bodyObj.data.meanAnomalyEpoch
+      };
+      const pos = getOrbitalPosition(elements, t);
       bodyObj.group.position.copy(pos);
     }
 
     // Update moons relative to their parent planet
     if (bodyObj.data.moonObjects) {
       bodyObj.data.moonObjects.forEach(moonObj => {
-        const pos = getOrbitalPosition(moonObj.data, t);
+        const moonElements = {
+          ...moonObj.data,
+          i: moonObj.data.inclination,
+          omega: moonObj.data.lonAscNode,
+          w: moonObj.data.argPeri,
+          M0: moonObj.data.meanAnomalyEpoch
+        };
+        const pos = getOrbitalPosition(moonElements, t);
         moonObj.group.position.copy(pos);
       });
     }
