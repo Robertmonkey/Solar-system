@@ -115,7 +115,13 @@ export function createDashboardCockpit() {
   const dashboardMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const dashboard = new THREE.Mesh(dashboardGeom, dashboardMat);
   dashboard.name = 'DashboardPanel';
-  dashboard.position.set(0, 1.05, -0.65);
+  // Move the dashboard closer to the seat.  With the cockpit enlarged by
+  // twenty percent the original Z position (‑0.65) placed the panel out of
+  // comfortable arm’s reach.  Shifting it forward (less negative) by
+  // roughly 0.15 units brings it within easy reach while maintaining
+  // clearance for the flight controls and canopy.  You can fine‑tune this
+  // value if your VR headset’s arm length differs.
+  dashboard.position.set(0, 1.05, -0.5);
   dashboard.rotation.set(-0.35, 0, 0);
   dashboard.scale.z = -1;
   cockpitGroup.add(dashboard);
