@@ -12,7 +12,17 @@ import { computeGravity } from './utils.js';
 import { KM_PER_WORLD_UNIT, SIZE_MULTIPLIER } from './constants.js';
 
 const activeProbes = [];
+const activeExplosions = [];
 const MAX_PROBES = 50;
+
+function createExplosion(position, scene) {
+  const geom = new THREE.SphereGeometry(0.3, 8, 8);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8 });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.copy(position);
+  scene.add(mesh);
+  activeExplosions.push({ mesh, life: 1, scene });
+}
 
 /**
  * Launch a new probe from the cannon.
@@ -61,6 +71,7 @@ export function launchProbe(position, direction, launchSpeedKmps, mass, scene) {
     trail,
     trailPath, // Use the valid, corrected path
     alive: true,
+    scene,
   };
   activeProbes.push(probe);
 }
@@ -108,8 +119,8 @@ export function updateProbes(dt, bodies, solarSystemOffset) {
         const bodyRadius = (body.data.radius / KM_PER_WORLD_UNIT) * SIZE_MULTIPLIER;
         
         if (probeWorldPos.distanceTo(bodyWorldPos) < bodyRadius) {
+            createExplosion(probe.mesh.position.clone(), probe.scene);
             probe.alive = false;
-            // TODO: Add an explosion effect here.
             break;
         }
     }
@@ -127,6 +138,20 @@ export function updateProbes(dt, bodies, solarSystemOffset) {
         probe.trail.geometry.dispose();
         probe.trail.material.dispose();
         activeProbes.splice(i, 1);
+    }
+  }
+
+  // Update and fade out explosions
+  for (let i = activeExplosions.length - 1; i >= 0; i--) {
+    const exp = activeExplosions[i];
+    exp.life -= dt;
+    exp.mesh.scale.multiplyScalar(1 + dt * 2);
+    exp.mesh.material.opacity = Math.max(exp.life, 0);
+    if (exp.life <= 0) {
+      if (exp.mesh.parent) exp.mesh.parent.remove(exp.mesh);
+      exp.mesh.geometry.dispose();
+      exp.mesh.material.dispose();
+      activeExplosions.splice(i, 1);
     }
   }
 }
