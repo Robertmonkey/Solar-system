@@ -99,28 +99,28 @@ export function createDashboardCockpit() {
 
   // --- Main Dashboard ---
   // A single, large, curved panel for the main UI.
-  const dashboardGeom = new THREE.CylinderGeometry(1.2, 1.2, 0.8, 32, 1, true, -0.8, 1.6);
+  const dashboardGeom = new THREE.CylinderGeometry(1.4, 1.4, 0.9, 40, 1, true, -0.9, 1.8);
   // NEW: A basic material that will be made to glow in ui.js
   const dashboardMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
   const dashboard = new THREE.Mesh(dashboardGeom, dashboardMat);
   dashboard.name = "DashboardPanel";
-  dashboard.position.set(0, 1.1, -0.5);
-  dashboard.rotation.set(-0.2, Math.PI, 0);
+  dashboard.position.set(0, 1.05, -0.65);
+  dashboard.rotation.set(-0.35, Math.PI, 0);
   cockpitGroup.add(dashboard);
 
   // --- Side Consoles ---
-  const consoleGeom = new THREE.BoxGeometry(0.6, 0.1, 0.8);
+  const consoleGeom = new THREE.BoxGeometry(0.55, 0.1, 0.7);
 
   // Left Console (for Throttle)
   const leftConsole = new THREE.Mesh(consoleGeom, darkMetalMat);
-  leftConsole.position.set(-1.1, 0.9, -0.6);
-  leftConsole.rotation.y = 0.5;
+  leftConsole.position.set(-0.9, 0.85, -0.45);
+  leftConsole.rotation.y = 0.4;
   cockpitGroup.add(leftConsole);
 
   // Right Console (for Joystick)
   const rightConsole = new THREE.Mesh(consoleGeom, darkMetalMat);
-  rightConsole.position.set(1.1, 0.9, -0.6);
-  rightConsole.rotation.y = -0.5;
+  rightConsole.position.set(0.9, 0.85, -0.45);
+  rightConsole.rotation.y = -0.4;
   cockpitGroup.add(rightConsole);
 
   // Extra instrument clusters
@@ -145,7 +145,7 @@ export function createDashboardCockpit() {
   throttleGroup.add(throttleBase, throttlePivot);
   throttleGroup.name = "Throttle";
   leftConsole.add(throttleGroup); // Attach to the console
-  throttleGroup.position.y = 0.07;
+  throttleGroup.position.set(0, 0.05, 0);
 
   // Joystick
   const joystickGroup = new THREE.Group();
@@ -159,7 +159,7 @@ export function createDashboardCockpit() {
   joystickGroup.add(stickBase, joystickPivot);
   joystickGroup.name = "Joystick";
   rightConsole.add(joystickGroup); // Attach to the console
-  joystickGroup.position.y = 0.07;
+  joystickGroup.position.set(0, 0.05, 0);
   
   // Fire Button (now on the right console)
   const fireButtonGeom = new THREE.CylinderGeometry(0.07, 0.07, 0.04, 32);
