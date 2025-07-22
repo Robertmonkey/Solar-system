@@ -7,7 +7,10 @@
  * the UI can read fun facts aloud.
  */
 
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js';
+// Use the same Three.js instance as the rest of the app via import map.
+// The previous hard-coded version pulled in a second copy of the library,
+// causing class mismatches when objects were shared across modules.
+import * as THREE from 'three';
 
 export async function initAudio(camera, sourceObject) {
   // Attach an audio listener so positional audio works in VR.
