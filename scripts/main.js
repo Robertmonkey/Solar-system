@@ -1,16 +1,16 @@
 /*
- * main.js (Refactored)
+ * main.js (Refactored & Corrected)
  *
  * Entry point for the VR solar system experience. This version introduces:
  * - A call to the new createDashboardCockpit for an ergonomic layout.
  * - Integration with the single-panel UI system.
  * - Slightly boosted lighting to complement the glowing dashboard.
+ * - A critical fix in the animation loop to prevent an endless loading screen.
  */
 
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
-// CHANGED: Using the new dashboard-style cockpit
 import { createDashboardCockpit } from './cockpit.js';
 import { createUI } from './ui.js';
 import { setupControls } from './controls.js';
@@ -76,7 +76,7 @@ async function init() {
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 10000);
   camera.position.set(0, 1.6, 0);
 
-  const ambientLight = new THREE.AmbientLight(0x404060, 0.7); // CHANGED: Slightly increased ambient light
+  const ambientLight = new THREE.AmbientLight(0x404060, 0.7);
   scene.add(ambientLight);
 
   const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -104,20 +104,18 @@ async function init() {
   scene.add(solarGroup);
 
   // === Cockpit Creation ===
-  // NEW: Using the new, more ergonomic cockpit design.
   const cockpit = createDashboardCockpit();
   scene.add(cockpit.group);
 
   // Add a point light to illuminate the controls.
   const controlLight = new THREE.PointLight(0xaabbee, 0.8, 5);
-  controlLight.position.set(0, 2.0, -0.5); // Position above and slightly in front of the user
+  controlLight.position.set(0, 2.0, -0.5);
   cockpit.group.add(controlLight);
 
   // === Audio System ===
   const audio = await initAudio(camera);
 
   // === UI System ===
-  // CHANGED: Now passes the single dashboard panel to the UI system.
   const ui = createUI(
     cockpit.dashboard,
     (bodyIndex) => { // onWarpSelect
@@ -126,7 +124,6 @@ async function init() {
     },
     (newSpeedFraction) => { /* onSpeedChange is handled by the control system */ },
     () => { // onLaunchProbe from UI button
-        // The fire button on the console is now the primary method, but this can be a backup.
         const aimDirection = new THREE.Vector3();
         cockpit.cannon.getWorldDirection(aimDirection);
         const launchPosition = new THREE.Vector3();
@@ -137,7 +134,6 @@ async function init() {
   );
   
   // === Control System ===
-  // NEW: Pass a dedicated fire function for the physical button.
   const fireProbe = () => {
     const aimDirection = new THREE.Vector3();
     cockpit.cannon.getWorldDirection(aimDirection);
@@ -180,9 +176,16 @@ async function init() {
 
     const travelSpeed = speedFractionToWorldUnitsPerSec(ui.speedFraction);
     if (travelSpeed > 0) {
+      // Get the cockpit's forward direction in world space
       const forward = new THREE.Vector3(0, 0, -1);
-      cockpit.group.getWorldQuaternion(forward.applyQuaternion.bind(forward));
+      const worldQuaternion = new THREE.Quaternion();
+      cockpit.group.getWorldQuaternion(worldQuaternion);
+      forward.applyQuaternion(worldQuaternion);
+      
+      // Calculate the displacement for this frame
       const displacement = forward.multiplyScalar(travelSpeed * dt);
+      
+      // Move the solar system *opposite* to the ship's travel to simulate motion
       solarGroup.position.sub(displacement);
     }
     
