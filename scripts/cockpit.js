@@ -52,13 +52,14 @@ export function createDashboardCockpit() {
   // --- Pilot Seat ---
   const seatGroup = new THREE.Group();
   const seatBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), seatMat);
-  seatBase.position.set(0, 0.55, 0.3);
+  // Position the seat so it faces the dashboard (negative Z)
+  seatBase.position.set(0, 0.55, -0.3);
   const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.1), seatMat);
   seatBack.position.set(0, 0.975, 0.0);
   const seatLeftArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.5), seatMat);
-  seatLeftArm.position.set(-0.35, 0.7, 0.05);
+  seatLeftArm.position.set(-0.35, 0.7, -0.05);
   const seatRightArm = seatLeftArm.clone();
-  seatRightArm.position.x = 0.35;
+  seatRightArm.position.set(0.35, 0.7, -0.05);
   seatGroup.add(seatBase, seatBack, seatLeftArm, seatRightArm);
   cockpitGroup.add(seatGroup);
 
@@ -115,23 +116,18 @@ export function createDashboardCockpit() {
 
   // Left Console (for Throttle)
   const leftConsole = new THREE.Mesh(consoleGeom, darkMetalMat);
-  leftConsole.position.set(-0.9, 0.85, -0.45);
-  leftConsole.rotation.y = 0.4;
+  // Bring the console closer for easy reach
+  leftConsole.position.set(-0.55, 0.8, -0.25);
+  leftConsole.rotation.y = 0.25;
   cockpitGroup.add(leftConsole);
 
   // Right Console (for Joystick)
   const rightConsole = new THREE.Mesh(consoleGeom, darkMetalMat);
-  rightConsole.position.set(0.9, 0.85, -0.45);
-  rightConsole.rotation.y = -0.4;
+  rightConsole.position.set(0.55, 0.8, -0.25);
+  rightConsole.rotation.y = -0.25;
   cockpitGroup.add(rightConsole);
 
-  // Extra instrument clusters
-  const instrumentGeom = new THREE.BoxGeometry(0.4, 0.1, 0.2);
-  const instrumentLeft = new THREE.Mesh(instrumentGeom, accentMat);
-  instrumentLeft.position.set(-0.6, 1.3, -0.8);
-  const instrumentRight = instrumentLeft.clone();
-  instrumentRight.position.x = 0.6;
-  cockpitGroup.add(instrumentLeft, instrumentRight);
+  // Removed obsolete floating panels
 
   // --- Controls ---
   // Throttle
