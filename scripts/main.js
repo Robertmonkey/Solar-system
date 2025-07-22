@@ -42,6 +42,18 @@ async function init() {
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(VRButton.createButton(renderer));
 
+  // If XR is supported, remove the overlay hint so the VR button is visible.
+  const overlay = document.getElementById('overlay');
+  if (overlay && navigator.xr && navigator.xr.isSessionSupported) {
+    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+      if (supported) {
+        overlay.remove();
+      }
+    }).catch(() => {
+      /* ignore */
+    });
+  }
+
   // Scene
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000010);
