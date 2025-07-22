@@ -16,20 +16,37 @@
       color: white;
       font-family: 'Orbitron', sans-serif;
     }
+    /* centered overlay for status messages */
     #overlay {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 10px;
-      border-radius: 4px;
-      font-size: 12px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.6);
+      padding: 20px 30px;
+      border-radius: 8px;
+      font-size: 16px;
+      text-align: center;
       backdrop-filter: blur(4px);
+      line-height: 1.5;
+      max-width: 90%;
+    }
+    /* hide overlay once XR is supported */
+    #overlay.hidden {
+      display: none;
+    }
+    /* reposition the Three.js VRButton */
+    #VRButton {
+      position: absolute !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      bottom: 20px !important;
     }
   </style>
 </head>
 <body>
-  <div id="overlay">Use a WebXR‑enabled browser or VR headset for the full experience. When ready, press “Enter VR”.</div>
+  <!-- status overlay, message populated by main.js -->
+  <div id="overlay"><span id="xr-message">Initializing WebXR…</span></div>
   <script type="module" src="./scripts/main.js"></script>
 </body>
 </html>
