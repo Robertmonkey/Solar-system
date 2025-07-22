@@ -1,13 +1,8 @@
 /*
- * controls.js (Major Interaction Refactor)
+ * controls.js (Corrected)
  *
- * This version implements a more intuitive, direct-manipulation control scheme.
- * - REMOVED: Distracting pointer rays are gone.
- * - NEW: Direct Touch Interaction. A small, invisible sphere on the user's
- * index fingertip detects collisions with UI panels, simulating a touchscreen.
- * - NEW: Visual Highlighting. Grab-able controls (throttle, joystick) now glow
- * when a hand is close enough to interact, providing clear feedback.
- * - FIXED: Grabbing logic is more robust and reliable.
+ * This version fixes a crash that occurred on desktop browsers by adding a
+ * check to ensure hand-tracking joint data exists before trying to access it.
  */
 
 import * as THREE from 'three';
@@ -156,42 +151,43 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe) {
     }
 
     function handleTouch(data) {
+        // --- START OF CORRECTION ---
+        // First, check if hand tracking is active and joints are available.
+        if (!data.handModel || !data.handModel.joints || !data.handModel.joints['index-finger-tip']) {
+            return; // Exit the function if no hand tracking data exists
+        }
+        // --- END OF CORRECTION ---
+
         const fingerTip = data.handModel.joints['index-finger-tip'];
-        if (fingerTip) {
-            const tipPos = new THREE.Vector3();
-            fingerTip.getWorldPosition(tipPos);
-            data.touchSphere.position.copy(tipPos);
+        // This code will now only run if fingerTip is valid
+        const tipPos = new THREE.Vector3();
+        fingerTip.getWorldPosition(tipPos);
+        data.touchSphere.position.copy(tipPos);
 
-            if (data.isSelecting) {
-                // Raycast from the fingertip sphere's position to detect intersection
-                const raycaster = new THREE.Raycaster();
-                raycaster.set(data.touchSphere.position, new THREE.Vector3(0,0,-1)); // Dummy direction
-                const intersects = raycaster.intersectObject(cockpit.dashboard);
+        if (data.isSelecting) {
+            // Simple bounding box check is often enough for touch
+            const dashboardBox = new THREE.Box3().setFromObject(cockpit.dashboard);
+            if (dashboardBox.intersectsSphere(data.touchSphere.geometry.boundingSphere.clone().translate(data.touchSphere.position))) {
+                
+                // Fire button is special
+                const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
+                if (fireButtonBox.intersectsSphere(data.touchSphere.geometry.boundingSphere.clone().translate(data.touchSphere.position))) {
+                    fireProbe();
+                    data.isSelecting = false; // Prevent repeated firing
+                    return;
+                }
 
-                // Simple bounding box check is often enough for touch
-                const dashboardBox = new THREE.Box3().setFromObject(cockpit.dashboard);
-                if (dashboardBox.intersectsSphere(data.touchSphere.geometry.boundingSphere.clone().translate(data.touchSphere.position))) {
-                    
-                    // Fire button is special
-                    const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
-                    if (fireButtonBox.intersectsSphere(data.touchSphere.geometry.boundingSphere.clone().translate(data.touchSphere.position))) {
-                        fireProbe();
-                        data.isSelecting = false; // Prevent repeated firing
-                        return;
-                    }
-
-                    // For the dashboard, we need UV coordinates to know where the touch happened
-                    const tempRay = new THREE.Raycaster();
-                    const handPos = new THREE.Vector3();
-                    data.hand.getWorldPosition(handPos);
-                    const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
-                    tempRay.set(tipPos, dir);
-                    const dashboardIntersects = tempRay.intersectObject(cockpit.dashboard);
-                    
-                    if(dashboardIntersects.length > 0) {
-                        ui.handlePointer(dashboardIntersects[0].uv);
-                        data.isSelecting = false; // Consume the select event
-                    }
+                // For the dashboard, we need UV coordinates to know where the touch happened
+                const tempRay = new THREE.Raycaster();
+                const handPos = new THREE.Vector3();
+                data.hand.getWorldPosition(handPos);
+                const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
+                tempRay.set(tipPos, dir);
+                const dashboardIntersects = tempRay.intersectObject(cockpit.dashboard);
+                
+                if(dashboardIntersects.length > 0) {
+                    ui.handlePointer(dashboardIntersects[0].uv);
+                    data.isSelecting = false; // Consume the select event
                 }
             }
         }
