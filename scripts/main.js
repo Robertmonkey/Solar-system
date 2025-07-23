@@ -165,8 +165,8 @@ renderer.setAnimationLoop(function () {
   renderer.render(scene, camera);
 });
 
-// Allow the user to enter VR with a button on the overlay
-document.getElementById('enter-vr').addEventListener('click', () => {
+// Allow the user to enter VR with a button on the page
+document.getElementById('VRButton').addEventListener('click', () => {
   renderer.xr.requestSession('immersive-vr', { optionalFeatures: ['hand-tracking'] }).then(session => {
     renderer.xr.setSession(session);
   });
