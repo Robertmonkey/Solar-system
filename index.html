@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solar System VR</title>
+  <!-- Preload the Orbitron font family for the UI -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- Import map for three.js and its examples -->
   <script type="importmap">
   {
     "imports": {
@@ -14,23 +17,38 @@
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/"
     }
   }
-</script>
+  </script>
+
   <style>
+    /* Global styles */
     body {
       margin: 0;
       overflow: hidden;
-      /* CHANGED: Restored the background image for the loading screen */
+      /* Slightly textured background to avoid large flat colour plates while loading */
       background: #000 url('./textures/ui.png') no-repeat center center fixed;
       background-size: cover;
       color: #aaddff;
       font-family: 'Orbitron', sans-serif;
     }
+
+    /* VR entry button positioning */
+    #VRButton {
+      position: absolute !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      bottom: 20px !important;
+      z-index: 100;
+    }
+
+    /* Overlay for XR status messages.  Hidden by default so it does not
+       obstruct the user's view once the app is running in VR.  The
+       `.hidden` class toggles `display: none`. */
     #overlay {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0,20,30,0.6);
+      background: rgba(0, 20, 30, 0.6);
       padding: 20px 30px;
       border-radius: 8px;
       border: 2px solid #1188bb;
@@ -44,20 +62,18 @@
     #overlay.hidden {
       display: none;
     }
-    #VRButton {
-      position: absolute !important;
-      left: 50% !important;
-      transform: translateX(-50%) !important;
-      bottom: 20px !important;
-      z-index: 100;
-    }
   </style>
 </head>
 <body>
-  <div id="overlay">
-    <span id="xr-message">Initializing WebXR…</span><br>
-    <small>Pinch your thumb and forefinger to interact with panels. Close your hand to grab the controls.</small>
+  <!-- Overlay shows XR initialisation and fallback messages.  It starts
+       hidden so it doesn’t show up as a translucent square in VR.  The
+       message has been updated to instruct the user to tap panels with
+       their index finger rather than pinching. -->
+  <div id="overlay" class="hidden">
+    <span id="xr-message">Initialising WebXR…</span><br>
+    <small>Tap panels with your index finger to interact. Close your hand to grab controls.</small>
   </div>
+  <!-- Main application script -->
   <script type="module" src="./scripts/main.js"></script>
 </body>
 </html>
