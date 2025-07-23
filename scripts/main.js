@@ -1,308 +1,173 @@
-/*
- * main.js (Refactored & Corrected)
- *
- * Entry point for the VR solar system experience. This version introduces:
- * - Creates a cockpit via createCockpit with a sleeker neon-themed layout.
- * - Integration with the single-panel UI system.
- * - Slightly boosted lighting to complement the glowing dashboard.
- * - A critical fix in the animation loop to prevent an endless loading screen.
- */
+// Entry point for the Solar System simulator. This file assembles all of
+// the subsystems: solar system, cockpit, UI, controls, probes and orrery.
+// It configures the renderer for VR, handles warping and updates the
+// simulation each frame.
 
 import * as THREE from 'three';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
+import { createSolarSystem, updateSolarSystem, solarBodies } from './solarSystem.js';
 import { createCockpit } from './cockpit.js';
 import { createUI } from './ui.js';
-import { setupControls } from './controls.js';
+import { createControls } from './controls.js';
+import { createOrrery, updateOrrery } from './orrery.js';
 import { launchProbe, updateProbes } from './probes.js';
-import { initAudio } from './audio.js';
-import { KM_PER_WORLD_UNIT, C_KMPS, MPH_TO_KMPS } from './constants.js';
-import { createOrrery } from './orrery.js';
 
-// Simulation timing: how many Earth days elapse per real second.
-const DAYS_PER_SECOND = 10.0;
+// Utility to convert seconds into Earth days. One day is 86 400 seconds.
+const SEC_TO_DAYS = 1 / 86400;
 
-/**
- * Converts a speed fraction (0–1 from the throttle/slider) to world units per second.
- * The mapping is exponential, ranging from 1 mph to the speed of light.
- * @param {number} f - The speed fraction from 0.0 to 1.0.
- * @returns {number} The corresponding speed in world units per second.
- */
-function speedFractionToWorldUnitsPerSec(f) {
-  const minKmps = MPH_TO_KMPS; // ~1 mph
-  const maxKmps = C_KMPS;     // Speed of light
-  // Exponential mapping from f [0,1] to speed [minKmps, maxKmps]
-  const kmps = minKmps * Math.pow(maxKmps / minKmps, f);
-  // Convert km/s to world units/s
-  return kmps / KM_PER_WORLD_UNIT;
+// Create basic Three.js scene and renderer. We set preserveDrawingBuffer so
+// that the overlay can be displayed before entering VR. You may want to
+// adjust antialias to suit your performance constraints.
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000010);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0, 5);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// Add some ambient and directional light to shade the bodies. Without
+// lighting the lambert materials on the planets will appear black.
+const ambient = new THREE.AmbientLight(0x888888);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+
+// Build the solar system and attach it to the scene.
+const { solarGroup, bodies } = createSolarSystem();
+scene.add(solarGroup);
+
+// Build cockpit and attach to scene. We position it relative to camera so
+// that the UI and controls are within reach in VR.
+const cockpit = createCockpit();
+cockpit.root.position.set(0, -0.5, -1.0);
+scene.add(cockpit.root);
+
+// Create the orrery and attach it to the cockpit. The orrery group is
+// positioned on the desk in front of the user. It does not interfere with
+// the solar system but provides a miniature overview.
+const orrery = createOrrery(bodies);
+orrery.group.position.set(0, -0.2, 0.5);
+cockpit.root.add(orrery.group);
+
+// Create the UI panels and attach them to the cockpit. Position them on
+// either side and below the main view. These positions may require
+// adjustment depending on your cockpit geometry.
+const ui = createUI(bodies, {
+  onWarp: warpToBody,
+  onToggleLabels: enabled => { showLabels = enabled; },
+  onToggleAutopilot: enabled => { autopilotEnabled = enabled; },
+  onNarrate: fact => narrateFact(fact)
+});
+ui.leftMesh.position.set(-0.9, 0.2, 0.4);
+ui.rightMesh.position.set(0.9, 0.2, 0.4);
+ui.bottomMesh.position.set(0, -0.5, 0.7);
+cockpit.root.add(ui.leftMesh);
+cockpit.root.add(ui.rightMesh);
+cockpit.root.add(ui.bottomMesh);
+
+// Create hand controls. These handle grabbing, UI interaction and firing.
+const controls = createControls(renderer, scene, camera, cockpit, ui, () => {
+  // Launch a probe from the cannon at the front of the cockpit. The
+  // position is taken relative to the solar system so that the probe does
+  // not inherit solarGroup offsets.
+  const muzzle = new THREE.Vector3(0, -0.3, 0.6);
+  cockpit.root.localToWorld(muzzle);
+  // Subtract the solarGroup’s world position to convert to solar coords
+  const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+  const launchPos = muzzle.clone().sub(solarOrigin);
+  const forward = new THREE.Vector3(0, 0, -1);
+  // Transform forward by camera orientation
+  const dir = forward.applyQuaternion(camera.quaternion);
+  launchProbe(launchPos, dir, scene);
+});
+
+// Flags controlling optional behaviours
+let showLabels = true;
+let autopilotEnabled = false;
+
+// Hide the overlay when the XR session starts. Some browsers leave the
+// overlay visible in VR until explicitly hidden. Conversely, show it when
+// exiting VR so the user can click the Enter VR button again.
+const overlay = document.getElementById('overlay');
+renderer.xr.addEventListener('sessionstart', () => {
+  if (overlay) overlay.style.display = 'none';
+});
+renderer.xr.addEventListener('sessionend', () => {
+  if (overlay) overlay.style.display = '';
+});
+
+// Warp to the given body index. We move the entire solarGroup so that the
+// selected body appears in front of the camera at a comfortable distance.
+function warpToBody(index) {
+  const target = bodies[index];
+  if (!target) return;
+  // Compute the world position of the target body
+  const targetWorld = new THREE.Vector3();
+  target.group.getWorldPosition(targetWorld);
+  // Compute offset from the target to the origin of the solarGroup
+  const origin = solarGroup.getWorldPosition(new THREE.Vector3());
+  const offset = targetWorld.clone().sub(origin);
+  // Move the solarGroup so that the target body moves to the origin
+  solarGroup.position.sub(offset);
+  // Optional: rotate the solarGroup so that the target is directly ahead
+  // of the viewer. For simplicity we leave orientation unchanged.
 }
 
-async function init() {
-  // === Renderer Setup ===
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    powerPreference: 'high-performance'
-  });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.xr.enabled = true;
-  renderer.shadowMap.enabled = true;
-  document.body.appendChild(renderer.domElement);
-
-  // === WebXR Session Initialization ===
-  // Some Meta Quest browser versions crash to a black screen if a WebXR session
-  // requests the `bounded-floor` reference space.  three.js's default VRButton
-  // automatically adds this feature so we intercept `requestSession` and strip
-  // it out to ensure stable behaviour.
-
-  if (navigator.xr && navigator.xr.requestSession) {
-    const originalRequestSession = navigator.xr.requestSession.bind(navigator.xr);
-    navigator.xr.requestSession = (mode, opts = {}) => {
-      if (opts.optionalFeatures) {
-        opts.optionalFeatures = opts.optionalFeatures.filter(f => f !== 'bounded-floor');
-      }
-      return originalRequestSession(mode, opts);
-    };
-  }
-
-  const sessionInit = { optionalFeatures: ['local-floor', 'hand-tracking'] };
-  document.body.appendChild(VRButton.createButton(renderer, sessionInit));
-
-  // Handle XR availability messages
-  const overlay = document.getElementById('overlay');
-  const xrMessage = document.getElementById('xr-message');
-  if ('xr' in navigator) {
-    navigator.xr.isSessionSupported('immersive-vr').then(supported => {
-      if (supported) {
-        overlay.classList.add('hidden');
-      } else {
-        xrMessage.textContent = 'VR NOT SUPPORTED';
-      }
-    }).catch(() => {
-      xrMessage.textContent = 'VR NOT ALLOWED';
-    });
+// Narrate a fun fact using the Web Speech API. If unavailable, logs to
+// console instead.
+function narrateFact(fact) {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(fact);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
   } else {
-    xrMessage.textContent = window.isSecureContext ? 'WEBXR NOT AVAILABLE' : 'WEBXR NEEDS HTTPS';
+    console.log('Narrate:', fact);
   }
-
-  // === Scene, Camera, and Lighting ===
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000005);
-
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 10000);
-  camera.position.set(0, 1.6, 0);
-
-  const ambientLight = new THREE.AmbientLight(0x404060, 0.7);
-  scene.add(ambientLight);
-
-  const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
-  sunLight.position.set(500, 500, 500);
-  sunLight.castShadow = true;
-  scene.add(sunLight);
-
-  // === Starfield ===
-  const starVertices = [];
-  for (let i = 0; i < 10000; i++) {
-    const x = THREE.MathUtils.randFloatSpread(4000);
-    const y = THREE.MathUtils.randFloatSpread(4000);
-    const z = THREE.MathUtils.randFloatSpread(4000);
-    starVertices.push(x, y, z);
-  }
-  const starGeometry = new THREE.BufferGeometry();
-  starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-  const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, sizeAttenuation: true });
-  const stars = new THREE.Points(starGeometry, starMaterial);
-  scene.add(stars);
-
-  // Additional line segments to show streaks when travelling fast
-  const streakPositions = new Float32Array(starVertices.length * 2);
-  const streakGeometry = new THREE.BufferGeometry();
-  streakGeometry.setAttribute('position', new THREE.BufferAttribute(streakPositions, 3));
-  const streakMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true });
-  const starStreaks = new THREE.LineSegments(streakGeometry, streakMaterial);
-  starStreaks.visible = false;
-  scene.add(starStreaks);
-
-  // === Solar System Creation ===
-  const { group: solarGroup, bodies } = await createSolarSystem(scene);
-  scene.add(solarGroup);
-
-  // === Cockpit Creation ===
-  const cockpit = createCockpit();
-  scene.add(cockpit.group);
-
-  // Miniature orrery displayed on the centre screen
-  const orrery = createOrrery(renderer);
-  cockpit.orreryMount.add(orrery.mesh);
-
-  // Add a point light to illuminate the controls.
-  const controlLight = new THREE.PointLight(0xaabbee, 0.8, 5);
-  controlLight.position.set(0, 2.0, -0.5);
-  cockpit.group.add(controlLight);
-
-  // === Audio System ===
-  const audio = await initAudio(camera, cockpit.orreryMount);
-
-  // === UI System ===
-  const ui = createUI(
-    cockpit.leftPanel,
-    cockpit.rightPanel,
-    cockpit.factsPanel,
-    (bodyIndex) => { // onWarpSelect
-      warpToBody(bodyIndex);
-      if (audio) audio.playWarp();
-    },
-    (newSpeedFraction) => { /* onSpeedChange is handled by the control system */ },
-    () => { // onLaunchProbe from UI button
-        const aimDirection = new THREE.Vector3();
-        cockpit.cannon.getWorldDirection(aimDirection);
-        const launchPosition = new THREE.Vector3();
-        cockpit.cannon.getWorldPosition(launchPosition);
-        launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
-        if (audio) audio.playBeep();
-    },
-    (enabled) => { autopilotEnabled = enabled; },
-    (visible) => { labelsVisible = visible; },
-    (fact) => { if (audio) audio.speak(fact); },
-    (fact) => { if (audio) audio.speak(fact); }
-  );
-
-  // === Control System ===
-  const fireProbe = () => {
-    const aimDirection = new THREE.Vector3();
-    cockpit.cannon.getWorldDirection(aimDirection);
-    const launchPosition = new THREE.Vector3();
-    cockpit.cannon.getWorldPosition(launchPosition);
-    launchProbe(launchPosition, aimDirection, ui.probeLaunchSpeed, ui.probeMass, scene);
-    if (audio) audio.playBeep();
-  };
-  const controls = setupControls(renderer, scene, cockpit, ui, fireProbe, orrery);
-
-  // === Simulation State ===
-  let lastFrameTime = performance.now();
-  let simulationTimeDays = 0;
-  let autopilotEnabled = false;
-  let labelsVisible = true;
-  let warpAnim = null;
-
-  function warpToBody(bodyIndex) {
-      const targetBody = bodies[bodyIndex];
-      updateSolarSystem(bodies, simulationTimeDays);
-      const bodyWorldPos = new THREE.Vector3();
-      targetBody.group.getWorldPosition(bodyWorldPos);
-      const offset = new THREE.Vector3(0, 0, -50);
-      const warpTargetPos = cockpit.group.localToWorld(offset);
-      const targetPos = new THREE.Vector3().subVectors(warpTargetPos, bodyWorldPos).add(solarGroup.position);
-      warpAnim = { start: solarGroup.position.clone(), end: targetPos, t: 0, duration: 2.0 };
-  }
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // === Animation Loop ===
-  renderer.setAnimationLoop(() => {
-    const now = performance.now();
-    const dt = (now - lastFrameTime) / 1000;
-    lastFrameTime = now;
-
-    simulationTimeDays += dt * DAYS_PER_SECOND * ui.timeScale;
-    updateSolarSystem(bodies, simulationTimeDays);
-
-    const travelSpeed = speedFractionToWorldUnitsPerSec(ui.speedFraction);
-    if (travelSpeed > 0) {
-      // Get the cockpit's forward direction in world space
-      const forward = new THREE.Vector3(0, 0, -1);
-      const worldQuaternion = new THREE.Quaternion();
-      // This is the corrected, standard way to get the world quaternion
-      cockpit.group.getWorldQuaternion(worldQuaternion);
-      forward.applyQuaternion(worldQuaternion);
-
-      // Calculate the displacement for this frame
-      const displacement = forward.multiplyScalar(travelSpeed * dt);
-
-      // Move the solar system *opposite* to the ship's travel to simulate motion
-      solarGroup.position.sub(displacement);
-
-      // Update star streaks based on speed
-      const speedFraction = ui.speedFraction;
-      const length = speedFraction * speedFraction * 50;
-      const posAttr = streakGeometry.attributes.position;
-      for (let i = 0; i < starVertices.length; i += 3) {
-        const sx = starVertices[i];
-        const sy = starVertices[i + 1];
-        const sz = starVertices[i + 2];
-        const idx = i * 2;
-        posAttr.array[idx] = sx;
-        posAttr.array[idx + 1] = sy;
-        posAttr.array[idx + 2] = sz;
-        posAttr.array[idx + 3] = sx - forward.x * length;
-        posAttr.array[idx + 4] = sy - forward.y * length;
-        posAttr.array[idx + 5] = sz - forward.z * length;
-      }
-      posAttr.needsUpdate = true;
-      starStreaks.visible = speedFraction > 0.5;
-    } else {
-      starStreaks.visible = false;
-    }
-
-    // Autopilot movement toward selected warp target
-    if (autopilotEnabled && ui.warpTargetIndex !== undefined) {
-      const targetBody = bodies[ui.warpTargetIndex];
-      const bodyPos = new THREE.Vector3();
-      targetBody.group.getWorldPosition(bodyPos);
-      const shipPos = new THREE.Vector3();
-      cockpit.group.getWorldPosition(shipPos);
-      const toTarget = bodyPos.sub(shipPos);
-      const distance = toTarget.length();
-      if (distance > 1) {
-        const direction = toTarget.normalize();
-        const autoSpeed = travelSpeed;
-        const move = Math.min(distance, autoSpeed * dt);
-        solarGroup.position.sub(direction.multiplyScalar(move));
-      }
-    }
-    
-    if (warpAnim) {
-      warpAnim.t += dt / warpAnim.duration;
-      const p = Math.min(warpAnim.t, 1);
-      const smooth = p * p * (3 - 2 * p);
-      solarGroup.position.lerpVectors(warpAnim.start, warpAnim.end, smooth);
-      if (p >= 1) warpAnim = null;
-    }
-
-    updateProbes(dt, bodies, solarGroup.position);
-    controls.update(dt);
-
-    const bodyPositions = bodies.map(b => {
-      const pos = new THREE.Vector3();
-      b.group.getWorldPosition(pos);
-      return pos;
-    });
-    orrery.update(bodyPositions);
-    bodies.forEach(b => {
-      if (b.group.userData.label) {
-        b.group.userData.label.quaternion.copy(camera.quaternion);
-        b.group.userData.label.visible = labelsVisible;
-      }
-    });
-    let closestBodyIndex = -1;
-    let minDistanceSq = Infinity;
-    const shipPos = new THREE.Vector3();
-    bodyPositions.forEach((pos, i) => {
-        const distSq = pos.distanceToSquared(shipPos);
-        if (distSq < minDistanceSq) {
-            minDistanceSq = distSq;
-            closestBodyIndex = i;
-        }
-    });
-
-    ui.update(bodyPositions, closestBodyIndex);
-    renderer.render(scene, camera);
-  });
 }
 
-init().catch(console.error);
+// Animation loop. Keeps track of elapsed time for orbital mechanics and
+// updates all subsystems.
+let lastTime = performance.now();
+renderer.setAnimationLoop(function () {
+  const now = performance.now();
+  const deltaSec = (now - lastTime) / 1000;
+  lastTime = now;
+  const deltaDays = deltaSec * SEC_TO_DAYS;
+
+  // Update solar system positions
+  updateSolarSystem(deltaDays);
+  // Update probes and remove any that collide with bodies
+  updateProbes(deltaSec, solarGroup, bodies, scene);
+  // Update the orrery to reflect current body positions and player location
+  const cameraPos = new THREE.Vector3();
+  camera.getWorldPosition(cameraPos);
+  updateOrrery(orrery, solarGroup, cameraPos);
+  // Update controls (hand tracking and UI interaction)
+  controls.update(deltaSec);
+  // Update cockpit control values based on current grabbing positions
+  for (let i = 0; i < 2; i++) {
+    const hand = renderer.xr.getHand(i);
+    const indexTip = hand && hand.joints && hand.joints['index-finger-tip'];
+    if (indexTip) {
+      const tipPos = new THREE.Vector3();
+      indexTip.getWorldPosition(tipPos);
+      cockpit.updateGrab(i, tipPos);
+    }
+  }
+  // If autopilot is enabled, automatically orient the spaceship toward the
+  // selected body (not implemented here).
+  if (autopilotEnabled) {
+    // TODO: implement autopilot steering by reading cockpit.joystickValue
+  }
+  renderer.render(scene, camera);
+});
+
+// Allow the user to enter VR with a button on the overlay
+document.getElementById('enter-vr').addEventListener('click', () => {
+  renderer.xr.requestSession('immersive-vr', { optionalFeatures: ['hand-tracking'] }).then(session => {
+    renderer.xr.setSession(session);
+  });
+});
