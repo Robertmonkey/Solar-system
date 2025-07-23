@@ -188,4 +188,87 @@ async function buildBody(bodyData) {
     const points = [];
     for (let i = 0; i <= 360; i++) {
       const M = (i / 360) * 2 * Math.PI;
-      const elements = { ...bodyData, M0: M, period: 1, i: bodyData.inclination, omega: bodyData.lonAscNode, w: a
+      const elements = { ...bodyData, M0: M, period: 1, i: bodyData.inclination, omega: bodyData.lonAscNode, w: bodyData.argPeri };
+      const pos = getOrbitalPosition(elements, 0);
+      points.push(pos);
+    }
+    const orbitGeom = new THREE.BufferGeometry().setFromPoints(points);
+    const orbitMat = new THREE.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.5 });
+    const orbitLine = new THREE.Line(orbitGeom, orbitMat);
+    group.add(orbitLine);
+  }
+
+  // Recursively build moons
+  if (bodyData.moons) {
+    for (const moonData of bodyData.moons) {
+      const moonObj = await buildBody(moonData);
+      group.add(moonObj);
+      bodyData.moonObjects = bodyData.moonObjects || [];
+      bodyData.moonObjects.push({ group: moonObj, data: moonData });
+    }
+  }
+
+  return group;
+}
+
+
+/**
+ * Build the entire solar system hierarchy.
+ * @param {THREE.Scene} scene - The main scene.
+ * @returns {Promise<object>} An object with the root group and a flat list of body objects.
+ */
+export async function createSolarSystem(scene) {
+  const rootGroup = new THREE.Group();
+  const bodies = [];
+
+  for (const bodyData of solarBodies) {
+    const bodyGroup = await buildBody(bodyData);
+    rootGroup.add(bodyGroup);
+    bodies.push({ group: bodyGroup, data: bodyData });
+  }
+
+  return { group: rootGroup, bodies };
+}
+
+/**
+ * Update the positions of all bodies in the system based on time.
+ * @param {Array<object>} bodies - The array of body objects.
+ * @param {number} t - The current simulation time in Earth days.
+ */
+export function updateSolarSystem(bodies, t) {
+  bodies.forEach(bodyObj => {
+    // Animate cloud rotation on Earth
+    if (bodyObj.data.name === 'Earth' && bodyObj.group.userData.clouds) {
+      bodyObj.group.userData.clouds.rotation.y += 0.0001;
+    }
+
+    // Update position of planets relative to the Sun (rootGroup)
+    if (bodyObj.data.a) { // If it has orbital parameters
+      // Map the data fields to the parameter names expected by getOrbitalPosition
+      const elements = {
+        ...bodyObj.data,
+        i: bodyObj.data.inclination,
+        omega: bodyObj.data.lonAscNode,
+        w: bodyObj.data.argPeri,
+        M0: bodyObj.data.meanAnomalyEpoch
+      };
+      const pos = getOrbitalPosition(elements, t);
+      bodyObj.group.position.copy(pos);
+    }
+
+    // Update moons relative to their parent planet
+    if (bodyObj.data.moonObjects) {
+      bodyObj.data.moonObjects.forEach(moonObj => {
+        const moonElements = {
+          ...moonObj.data,
+          i: moonObj.data.inclination,
+          omega: moonObj.data.lonAscNode,
+          w: moonObj.data.argPeri,
+          M0: moonObj.data.meanAnomalyEpoch
+        };
+        const pos = getOrbitalPosition(moonElements, t);
+        moonObj.group.position.copy(pos);
+      });
+    }
+  });
+}
