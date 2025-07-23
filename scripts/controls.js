@@ -1,25 +1,15 @@
 /*
- * controls.js (Updated)
+ * controls.js (Improved interaction)
  *
- * This module wires up the WebXR input sources so that users can grab
- * controls, point at UI elements and fire probes.  A number of fixes
- * have been made here:
+ * Sets up WebXR input for the Solar System VR experience.  This version
+ * makes a few notable changes to improve usability:
  *
- *   1. The cockpit scale was increased elsewhere, but the hands were still
- *      invisible because the high‑quality hand meshes weren’t loading.  We
- *      explicitly set the path on the XRHandModelFactory to point at the
- *      WebXR input profiles CDN and request the 'mesh' profile.  This
- *      loads the correct glTF hand models for both hands.  Without a
- *      path the factory falls back to spheres and may silently fail to
- *      fetch assets on some devices.
- *   2. The previous code attached interaction events to the hand group.
- *      However, WebXR emits select/squeeze events on the controller
- *      objects returned from renderer.xr.getController().  Event
- *      listeners have been moved onto the controllers accordingly.
- *   3. Touch detection now uses the joints exposed by the hand group
- *      instead of attempting to read joints from the hand model.  The
- *      hand model is purely visual; the underlying hand group is what
- *      exposes joint poses.
+ *   • The grab radius has been increased so that reaching out to the
+ *     controls is easier and does not require precision extension.
+ *   • Touch interactions now trigger UI actions immediately upon contact
+ *     with the dashboard panels and orrery planets; users no longer need
+ *     to pinch (trigger) first.  This makes the panels behave like
+ *     touchscreens that respond to your index finger.
  */
 
 import * as THREE from 'three';
@@ -27,17 +17,10 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 
 // Maximum distance from a controller to highlight or grab an object.
-//
-// The cockpit geometry was scaled up by ~20 % to give users more room.  As a
-// consequence the physical distance between the user’s hand and the controls
-// increased, and the original grab radius (0.25 m) made it impossible to
-// hover over or grab the throttle, joystick or fire button.  Increasing
-// the grab radius slightly restores the ability to highlight and pick up
-// these controls without requiring uncomfortable arm extension.  A value of
-// 0.35 was chosen experimentally to balance reach with avoiding accidental
-// grabs when merely reaching past a control.
-// Slightly increase the grab radius so the controls are easier to reach
-const GRAB_DISTANCE = 0.55;
+// Increased to 0.8 metres so that hovering over the controls feels
+// natural even when the cockpit is scaled up.  A larger radius helps
+// compensate for small tracking errors inherent in hand tracking.
+const GRAB_DISTANCE = 0.8;
 
 /**
  * Set up WebXR input for the scene.
@@ -52,22 +35,13 @@ const GRAB_DISTANCE = 0.55;
 export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
   const controllerModelFactory = new XRControllerModelFactory();
   const handModelFactory = new XRHandModelFactory();
-  // Point the hand model factory at the WebXR input profiles CDN.  Use the
-  // default version (@1.0) rather than @1.0.0; some versions of Three.js
-  // expect this exact path.  Without setting a path the loader falls back
-  // to the same default, but we specify it here for clarity.
   handModelFactory.setPath(
     'https://cdn.jsdelivr.net/npm/@webxr-input-profiles/assets@1.0/dist/profiles/generic-hand/'
   );
 
   // Array storing per‑hand state
   const controllers = [];
-
   for (let i = 0; i < 2; i++) {
-    // WebXR returns three distinct objects for each hand: a controller for
-    // events, a grip for the physical controller model and a hand group for
-    // articulated joints.  We add each to the scene explicitly rather than
-    // passing them together so that the scene graph is clear.
     const controller = renderer.xr.getController(i);
     const grip = renderer.xr.getControllerGrip(i);
     const hand = renderer.xr.getHand(i);
@@ -75,19 +49,12 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
     scene.add(grip);
     scene.add(hand);
 
-    // Visualize the physical controller grip (for non‑hand controllers)
+    // Visualise physical controller grip
     grip.add(controllerModelFactory.createControllerModel(grip));
-
-    // Load the high‑fidelity GLTF hand mesh.  Using the 'mesh' profile
-    // creates a fully rigged hand model with skinned meshes for each
-    // finger.  This matches the behaviour of the earlier proof‑of‑concept
-    // code and relies on the assets hosted on the WebXR input profiles CDN.
     const handModel = handModelFactory.createHandModel(hand, 'mesh');
     hand.add(handModel);
 
-    // Invisible sphere used for precise finger tip collision testing.  This
-    // sphere follows the index fingertip each frame and allows us to test
-    // intersections against other objects (e.g. the dashboard panel).
+    // Invisible sphere for fingertip collision
     const touchSphere = new THREE.Mesh(
       new THREE.SphereGeometry(0.015),
       new THREE.MeshBasicMaterial({ visible: false })
@@ -109,16 +76,15 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
     };
     controllers.push(controllerData);
 
-    // Hook up interaction events.  Select events correspond to trigger
-    // presses; squeeze events correspond to grip presses.
+    // Hook up interaction events.  Select events correspond to trigger presses;
+    // squeeze events correspond to grip presses (closing the hand).
     controller.addEventListener('selectstart', () => onSelectStart(controllerData));
     controller.addEventListener('selectend', () => onSelectEnd(controllerData));
     controller.addEventListener('squeezestart', () => onGrabStart(controllerData));
     controller.addEventListener('squeezeend', () => onGrabEnd(controllerData));
   }
 
-  // A list of objects that can be grabbed.  Each entry has a reference to the
-  // Three.js object and a name used to decide how to handle the grab.
+  // Objects that can be grabbed with your hand
   const grabInteractables = [
     { object: cockpit.throttle, name: 'throttle' },
     { object: cockpit.joystick, name: 'joystick' },
@@ -129,19 +95,14 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
   function onSelectStart(data) {
     data.isSelecting = true;
   }
-
   function onSelectEnd(data) {
     data.isSelecting = false;
   }
-
   function onGrabStart(data) {
     if (data.hoveredObject) {
       const type = data.hoveredObject.name;
       const controllerPos = new THREE.Vector3();
-      // Use the hand group to get a stable world position for the palm.  The
-      // controller object has no position when hand tracking is active.
       data.hand.getWorldPosition(controllerPos);
-
       if (type === 'throttle') {
         data.grabbedObject = {
           type: 'throttle',
@@ -158,15 +119,13 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
           initialObjectRotation: cockpit.joystickPivot.rotation.clone(),
         };
       } else if (type === 'fireButton') {
-        // Immediately trigger the fire probe callback when the fire button is
-        // pressed.  This behaviour matches the UI’s expected semantics.
+        // Immediately trigger the fire probe callback when the fire button is pressed
         fireProbe();
         data.isSelecting = false;
         return;
       }
     }
   }
-
   function onGrabEnd(data) {
     if (data.grabbedObject) {
       if (data.grabbedObject.type === 'joystick') {
@@ -177,38 +136,25 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
   }
 
   /**
-   * Highlights the nearest interactable within GRAB_DISTANCE of the palm.  If
-   * the palm moves closer to a different object the highlight is switched.
+   * Highlights the nearest interactable within GRAB_DISTANCE of the palm.
    */
   function handleHighlighting(data) {
-    // Determine which interactable, if any, the palm is closest to.  We use the
-    // distance from the hand to the nearest point on each object's bounding
-    // box rather than the object's origin.  Many controls (e.g. the joystick
-    // and throttle) are groups whose origin sits between components; using
-    // bounding boxes yields a more accurate proximity test.  A small bias is
-    // applied to throttle and joystick to avoid unintentional grabs when
-    // reaching for other controls.
     let closestHover = null;
     let minDistance = GRAB_DISTANCE;
     const handPos = new THREE.Vector3();
     data.hand.getWorldPosition(handPos);
     grabInteractables.forEach((item) => {
-      // Compute bounding box in world space
       const box = new THREE.Box3().setFromObject(item.object);
-      // Find the closest point on the box to the hand position
       const closestPoint = new THREE.Vector3();
       box.clampPoint(handPos, closestPoint);
       const distance = handPos.distanceTo(closestPoint);
-      // Slightly bias against the joystick and throttle so you need to get a
-      // little closer to grab them.  This prevents accidentally grabbing
-      // them when you intend to press the fire button.
+      // Slightly bias against joystick and throttle
       const verticalBias = item.name === 'joystick' || item.name === 'throttle' ? 0.1 : 0;
       if (distance < minDistance + verticalBias) {
         minDistance = distance;
         closestHover = item;
       }
     });
-    // If we've switched which object is being hovered, update emissive state
     if (data.hoveredObject !== closestHover) {
       if (data.hoveredObject) {
         setObjectEmissive(data.hoveredObject.object, 0);
@@ -222,8 +168,7 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
 
   /**
    * Temporarily changes the emissive colour and intensity of a mesh and all
-   * nested meshes.  When intensity is 0 the original emissive colour is
-   * restored.
+   * nested meshes.  When intensity is 0 the original emissive colour is restored.
    */
   function setObjectEmissive(object, intensity) {
     object.traverse((child) => {
@@ -244,37 +189,32 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
   /**
    * Called every frame to update the fingertip collider and dispatch UI
    * events when the user taps on the dashboard.  The index finger tip is
-   * obtained from the hand’s joints rather than from the hand model.  This
-   * ensures reliable positions even if the hand mesh hasn’t finished
-   * loading or isn’t visible.
+   * obtained from the hand’s joints rather than from the hand model.
    */
   function handleTouch(data) {
-    // The hand group exposes a map of joints when hand tracking is active.
     const fingerTip = data?.hand?.joints?.['index-finger-tip'];
     if (!fingerTip) return;
-    // Compute the world position of the fingertip.
     const tipPos = new THREE.Vector3();
     fingerTip.getWorldPosition(tipPos);
     data.touchSphere.position.copy(tipPos);
 
-    // --- Fire button ---
+    // Fire button detection: trigger probe launch on touch
     const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
     if (fireButtonBox.containsPoint(tipPos)) {
-      if (data.isSelecting || !data.touchingFire) {
-        fireProbe();
-        data.isSelecting = false;
-      }
+      // Call fireProbe regardless of pinch; treat as a tap
+      fireProbe();
+      data.isSelecting = false;
       data.touchingFire = true;
       return;
     } else {
       data.touchingFire = false;
     }
 
-    // --- Dashboard panels ---
+    // Dashboard panels (left, right, facts)
     const panels = [
       { mesh: cockpit.leftPanel, name: 'left' },
       { mesh: cockpit.rightPanel, name: 'right' },
-      { mesh: cockpit.factsPanel, name: 'facts' }
+      { mesh: cockpit.factsPanel, name: 'facts' },
     ];
     let touchingPanel = null;
     for (const panel of panels) {
@@ -286,21 +226,18 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
       data.hand.getWorldPosition(handPos);
       const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
       tempRay.set(tipPos, dir);
-
-      // Check for intersections with the orrery planets first
+      // Check orrery first
       if (orrery) {
         const hits = tempRay.intersectObjects(orrery.planetMeshes);
         if (hits.length > 0) {
           const idx = orrery.planetMeshes.indexOf(hits[0].object);
-          if (data.isSelecting || data.lastPanel !== 'orrery-' + idx) {
-            ui.selectWarpTarget(idx);
-            data.lastPanel = 'orrery-' + idx;
-          }
+          // Always select warp target on touch; no need to pinch first
+          ui.selectWarpTarget(idx);
+          data.lastPanel = 'orrery-' + idx;
           data.isSelecting = false;
           return;
         }
       }
-
       // Otherwise fall back to the 2D dashboard UI for that panel
       const hits = tempRay.intersectObject(panel.mesh);
       if (hits.length > 0) {
@@ -310,13 +247,12 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
         break;
       }
     }
-
     if (!touchingPanel) data.lastPanel = null;
   }
 
   /**
-   * Update function called every frame from the main animation loop.
-   * Handles grabbing mechanics, highlighting and UI touch.
+   * Update function called every frame from the main animation loop.  Handles
+   * grabbing mechanics, highlighting and UI touch.
    *
    * @param {number} dt Delta time in seconds
    */
@@ -355,16 +291,11 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
         handleTouch(data);
       }
     });
-
-    // If neither controller is grabbing the throttle then smoothly follow the
-    // UI speed fraction back to its rest position.  This interpolation
-    // provides a spring‑like behaviour when releasing the throttle.
+    // Smoothly reset throttle and joystick when released
     if (!controllers.some((c) => c.grabbedObject?.type === 'throttle')) {
       const maxAngle = Math.PI / 3;
       cockpit.throttlePivot.rotation.x = -ui.speedFraction * maxAngle;
     }
-    // Likewise if no joystick is being grabbed, ease the joystick back to
-    // neutral.
     if (!controllers.some((c) => c.grabbedObject?.type === 'joystick')) {
       cockpit.joystickPivot.rotation.x = cockpit.joystickPivot.rotation.x * (1 - 10 * dt);
       cockpit.joystickPivot.rotation.z = cockpit.joystickPivot.rotation.z * (1 - 10 * dt);
