@@ -48,9 +48,15 @@ export function createOrrery(renderer) {
         planetMeshes[i].position.set(pos.x * scale, pos.y * scale, pos.z * scale);
       }
     });
+
+    const xrWasEnabled = renderer.xr.enabled;
+    renderer.xr.enabled = false;
+
     renderer.setRenderTarget(renderTarget);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
+
+    renderer.xr.enabled = xrWasEnabled;
   }
 
   return { mesh, update, planetMeshes };
