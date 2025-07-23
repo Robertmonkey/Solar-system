@@ -42,7 +42,8 @@ async function init() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputEncoding = THREE.sRGBEncoding;
+  // CORRECTED: Use the modern 'outputColorSpace' property instead of 'outputEncoding'
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.xr.enabled = true;
   renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
