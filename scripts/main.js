@@ -48,16 +48,21 @@ async function init() {
   document.body.appendChild(renderer.domElement);
 
   // === WebXR Session Initialization ===
-  // Some Meta Quest browser versions crash to a black screen if a WebXR session
-  // requests the `bounded-floor` reference space.  three.js's default VRButton
-  // automatically adds this feature so we intercept `requestSession` and strip
-  // it out to ensure stable behaviour.
+  // Some versions of the Meta Quest browser render a completely black screen if
+  // a WebXR session requests the `bounded-floor` reference space. three.js's
+  // built‑in `VRButton` adds both `bounded-floor` and `layers` to every session
+  // request by default. Intercept `requestSession` so these problematic features
+  // are stripped from both the optional and required feature lists.
 
   if (navigator.xr && navigator.xr.requestSession) {
     const originalRequestSession = navigator.xr.requestSession.bind(navigator.xr);
     navigator.xr.requestSession = (mode, opts = {}) => {
+      const strip = f => f !== 'bounded-floor' && f !== 'layers';
       if (opts.optionalFeatures) {
-        opts.optionalFeatures = opts.optionalFeatures.filter(f => f !== 'bounded-floor');
+        opts.optionalFeatures = opts.optionalFeatures.filter(strip);
+      }
+      if (opts.requiredFeatures) {
+        opts.requiredFeatures = opts.requiredFeatures.filter(strip);
       }
       return originalRequestSession(mode, opts);
     };
