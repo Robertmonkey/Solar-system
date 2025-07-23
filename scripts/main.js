@@ -39,10 +39,12 @@ function speedFractionToWorldUnitsPerSec(f) {
 
 async function init() {
   // === Renderer Setup ===
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: 'high-performance'
+  });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  // CORRECTED: Use the modern 'outputColorSpace' property instead of 'outputEncoding'
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.xr.enabled = true;
   renderer.shadowMap.enabled = true;
