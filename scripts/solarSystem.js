@@ -48,7 +48,8 @@ function createLabelSprite(text) {
   context.shadowBlur = 8;
   context.fillText(text, canvas.width / 2, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
-  texture.encoding = THREE.sRGBEncoding;
+  // CORRECTED: Use the modern 'colorSpace' property instead of 'encoding'
+  texture.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
   const sprite = new THREE.Sprite(material);
   const scaleFactor = 0.05;
