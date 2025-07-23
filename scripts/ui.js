@@ -27,7 +27,8 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
   const leftCanvas = makeCanvas();
   const leftCtx = leftCanvas.getContext('2d');
   const leftTex = new THREE.CanvasTexture(leftCanvas);
-  leftTex.encoding = THREE.sRGBEncoding;
+  // CORRECTED: Use the modern 'colorSpace' property instead of 'encoding'
+  leftTex.colorSpace = THREE.SRGBColorSpace;
   leftTex.anisotropy = 4;
   leftPanel.material = new THREE.MeshBasicMaterial({
     map: leftTex,
@@ -39,7 +40,8 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
   const rightCanvas = makeCanvas();
   const rightCtx = rightCanvas.getContext('2d');
   const rightTex = new THREE.CanvasTexture(rightCanvas);
-  rightTex.encoding = THREE.sRGBEncoding;
+  // CORRECTED: Use the modern 'colorSpace' property instead of 'encoding'
+  rightTex.colorSpace = THREE.SRGBColorSpace;
   rightTex.anisotropy = 4;
   rightPanel.material = new THREE.MeshBasicMaterial({
     map: rightTex,
@@ -187,8 +189,8 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
 
   function handlePointer(panel, uv) {
     state.needsRedraw = true;
-    const x = uv.u * size.width;
-    const y = (1 - uv.v) * size.height;
+    const x = uv.x * size.width;
+    const y = (1 - uv.y) * size.height;
 
     if (panel === 'left') {
       if (x > 20 && x < 230) {
