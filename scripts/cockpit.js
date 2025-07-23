@@ -19,7 +19,8 @@ import * as THREE from 'three';
 export function createLecternCockpit() {
   const cockpitGroup = new THREE.Group();
   cockpitGroup.name = 'Cockpit';
-  cockpitGroup.position.set(0, 0, 0);
+  // Lower the entire console so the panels sit around waist height
+  cockpitGroup.position.set(0, -0.6, 0);
 
   const BASE_COLOR = 0x0e0e12;
   const ACCENT_COLOR = 0x1188bb;

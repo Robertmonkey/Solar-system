@@ -43,11 +43,15 @@ export function createOrrery(renderer) {
   // overflowing the screen.
   const root = new THREE.Group();
   scene.add(root);
+  // Hidden group used only for pointer interaction in the main scene.
+  const pickRoot = new THREE.Group();
+  pickRoot.visible = false;
 
   // Create a small sphere for each solar body.  The sun is drawn larger
   // (radius 0.4) while all other planets are drawn with a much smaller
   // radius.  Colours default to white when no colour is specified.
   const planetMeshes = [];
+  const pickMeshes = [];
   solarBodies.forEach((body, i) => {
     const radius = i === 0 ? 0.4 : 0.1;
     const color = new THREE.Color(body.color || 0xffffff);
@@ -57,6 +61,11 @@ export function createOrrery(renderer) {
     );
     root.add(mesh);
     planetMeshes.push(mesh);
+
+    // Duplicate invisible spheres for hit testing in the main scene
+    const pickMesh = mesh.clone();
+    pickRoot.add(pickMesh);
+    pickMeshes.push(pickMesh);
   });
 
   // Use a separate renderer for the orrery.  The off‑screen renderer
@@ -78,10 +87,17 @@ export function createOrrery(renderer) {
   // The plane is rotated slightly downward and centred on the dashboard.
   const planeGeom = new THREE.PlaneGeometry(0.6, 0.6);
   const planeMat = new THREE.MeshBasicMaterial({ map: renderTarget.texture, side: THREE.DoubleSide });
-  const mesh = new THREE.Mesh(planeGeom, planeMat);
-  mesh.name = 'OrreryScreen';
-  mesh.position.set(0, 1.5, -0.29);
-  mesh.rotation.x = -0.3;
+  const screen = new THREE.Mesh(planeGeom, planeMat);
+  screen.name = 'OrreryScreen';
+
+  // Container that holds the visible screen and the invisible pick meshes.
+  const mesh = new THREE.Group();
+  mesh.add(screen);
+  mesh.add(pickRoot);
+  // The parent (orrery mount) controls final placement, so keep local
+  // transforms at the origin.
+  mesh.position.set(0, 0, 0);
+  mesh.rotation.set(0, 0, 0);
 
   /**
    * Update the positions of the planets and render the orrery.  The
@@ -99,9 +115,15 @@ export function createOrrery(renderer) {
     const scale = 2.0 / maxDist;
     bodyPositions.forEach((pos, i) => {
       if (planetMeshes[i]) {
-        planetMeshes[i].position.set(pos.x * scale, pos.y * scale, pos.z * scale);
+        const scaled = new THREE.Vector3(pos.x * scale, pos.y * scale, pos.z * scale);
+        planetMeshes[i].position.copy(scaled);
+        // Mirror positions to the invisible pick meshes for interaction
+        if (pickMeshes[i]) pickMeshes[i].position.copy(scaled);
       }
     });
+
+
+
     // Render the orrery into its texture.  Because the off‑screen renderer
     // never has XR enabled, there is no need to toggle `xr.enabled` here.
     offscreenRenderer.setRenderTarget(renderTarget);
@@ -109,5 +131,5 @@ export function createOrrery(renderer) {
     offscreenRenderer.setRenderTarget(null);
   }
 
-  return { mesh, update, planetMeshes };
+  return { mesh, update, planetMeshes: pickMeshes };
 }

@@ -36,7 +36,8 @@ import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 // these controls without requiring uncomfortable arm extension.  A value of
 // 0.35 was chosen experimentally to balance reach with avoiding accidental
 // grabs when merely reaching past a control.
-const GRAB_DISTANCE = 0.35;
+// Slightly increase the grab radius so the controls are easier to reach
+const GRAB_DISTANCE = 0.45;
 
 /**
  * Set up WebXR input for the scene.
@@ -103,6 +104,8 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
       isSelecting: false,
       grabbedObject: null,
       hoveredObject: null,
+      lastPanel: null,
+      touchingFire: false,
     };
     controllers.push(controllerData);
 
@@ -254,50 +257,62 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
     fingerTip.getWorldPosition(tipPos);
     data.touchSphere.position.copy(tipPos);
 
-    if (data.isSelecting) {
-      // If the user is holding the trigger while touching the dashboard we
-      // first check for the fire button.  Firing is triggered when the
-      // fingertip intersects the fire button bounding box.
-      const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
-      if (fireButtonBox.containsPoint(tipPos)) {
+    // --- Fire button ---
+    const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
+    if (fireButtonBox.containsPoint(tipPos)) {
+      if (data.isSelecting || !data.touchingFire) {
         fireProbe();
         data.isSelecting = false;
-        return;
       }
-      // Otherwise test against the dashboard panels for UI interactions.
-      const panels = [
-        { mesh: cockpit.leftPanel, name: 'left' },
-        { mesh: cockpit.rightPanel, name: 'right' }
-      ];
-      for (const panel of panels) {
-        const box = new THREE.Box3().setFromObject(panel.mesh);
-        if (!box.containsPoint(tipPos)) continue;
-        const tempRay = new THREE.Raycaster();
-        const handPos = new THREE.Vector3();
-        data.hand.getWorldPosition(handPos);
-        const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
-        tempRay.set(tipPos, dir);
+      data.touchingFire = true;
+      return;
+    } else {
+      data.touchingFire = false;
+    }
 
-        // Check for intersections with the orrery planets first
-        if (orrery) {
-          const hits = tempRay.intersectObjects(orrery.planetMeshes);
-          if (hits.length > 0) {
-            const idx = orrery.planetMeshes.indexOf(hits[0].object);
-            ui.selectWarpTarget(idx);
-            data.isSelecting = false;
-            return;
-          }
-        }
+    // --- Dashboard panels ---
+    const panels = [
+      { mesh: cockpit.leftPanel, name: 'left' },
+      { mesh: cockpit.rightPanel, name: 'right' }
+    ];
+    let touchingPanel = null;
+    for (const panel of panels) {
+      const box = new THREE.Box3().setFromObject(panel.mesh);
+      if (!box.containsPoint(tipPos)) continue;
+      touchingPanel = panel.name;
+      const tempRay = new THREE.Raycaster();
+      const handPos = new THREE.Vector3();
+      data.hand.getWorldPosition(handPos);
+      const dir = new THREE.Vector3().subVectors(tipPos, handPos).normalize();
+      tempRay.set(tipPos, dir);
 
-        // Otherwise fall back to the 2D dashboard UI for that panel
-        const hits = tempRay.intersectObject(panel.mesh);
+      // Check for intersections with the orrery planets first
+      if (orrery) {
+        const hits = tempRay.intersectObjects(orrery.planetMeshes);
         if (hits.length > 0) {
-          ui.handlePointer(panel.name, hits[0].uv);
+          const idx = orrery.planetMeshes.indexOf(hits[0].object);
+          if (data.isSelecting || data.lastPanel !== 'orrery-' + idx) {
+            ui.selectWarpTarget(idx);
+            data.lastPanel = 'orrery-' + idx;
+          }
           data.isSelecting = false;
-          break;
+          return;
         }
+      }
+
+      // Otherwise fall back to the 2D dashboard UI for that panel
+      const hits = tempRay.intersectObject(panel.mesh);
+      if (hits.length > 0) {
+        if (data.isSelecting || data.lastPanel !== panel.name) {
+          ui.handlePointer(panel.name, hits[0].uv);
+          data.lastPanel = panel.name;
+          data.isSelecting = false;
+        }
+        break;
       }
     }
+
+    if (!touchingPanel) data.lastPanel = null;
   }
 
   /**
