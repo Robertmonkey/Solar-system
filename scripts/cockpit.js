@@ -22,7 +22,10 @@ export function createLecternCockpit() {
   // Lower the entire console so the panels sit around waist height
   cockpitGroup.position.set(0, -0.6, 0);
 
-  const BASE_COLOR = 0x0e0e12;
+  // The previous near-black material made the lectern almost invisible under
+  // typical lighting conditions.  Brighten it slightly so surface details are
+  // discernible even without intense lighting.
+  const BASE_COLOR = 0x333344;
   const ACCENT_COLOR = 0x1188bb;
   const GLOW_COLOR = 0x2299ee;
 
@@ -95,12 +98,16 @@ export function createLecternCockpit() {
 
   const leftPanel = createPanel('LeftPanel', -0.8);
   const rightPanel = createPanel('RightPanel', 0.8);
+  // Extra panel dedicated to displaying fun facts and body statistics.
+  const factsPanel = createPanel('FactsPanel', 0);
+  factsPanel.position.y = 0.9; // sit below the orrery
 
-  // Central orrery screen
-  const orreryGeom = new THREE.PlaneGeometry(0.6, 0.6);
-  const orreryMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
-  const orreryMount = new THREE.Mesh(orreryGeom, orreryMat);
-  orreryMount.name = 'OrreryScreen';
+  // Central orrery screen mount.  This used to be a black plane mesh which
+  // ended up perfectly overlapping the actual orrery screen and thus made the
+  // miniature solar system invisible.  Replaced with a plain Group so only the
+  // rendered texture is visible.
+  const orreryMount = new THREE.Group();
+  orreryMount.name = 'OrreryMount';
   orreryMount.position.set(0, 1.5, -0.32);
   orreryMount.rotation.x = -0.3;
   cockpitGroup.add(orreryMount);
@@ -194,6 +201,7 @@ export function createLecternCockpit() {
     group: cockpitGroup,
     leftPanel,
     rightPanel,
+    factsPanel,
     orreryMount,
     throttle: throttleGroup,
     joystick: joystickGroup,

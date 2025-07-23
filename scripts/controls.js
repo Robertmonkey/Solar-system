@@ -37,7 +37,7 @@ import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 // 0.35 was chosen experimentally to balance reach with avoiding accidental
 // grabs when merely reaching past a control.
 // Slightly increase the grab radius so the controls are easier to reach
-const GRAB_DISTANCE = 0.45;
+const GRAB_DISTANCE = 0.55;
 
 /**
  * Set up WebXR input for the scene.
@@ -273,7 +273,8 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
     // --- Dashboard panels ---
     const panels = [
       { mesh: cockpit.leftPanel, name: 'left' },
-      { mesh: cockpit.rightPanel, name: 'right' }
+      { mesh: cockpit.rightPanel, name: 'right' },
+      { mesh: cockpit.factsPanel, name: 'facts' }
     ];
     let touchingPanel = null;
     for (const panel of panels) {
@@ -303,11 +304,9 @@ export function setupControls(renderer, scene, cockpit, ui, fireProbe, orrery) {
       // Otherwise fall back to the 2D dashboard UI for that panel
       const hits = tempRay.intersectObject(panel.mesh);
       if (hits.length > 0) {
-        if (data.isSelecting || data.lastPanel !== panel.name) {
-          ui.handlePointer(panel.name, hits[0].uv);
-          data.lastPanel = panel.name;
-          data.isSelecting = false;
-        }
+        ui.handlePointer(panel.name, hits[0].uv);
+        data.lastPanel = panel.name;
+        data.isSelecting = false;
         break;
       }
     }

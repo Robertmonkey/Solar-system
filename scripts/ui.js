@@ -14,7 +14,11 @@ import { C_KMPS, MPH_TO_KMPS } from './constants.js';
 const bgImage = new Image();
 bgImage.src = './textures/ui.png';
 
-export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onLaunchProbe, onToggleAutopilot, onToggleLabels, onFunFact) {
+// The UI now spans three panels: left (navigation), right (ship systems) and a
+// new facts panel dedicated to trivia and planetary statistics.
+export function createUI(leftPanel, rightPanel, factsPanel,
+  onWarpSelect, onSpeedChange, onLaunchProbe,
+  onToggleAutopilot, onToggleLabels, onFunFact, onNarrate) {
   const size = { width: 512, height: 512 };
 
   function makeCanvas() {
@@ -43,6 +47,18 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
   rightTex.anisotropy = 4;
   rightPanel.material = new THREE.MeshBasicMaterial({
     map: rightTex,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+
+  const factsCanvas = makeCanvas();
+  const factsCtx = factsCanvas.getContext('2d');
+  const factsTex = new THREE.CanvasTexture(factsCanvas);
+  factsTex.colorSpace = THREE.SRGBColorSpace;
+  factsTex.anisotropy = 4;
+  factsPanel.material = new THREE.MeshBasicMaterial({
+    map: factsTex,
     transparent: true,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
@@ -85,33 +101,17 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
     drawBg(leftCtx);
     const x0 = 30;
     text(leftCtx, 'WARP TARGET', x0, 40, 22, '#ffffff', 'bold');
-    warpTargets.forEach((t, i) => {
-      const y = 80 + i * 24;
+    const lineHeight = 20;
+    const maxItems = Math.floor((size.height - 80) / lineHeight) - 2;
+    warpTargets.slice(0, maxItems).forEach((t, i) => {
+      const y = 80 + i * lineHeight;
       if (i === state.warpTargetIndex) {
         leftCtx.fillStyle = 'rgba(100,150,255,0.5)';
-        leftCtx.fillRect(x0 - 10, y - 18, 200, 24);
+        leftCtx.fillRect(x0 - 10, y - 16, 200, lineHeight);
       }
-      text(leftCtx, t.name, x0, y, 16, i === state.warpTargetIndex ? '#ffffff' : '#bbddff');
+      text(leftCtx, t.name, x0, y, 14, i === state.warpTargetIndex ? '#ffffff' : '#bbddff');
     });
 
-    const body = solarBodies[state.infoBodyIndex] || solarBodies[0];
-    const fact = body.funFacts ? body.funFacts[state.funFactIndex % body.funFacts.length] : 'No data.';
-    leftCtx.fillStyle = '#cccccc';
-    leftCtx.font = '14px Orbitron';
-    let line = '', y = 300;
-    const words = fact.split(' ');
-    for (const w of words) {
-      const test = line + w + ' ';
-      if (leftCtx.measureText(test).width > 440 && line) {
-        leftCtx.fillText(line, x0, y);
-        line = w + ' ';
-        y += 20;
-      } else {
-        line = test;
-      }
-    }
-    leftCtx.fillText(line, x0, y);
-    text(leftCtx, 'Touch to cycle facts', x0, size.height - 20, 12, '#888888');
     leftTex.needsUpdate = true;
   }
 
@@ -156,7 +156,53 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
     rightCtx.fillRect(x0, 410, 120, 24);
     text(rightCtx, state.labels ? 'ON' : 'OFF', x0 + 10, 428, 16, '#ffffff');
 
+    text(rightCtx, 'LAUNCH PROBE', x0, 460, 16);
+    rightCtx.fillStyle = '#333344';
+    rightCtx.fillRect(x0, 480, 160, 24);
+    text(rightCtx, 'FIRE', x0 + 10, 498, 16, '#ffffff');
+
     rightTex.needsUpdate = true;
+  }
+
+  function drawFacts() {
+    drawBg(factsCtx);
+    const body = solarBodies[state.infoBodyIndex] || solarBodies[0];
+    const x0 = 30;
+    text(factsCtx, body.name.toUpperCase(), x0, 40, 22, '#ffffff', 'bold');
+
+    // Body representation
+    if (body.color) {
+      factsCtx.fillStyle = '#' + body.color.toString(16).padStart(6, '0');
+      factsCtx.beginPath();
+      factsCtx.arc(x0 + 40, 100, 30, 0, Math.PI * 2);
+      factsCtx.fill();
+    }
+
+    text(factsCtx, `RADIUS: ${body.radius} km`, x0, 150, 16);
+    if (body.mass) text(factsCtx, `MASS: ${body.mass.toExponential(2)} kg`, x0, 176, 16);
+
+    const fact = body.funFacts ? body.funFacts[state.funFactIndex % body.funFacts.length] : 'No data.';
+    factsCtx.fillStyle = '#cccccc';
+    factsCtx.font = '14px Orbitron';
+    let line = '', y = 220;
+    const words = fact.split(' ');
+    for (const w of words) {
+      const test = line + w + ' ';
+      if (factsCtx.measureText(test).width > 440 && line) {
+        factsCtx.fillText(line, x0, y);
+        line = w + ' ';
+        y += 20;
+      } else {
+        line = test;
+      }
+    }
+    factsCtx.fillText(line, x0, y);
+
+    factsCtx.fillStyle = '#333344';
+    factsCtx.fillRect(x0, size.height - 60, 160, 30);
+    text(factsCtx, 'NARRATE', x0 + 10, size.height - 40, 16, '#ffffff');
+
+    factsTex.needsUpdate = true;
   }
 
   function speedToStr(f) {
@@ -181,6 +227,7 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
     if (state.needsRedraw) {
       drawLeft(bodyPositions);
       drawRight();
+      drawFacts();
       state.needsRedraw = false;
     }
   }
@@ -192,21 +239,12 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
 
     if (panel === 'left') {
       if (x > 20 && x < 230) {
-        const lineHeight = 24;
+        const lineHeight = 20;
         const idx = Math.floor((y - 80 + lineHeight / 2) / lineHeight);
         if (idx >= 0 && idx < warpTargets.length) {
           state.warpTargetIndex = idx;
           state.funFactIndex = 0;
           onWarpSelect && onWarpSelect(idx);
-        }
-      } else {
-        state.funFactIndex++;
-        if (onFunFact) {
-          const body = solarBodies[state.infoBodyIndex] || solarBodies[0];
-          const facts = body.funFacts || [];
-          if (facts.length) {
-            onFunFact(facts[state.funFactIndex % facts.length]);
-          }
         }
       }
     } else if (panel === 'right') {
@@ -223,6 +261,22 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
       } else if (y > 400 && y < 434) {
         state.labels = !state.labels;
         onToggleLabels && onToggleLabels(state.labels);
+      } else if (y > 460 && y < 494) {
+         onLaunchProbe && onLaunchProbe();
+      }
+    } else if (panel === 'facts') {
+      if (y > size.height - 60) {
+        const body = solarBodies[state.infoBodyIndex] || solarBodies[0];
+        const facts = body.funFacts || [];
+        const fact = facts[state.funFactIndex % facts.length];
+        onNarrate && onNarrate(fact);
+      } else {
+        state.funFactIndex++;
+        if (onFunFact) {
+          const body = solarBodies[state.infoBodyIndex] || solarBodies[0];
+          const facts = body.funFacts || [];
+          if (facts.length) onFunFact(facts[state.funFactIndex % facts.length]);
+        }
       }
     }
   }
