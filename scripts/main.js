@@ -148,6 +148,7 @@ async function init() {
   const ui = createUI(
     cockpit.leftPanel,
     cockpit.rightPanel,
+    cockpit.factsPanel,
     (bodyIndex) => { // onWarpSelect
       warpToBody(bodyIndex);
       if (audio) audio.playWarp();
@@ -163,6 +164,7 @@ async function init() {
     },
     (enabled) => { autopilotEnabled = enabled; },
     (visible) => { labelsVisible = visible; },
+    (fact) => { if (audio) audio.speak(fact); },
     (fact) => { if (audio) audio.speak(fact); }
   );
 
