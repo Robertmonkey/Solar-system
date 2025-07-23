@@ -27,7 +27,6 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
   const leftCanvas = makeCanvas();
   const leftCtx = leftCanvas.getContext('2d');
   const leftTex = new THREE.CanvasTexture(leftCanvas);
-  // CORRECTED: Use the modern 'colorSpace' property instead of 'encoding'
   leftTex.colorSpace = THREE.SRGBColorSpace;
   leftTex.anisotropy = 4;
   leftPanel.material = new THREE.MeshBasicMaterial({
@@ -40,7 +39,6 @@ export function createUI(leftPanel, rightPanel, onWarpSelect, onSpeedChange, onL
   const rightCanvas = makeCanvas();
   const rightCtx = rightCanvas.getContext('2d');
   const rightTex = new THREE.CanvasTexture(rightCanvas);
-  // CORRECTED: Use the modern 'colorSpace' property instead of 'encoding'
   rightTex.colorSpace = THREE.SRGBColorSpace;
   rightTex.anisotropy = 4;
   rightPanel.material = new THREE.MeshBasicMaterial({
