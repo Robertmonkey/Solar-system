@@ -48,14 +48,22 @@ async function init() {
   document.body.appendChild(renderer.domElement);
 
   // === WebXR Session Initialization ===
-  // Use only local-floor reference spaces. The bounded-floor reference space
-  // has been reported to cause a black screen when entering VR on the Meta
-  // Quest browser【115443265057812†L330-L340】. By omitting 'bounded-floor'
-  // here, we avoid triggering that browser bug. Hand tracking remains
-  // enabled as an optional feature.
-  const sessionInit = {
-    optionalFeatures: ['local-floor', 'hand-tracking']
-  };
+  // Some Meta Quest browser versions crash to a black screen if a WebXR session
+  // requests the `bounded-floor` reference space.  three.js's default VRButton
+  // automatically adds this feature so we intercept `requestSession` and strip
+  // it out to ensure stable behaviour.
+
+  if (navigator.xr && navigator.xr.requestSession) {
+    const originalRequestSession = navigator.xr.requestSession.bind(navigator.xr);
+    navigator.xr.requestSession = (mode, opts = {}) => {
+      if (opts.optionalFeatures) {
+        opts.optionalFeatures = opts.optionalFeatures.filter(f => f !== 'bounded-floor');
+      }
+      return originalRequestSession(mode, opts);
+    };
+  }
+
+  const sessionInit = { optionalFeatures: ['local-floor', 'hand-tracking'] };
   document.body.appendChild(VRButton.createButton(renderer, sessionInit));
 
   // Handle XR availability messages
