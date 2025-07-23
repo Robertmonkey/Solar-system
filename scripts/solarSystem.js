@@ -124,7 +124,7 @@ async function buildBody(bodyData) {
         uniform vec3 glowColor;
         varying vec3 vNormal;
         void main() {
-          float intensity = pow( c - dot( vNormal, vec3( 0.0, 0.0, 1.0 ) ), p );
+          float intensity = pow( max(0.0, c - dot( vNormal, vec3( 0.0, 0.0, 1.0 ) )), p );
           gl_FragColor = vec4( glowColor, 1.0 ) * intensity;
         }
       `,
