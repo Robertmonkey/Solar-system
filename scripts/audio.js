@@ -49,6 +49,10 @@ export async function initAudio(camera, sourceObject) {
     speak(text) {
       if ('speechSynthesis' in window) {
         const utter = new SpeechSynthesisUtterance(text);
+        const voices = window.speechSynthesis.getVoices();
+        utter.voice = voices.find(v => /en/i.test(v.lang)) || voices[0] || null;
+        utter.pitch = 0.6; // Deeper voice for a cosmic feel
+        utter.rate = 0.85;
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utter);
       }
