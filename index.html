@@ -31,14 +31,6 @@
       font-family: 'Orbitron', sans-serif;
     }
 
-    /* VR entry button positioning */
-    #VRButton {
-      position: absolute !important;
-      left: 50% !important;
-      transform: translateX(-50%) !important;
-      bottom: 20px !important;
-      z-index: 100;
-    }
 
     /* Overlay for XR status messages.  Hidden by default so it does not
        obstruct the user's view once the app is running in VR.  The
@@ -73,8 +65,6 @@
     <span id="xr-message">Initialising WebXR…</span><br>
     <small>Tap panels with your index finger to interact. Close your hand to grab controls.</small>
   </div>
-  <!-- Button to manually start an immersive VR session -->
-  <button id="VRButton">Enter VR</button>
   <!-- Main application script -->
   <script type="module" src="./scripts/main.js"></script>
 </body>
