@@ -1,231 +1,203 @@
 /*
- * cockpit.js (Major Refactor)
+ * lecternCockpit.js
  *
- * This module defines the dashboard style cockpit for the solar system
- * experience.  The previous implementation used a very simple desk and
- * controls; this version provides a more immersive cockpit with a canopy,
- * pilot seat, side consoles and illuminated crossbar.  The cockpit
- * group is uniformly scaled by 0.72 to give extra headroom compared to
- * the earlier implementation.
+ * This module defines a new cockpit layout for the Solar System simulator.  It
+ * replaces the seated desk and overhead light bar with a standing platform and
+ * wrap‑around lectern.  The design provides a semi‑circular console at waist
+ * height, integrated throttle/joystick controls, a launch button and a
+ * dedicated pedestal for the orrery.  The cockpit group is returned along
+ * with references to interactive components so the rest of the application
+ * can hook into them.
  */
 
 import * as THREE from 'three';
 
 /**
- * Creates a new dashboard‑style cockpit.
+ * Creates a lectern‑style cockpit.  The returned object exposes the group
+ * containing all meshes as well as references to the throttle, joystick,
+ * fire button and a mount for the orrery.  It also exposes helper methods to
+ * handle grabbing of the controls and update their orientation based on
+ * fingertip positions.
  *
- * @returns An object containing the main cockpit group and references to
- *          interactive parts like the dashboard panel, throttle, joystick,
- *          fire button and cannon for external manipulation.
+ * @returns {{
+ *   group: THREE.Group,
+ *   throttle: THREE.Group,
+ *   joystick: THREE.Group,
+ *   throttlePivot: THREE.Object3D,
+ *   joystickPivot: THREE.Object3D,
+ *   fireButton: THREE.Mesh,
+ *   orreryMount: THREE.Object3D,
+ *   startGrabbingThrottle: function(number),
+ *   stopGrabbingThrottle: function(number),
+ *   startGrabbingJoystick: function(number),
+ *   stopGrabbingJoystick: function(number),
+ *   updateGrab: function(number, THREE.Vector3)
+ * }}
  */
-export function createDashboardCockpit() {
+export function createLecternCockpit() {
   const cockpitGroup = new THREE.Group();
-  cockpitGroup.name = 'Cockpit';
-  cockpitGroup.position.set(0, 0, 0);
-  // ENLARGED: The cockpit used to be scaled to 0.6 on each axis.  A 20 % increase
-  // means multiplying by 1.2, yielding a scale of 0.72.  This gives more
-  // headroom and makes the dashboard easier to reach without altering the
-  // relative proportions of individual components.
-  cockpitGroup.scale.set(0.72, 0.72, 0.72);
+  cockpitGroup.name = 'LecternCockpit';
 
+  // Materials.  Dark metallic surfaces with subtle emissive accents to achieve
+  // the cosmic aesthetic.
   const darkMetalMat = new THREE.MeshStandardMaterial({
     color: 0x1a1a20,
     metalness: 0.9,
-    roughness: 0.3,
-  });
-  // Materials for new decorative elements
-  const seatMat = new THREE.MeshStandardMaterial({
-    color: 0x222233,
-    metalness: 0.7,
-    roughness: 0.5,
+    roughness: 0.3
   });
   const accentMat = new THREE.MeshStandardMaterial({
     color: 0x224466,
     metalness: 0.9,
     roughness: 0.2,
     emissive: 0x112244,
-    emissiveIntensity: 0.5,
+    emissiveIntensity: 0.6
+  });
+  const controlMat = new THREE.MeshStandardMaterial({
+    color: 0x00aaff,
+    metalness: 0.8,
+    roughness: 0.4,
+    emissive: 0x001133
   });
 
-  // --- Floor ---
-  const floorGeom = new THREE.CylinderGeometry(2.5, 2.5, 0.1, 6);
-  const floor = new THREE.Mesh(floorGeom, darkMetalMat);
-  floor.position.y = -0.05;
-  floor.receiveShadow = true;
-  cockpitGroup.add(floor);
-
-  // --- Pilot Seat ---
-  const seatGroup = new THREE.Group();
-  // CHANGED: Applying the better chair fix.
-  seatGroup.rotation.y = Math.PI; // Rotate to face dashboard
-  seatGroup.position.z = 0.2;
-  const seatBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.15, 0.6), seatMat);
-  seatBase.position.set(0, 0.65, -0.3);
-  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.1), seatMat);
-  // Position back at a negative Z before rotation so it ends up behind the player.
-  seatBack.position.set(0, 1.15, -0.6);
-  const seatLeftArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.5), seatMat);
-  seatLeftArm.position.set(-0.35, 0.8, -0.3);
-  const seatRightArm = seatLeftArm.clone();
-  seatRightArm.position.set(0.35, 0.8, -0.3);
-  seatGroup.add(seatBase, seatBack, seatLeftArm, seatRightArm);
-  cockpitGroup.add(seatGroup);
-
-  // Floor accent ring
-  const ringGeom = new THREE.TorusGeometry(1.8, 0.02, 8, 32);
-  const floorRing = new THREE.Mesh(ringGeom, accentMat);
+  // --- Floor Ring ---
+  // A torus that gives the player a sense of platform and orientation.  The
+  // radius should be large enough for the player to stand comfortably.  It
+  // doesn’t block movement but anchors the scene visually.
+  const floorGeom = new THREE.TorusGeometry(2.2, 0.04, 12, 48);
+  const floorRing = new THREE.Mesh(floorGeom, accentMat);
   floorRing.rotation.x = Math.PI / 2;
-  floorRing.position.y = 0.01;
+  floorRing.position.y = 0;
   cockpitGroup.add(floorRing);
 
-  // --- Canopy ---
-  // CHANGED: Enlarged and raised the canopy for better headroom.
-  const canopyGeom = new THREE.SphereGeometry(4.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-  const canopyMat = new THREE.MeshBasicMaterial({
-    color: 0x88aaff,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.15,
-  });
-  const canopy = new THREE.Mesh(canopyGeom, canopyMat);
-  canopy.position.y = 1.7;
-  canopy.rotation.x = Math.PI / 2;
-  cockpitGroup.add(canopy);
+  // --- Lectern Desk ---
+  // Use a half‑cylinder to create a wrap‑around desk.  The desk is open
+  // towards the player and spans 180 degrees around them.  We use
+  // CylinderGeometry with a start angle of ‑π/2 so the flat edge faces the
+  // player’s back.  The height is small to resemble a tabletop.
+  const deskRadius = 1.5;
+  const deskThickness = 0.12;
+  const deskGeom = new THREE.CylinderGeometry(
+    deskRadius,
+    deskRadius,
+    deskThickness,
+    64,
+    1,
+    true,
+    -Math.PI / 2,
+    Math.PI
+  );
+  const desk = new THREE.Mesh(deskGeom, darkMetalMat);
+  desk.position.set(0, 0.8, 0);
+  desk.rotation.x = Math.PI / 2; // Lay it horizontally
+  cockpitGroup.add(desk);
 
-  // --- Overhead Crossbar with Lights ---
-  const crossbarGeom = new THREE.CylinderGeometry(0.02, 0.02, 2.2, 8);
-  const crossbar = new THREE.Mesh(crossbarGeom, darkMetalMat);
-  crossbar.position.set(0, 2.2, -0.3);
-  crossbar.rotation.z = Math.PI / 2;
-  cockpitGroup.add(crossbar);
+  // Add an accent ring along the top edge of the desk for visual interest.
+  const deskEdgeGeom = new THREE.TorusGeometry(deskRadius + 0.01, 0.01, 8, 64, Math.PI);
+  const deskEdge = new THREE.Mesh(deskEdgeGeom, accentMat);
+  deskEdge.position.set(0, 0.86, 0);
+  deskEdge.rotation.y = Math.PI; // Align the opening
+  cockpitGroup.add(deskEdge);
 
-  const cabinLightLeft = new THREE.PointLight(0x66ccff, 0.5, 4);
-  cabinLightLeft.position.set(-1.0, 0, 0);
-  crossbar.add(cabinLightLeft);
-
-  const cabinLightRight = new THREE.PointLight(0x66ccff, 0.5, 4);
-  cabinLightRight.position.set(1.0, 0, 0);
-  crossbar.add(cabinLightRight);
-
-  // --- Main Dashboard ---
-  const dashboardGeom = new THREE.CylinderGeometry(1.4, 1.4, 0.9, 40, 1, true, -0.9, 1.8);
-  const dashboardMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-  const dashboard = new THREE.Mesh(dashboardGeom, dashboardMat);
-  dashboard.name = 'DashboardPanel';
-  // Move the dashboard closer to the seat.  With the cockpit enlarged by
-  // twenty percent the original Z position (‑0.65) placed the panel out of
-  // comfortable arm’s reach.  Shifting it forward (less negative) by
-  // roughly 0.15 units brings it within easy reach while maintaining
-  // clearance for the flight controls and canopy.  You can fine‑tune this
-  // value if your VR headset’s arm length differs.
-  dashboard.position.set(0, 1.05, -0.5);
-  dashboard.rotation.set(-0.35, 0, 0);
-  dashboard.scale.z = -1;
-  cockpitGroup.add(dashboard);
-
-  // --- Side Consoles ---
-  const consoleGeom = new THREE.BoxGeometry(0.55, 0.1, 0.7);
-  const leftConsole = new THREE.Mesh(consoleGeom, darkMetalMat);
-  leftConsole.position.set(-0.55, 0.8, -0.25);
-  leftConsole.rotation.y = 0.25;
-  cockpitGroup.add(leftConsole);
-  const rightConsole = new THREE.Mesh(consoleGeom, darkMetalMat);
-  rightConsole.position.set(0.55, 0.8, -0.25);
-  rightConsole.rotation.y = -0.25;
-  cockpitGroup.add(rightConsole);
+  // --- Orrery Mount ---
+  // A small pedestal at the rear of the desk for the miniature solar system.
+  const orreryMount = new THREE.Object3D();
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.1, 24), accentMat);
+  stand.position.set(0, 0.96, 0);
+  orreryMount.add(stand);
+  cockpitGroup.add(orreryMount);
 
   // --- Controls ---
+  // Position the throttle on the left side of the desk and the joystick on
+  // the right.  The controls sit slightly forward so the player doesn’t
+  // overreach.
   const throttleGroup = new THREE.Group();
   const throttleBase = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.04, 0.2), darkMetalMat);
   const throttleLever = new THREE.Mesh(
-    new THREE.BoxGeometry(0.04, 0.3, 0.04),
+    new THREE.BoxGeometry(0.04, 0.35, 0.04),
     new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.8, roughness: 0.3, emissive: 0x331100 })
   );
-  throttleLever.position.y = 0.15;
+  throttleLever.position.y = 0.175;
   const throttlePivot = new THREE.Object3D();
   throttlePivot.add(throttleLever);
   throttleGroup.add(throttleBase, throttlePivot);
   throttleGroup.name = 'Throttle';
-  leftConsole.add(throttleGroup);
-  throttleGroup.position.set(0, 0.05, 0);
+  throttleGroup.position.set(-0.5, 0.82, 0.9);
+  cockpitGroup.add(throttleGroup);
 
   const joystickGroup = new THREE.Group();
   const stickBase = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 32), darkMetalMat);
-  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.25, 16), new THREE.MeshStandardMaterial({ color: 0x00aaff, metalness: 0.8, roughness: 0.4 }));
-  stick.position.y = 0.125;
-  const stickTop = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), new THREE.MeshStandardMaterial({ color: 0x0066cc, metalness: 0.6, roughness: 0.3, emissive: 0x001133 }));
-  stickTop.position.y = 0.25;
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.3, 16), controlMat);
+  stick.position.y = 0.15;
+  const stickTop = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), controlMat);
+  stickTop.position.y = 0.3;
   const joystickPivot = new THREE.Object3D();
   joystickPivot.add(stick, stickTop);
   joystickGroup.add(stickBase, joystickPivot);
   joystickGroup.name = 'Joystick';
-  rightConsole.add(joystickGroup);
-  joystickGroup.position.set(0, 0.05, 0);
+  joystickGroup.position.set(0.5, 0.82, 0.9);
+  cockpitGroup.add(joystickGroup);
 
-  const fireButtonGeom = new THREE.CylinderGeometry(0.07, 0.07, 0.04, 32);
-  const fireButtonMat = new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.5, roughness: 0.5, emissive: 0x550000 });
+  // Launch/Fire button near the probe controls (front centre).
+  const fireButtonGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.05, 32);
+  const fireButtonMat = new THREE.MeshStandardMaterial({ color: 0xff2222, metalness: 0.5, roughness: 0.4, emissive: 0x330000 });
   const fireButton = new THREE.Mesh(fireButtonGeom, fireButtonMat);
   fireButton.name = 'FireButton';
-  rightConsole.add(fireButton);
-  fireButton.position.set(0, 0.07, 0.25);
+  fireButton.position.set(0, 0.82, 1.05);
+  cockpitGroup.add(fireButton);
 
-  // --- Probe Cannon ---
-  const cannonGeom = new THREE.CylinderGeometry(0.1, 0.08, 2.0, 16);
-  const cannonMat = new THREE.MeshStandardMaterial({ color: 0xbbbbff, metalness: 0.9, roughness: 0.2 });
-  const cannon = new THREE.Mesh(cannonGeom, cannonMat);
-  cannon.position.set(0, -0.2, -2.5);
-  cannon.rotation.x = Math.PI / 2;
-  cockpitGroup.add(cannon);
-
-  // --- Grabbing helpers ---
-  // Track which hand is currently grabbing each control so that the
-  // fingertip position can drive the lever/joystick animations.
+  // --- Grabbing State ---
   const grabbingThrottle = [false, false];
   const grabbingJoystick = [false, false];
 
   function startGrabbingThrottle(handIndex) {
     grabbingThrottle[handIndex] = true;
   }
-
   function stopGrabbingThrottle(handIndex) {
     grabbingThrottle[handIndex] = false;
   }
-
   function startGrabbingJoystick(handIndex) {
     grabbingJoystick[handIndex] = true;
   }
-
   function stopGrabbingJoystick(handIndex) {
     grabbingJoystick[handIndex] = false;
   }
 
-  // Update the throttle/joystick orientation based on the fingertip position
-  // of the controlling hand.
+  /**
+   * Update the orientation of the throttle and joystick based on the
+   * fingertip position of the grabbing hand.  This function inverts the
+   * axes compared to the previous implementation to make the controls feel
+   * natural.  Pulling the throttle back increases the rotation (pushes
+   * forward) and pushing the joystick forward tilts the ship forward.
+   *
+   * @param {number} handIndex
+   * @param {THREE.Vector3} tipPosWorld
+   */
   function updateGrab(handIndex, tipPosWorld) {
     if (grabbingThrottle[handIndex]) {
       const local = throttleGroup.worldToLocal(tipPosWorld.clone());
-      const y = THREE.MathUtils.clamp(local.y, 0, 0.3);
-      const angle = THREE.MathUtils.mapLinear(y, 0, 0.3, 0, Math.PI / 2);
-      throttlePivot.rotation.x = -angle;
+      const y = THREE.MathUtils.clamp(local.y, 0, 0.35);
+      const angle = THREE.MathUtils.mapLinear(y, 0, 0.35, 0, Math.PI / 2);
+      // When the user pulls back (higher y), rotate the lever forwards.
+      throttlePivot.rotation.x = angle;
     }
     if (grabbingJoystick[handIndex]) {
       const local = joystickGroup.worldToLocal(tipPosWorld.clone());
       const maxAngle = Math.PI / 4;
-      const xAngle = THREE.MathUtils.clamp(local.x * 2, -maxAngle, maxAngle);
-      const yAngle = THREE.MathUtils.clamp(-local.z * 2, -maxAngle, maxAngle);
+      // Invert axes so forward tilt corresponds to positive Z.
+      const xAngle = -THREE.MathUtils.clamp(local.x * 2, -maxAngle, maxAngle);
+      const yAngle = THREE.MathUtils.clamp(local.z * 2, -maxAngle, maxAngle);
       joystickPivot.rotation.set(yAngle, 0, xAngle);
     }
   }
 
   return {
     group: cockpitGroup,
-    dashboard: dashboard,
     throttle: throttleGroup,
     joystick: joystickGroup,
     throttlePivot,
     joystickPivot,
     fireButton,
-    cannon,
+    orreryMount,
     startGrabbingThrottle,
     stopGrabbingThrottle,
     startGrabbingJoystick,
@@ -234,7 +206,7 @@ export function createDashboardCockpit() {
   };
 }
 
-// Export the new function with a friendly alias.  This preserves the
-// external API expected by main.js while allowing the implementation
-// details to evolve over time.
-export { createDashboardCockpit as createCockpit };
+// Preserve API compatibility with the older code by re‑exporting the new
+// function as createCockpit().  Existing imports that call createCockpit()
+// will automatically use the lectern cockpit.
+export { createLecternCockpit as createCockpit };
