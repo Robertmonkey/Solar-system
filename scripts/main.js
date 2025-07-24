@@ -15,6 +15,10 @@ import { initAudio } from './audio.js';
 
 // Utility to convert seconds into Earth days. One day is 86 400 seconds.
 const SEC_TO_DAYS = 1 / 86400;
+// Speed multiplier for orbital motion. A value greater than 1 accelerates
+// the passage of time so that planetary orbits complete more quickly. Adjust
+// this value to control how fast bodies move around the Sun in the simulator.
+const TIME_SCALE = 50;
 
 // Main async function to set up the scene
 async function main() {
@@ -70,17 +74,20 @@ async function main() {
   const { solarGroup, bodies } = createSolarSystem();
   scene.add(solarGroup);
 
-  // Build cockpit and attach to scene.
+  // Build cockpit and attach to scene. Position the cockpit so that it sits
+  // comfortably in front of the player rather than below their feet. A slight
+  // downward offset (negative Y) makes the desk feel like it's at waist height.
   const cockpit = createCockpit();
-  cockpit.root.position.set(0, -0.5, -1.0);
+  cockpit.root.position.set(0, -0.4, -1.5);
   scene.add(cockpit.root);
-  
+
   // Initialize audio system
   const audio = await initAudio(camera, cockpit.root);
 
-  // Create the orrery and attach it to the cockpit.
+  // Create the orrery and attach it to the cockpit. We raise the miniature
+  // solar system so that it rests on the desk surface and is easy to see.
   const orrery = createOrrery(bodies);
-  orrery.group.position.set(0, -0.2, 0.5);
+  orrery.group.position.set(0, 0.1, 0.5);
   cockpit.root.add(orrery.group);
 
   // Create the UI panels and attach them to the cockpit.
@@ -90,14 +97,17 @@ async function main() {
     onToggleAutopilot: enabled => { autopilotEnabled = enabled; },
     onNarrate: fact => audio.speak(fact) // Use audio module for narration
   });
-  ui.leftMesh.position.set(-0.9, 0.2, 0.4);
-  ui.rightMesh.position.set(0.9, 0.2, 0.4);
-  ui.bottomMesh.position.set(0, -0.5, 0.7);
+  // Position UI panels higher up so they're at eye level when seated
+  ui.leftMesh.position.set(-0.9, 0.3, 0.4);
+  ui.rightMesh.position.set(0.9, 0.3, 0.4);
+  // The bottom panel sits toward the front edge of the desk
+  ui.bottomMesh.position.set(0, -0.3, 0.7);
   cockpit.root.add(ui.leftMesh);
   cockpit.root.add(ui.rightMesh);
   cockpit.root.add(ui.bottomMesh);
 
-  // Create hand controls.
+  // Create hand controls. When the fire callback is invoked, it launches a
+  // probe from the muzzle position on the cockpit and plays a beep.
   const controls = createControls(renderer, scene, camera, cockpit, ui, () => {
     const muzzle = new THREE.Vector3(0, -0.3, 0.6);
     cockpit.root.localToWorld(muzzle);
@@ -140,9 +150,13 @@ async function main() {
     const now = performance.now();
     const deltaSec = (now - lastTime) / 1000;
     lastTime = now;
-    const deltaDays = deltaSec * SEC_TO_DAYS;
+    // Convert into days and apply the time scale factor to speed up or slow down
+    // the orbits. Without this, orbits take very long to complete and appear static.
+    const deltaDays = deltaSec * SEC_TO_DAYS * TIME_SCALE;
 
+    // Update the solar system with scaled time
     updateSolarSystem(deltaDays);
+    // Update probe positions with real time (do not scale probe physics)
     updateProbes(deltaSec, solarGroup, bodies, scene);
     const cameraPos = new THREE.Vector3();
     camera.getWorldPosition(cameraPos);
