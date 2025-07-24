@@ -10,6 +10,7 @@ import { createUI } from './ui.js';
 import { createControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
 import { launchProbe, updateProbes } from './probes.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 // Utility to convert seconds into Earth days. One day is 86 400 seconds.
 const SEC_TO_DAYS = 1 / 86400;
@@ -26,6 +27,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 document.body.appendChild(renderer.domElement);
+// Add the default VRButton so users can start an immersive session
+document.body.appendChild(VRButton.createButton(renderer, { optionalFeatures: ['hand-tracking'] }));
 
 // Add some ambient and directional light to shade the bodies. Without
 // lighting the lambert materials on the planets will appear black.
@@ -163,11 +166,4 @@ renderer.setAnimationLoop(function () {
     // TODO: implement autopilot steering by reading cockpit.joystickValue
   }
   renderer.render(scene, camera);
-});
-
-// Allow the user to enter VR with a button on the page
-document.getElementById('VRButton').addEventListener('click', () => {
-  renderer.xr.requestSession('immersive-vr', { optionalFeatures: ['hand-tracking'] }).then(session => {
-    renderer.xr.setSession(session);
-  });
 });
