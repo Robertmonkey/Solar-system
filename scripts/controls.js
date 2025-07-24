@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
+import { MAX_FLIGHT_SPEED } from './constants.js';
 
 /**
  * Create VR controls.  The renderer must have XR enabled.  Provide the
@@ -51,7 +52,15 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     facts: ui.factsMesh
   };
   const uiNames = ['warp', 'probe', 'facts'];
+  let throttleValue = 0;
+  let joystickX = 0;
+  let joystickY = 0;
+
   function update(deltaTime) {
+    // Reset input values each frame
+    throttleValue = 0;
+    joystickX = 0;
+    joystickY = 0;
     throttleBox.setFromObject(cockpit.throttle);
     joystickBox.setFromObject(cockpit.joystick);
     fireButtonBox.setFromObject(cockpit.fireButton);
@@ -69,6 +78,11 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         state.grabbingThrottle = false;
         cockpit.stopGrabbingThrottle(i);
       }
+      if (state.grabbingThrottle) {
+        const local = cockpit.throttle.worldToLocal(tipPos.clone());
+        const y = THREE.MathUtils.clamp(local.y, 0, 0.4);
+        throttleValue = y / 0.4;
+      }
       // Grab joystick
       if (!state.grabbingJoystick && joystickBox.containsPoint(tipPos)) {
         state.grabbingJoystick = true;
@@ -76,6 +90,13 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       } else if (state.grabbingJoystick && !joystickBox.containsPoint(tipPos)) {
         state.grabbingJoystick = false;
         cockpit.stopGrabbingJoystick(i);
+      }
+      if (state.grabbingJoystick) {
+        const local = cockpit.joystick.worldToLocal(tipPos.clone());
+        const x = THREE.MathUtils.clamp(local.x, -0.2, 0.2);
+        const z = THREE.MathUtils.clamp(local.z, -0.2, 0.2);
+        joystickX = x / 0.2;
+        joystickY = z / 0.2;
       }
       // Fire button
       if (fireButtonBox.containsPoint(tipPos)) {
@@ -100,6 +121,19 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         ui.handlePointer(name, uv);
       }
     });
+    const speed = throttleValue * MAX_FLIGHT_SPEED;
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    right.y = 0;
+    right.normalize();
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    forward.y = 0;
+    forward.normalize();
+    const moveDir = new THREE.Vector3()
+      .addScaledVector(right, joystickX)
+      .addScaledVector(forward, joystickY);
+    if (moveDir.lengthSq() > 1) moveDir.normalize();
+    const movement = moveDir.multiplyScalar(speed * deltaTime);
+    return movement;
   }
   return { update };
 }

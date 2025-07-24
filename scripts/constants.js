@@ -26,3 +26,8 @@ export const C_KMPS = 299_792.458;
 // Conversion from miles per hour to kilometres per second.  The throttle slider
 // uses an exponential mapping between 1 mph and c.
 export const MPH_TO_KMPS = 1.60934 / 3600;
+
+// Maximum player flight speed in world units per second.  This value is
+// intentionally modest so that manual flight feels slow compared to the warp
+// jumps triggered from the UI.
+export const MAX_FLIGHT_SPEED = 0.5;
