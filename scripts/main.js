@@ -78,17 +78,20 @@ async function main() {
   // comfortably in front of the player rather than below their feet. A slight
   // downward offset (negative Y) makes the desk feel like it's at waist height.
   const cockpit = createCockpit();
-  cockpit.root.position.set(0, -0.4, -1.5);
-  scene.add(cockpit.root);
+  // createCockpit returns an object with a `group` that acts as the root of
+  // the cockpit hierarchy. Older code referenced `cockpit.root`, so adapt all
+  // usages to the new `group` property.
+  cockpit.group.position.set(0, -0.4, -1.5);
+  scene.add(cockpit.group);
 
   // Initialize audio system
-  const audio = await initAudio(camera, cockpit.root);
+  const audio = await initAudio(camera, cockpit.group);
 
   // Create the orrery and attach it to the cockpit. We raise the miniature
   // solar system so that it rests on the desk surface and is easy to see.
   const orrery = createOrrery(bodies);
   orrery.group.position.set(0, 0.1, 0.5);
-  cockpit.root.add(orrery.group);
+  cockpit.group.add(orrery.group);
 
   // Create the UI panels and attach them to the cockpit.
   const ui = createUI(bodies, {
@@ -102,15 +105,15 @@ async function main() {
   ui.rightMesh.position.set(0.9, 0.3, 0.4);
   // The bottom panel sits toward the front edge of the desk
   ui.bottomMesh.position.set(0, -0.3, 0.7);
-  cockpit.root.add(ui.leftMesh);
-  cockpit.root.add(ui.rightMesh);
-  cockpit.root.add(ui.bottomMesh);
+  cockpit.group.add(ui.leftMesh);
+  cockpit.group.add(ui.rightMesh);
+  cockpit.group.add(ui.bottomMesh);
 
   // Create hand controls. When the fire callback is invoked, it launches a
   // probe from the muzzle position on the cockpit and plays a beep.
   const controls = createControls(renderer, scene, camera, cockpit, ui, () => {
     const muzzle = new THREE.Vector3(0, -0.3, 0.6);
-    cockpit.root.localToWorld(muzzle);
+    cockpit.group.localToWorld(muzzle);
     const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
     const launchPos = muzzle.clone().sub(solarOrigin);
     const forward = new THREE.Vector3(0, 0, -1);
