@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { bodies } from './data.js';
+import { AU_KM } from './constants.js';
 import { degToRad, getOrbitalPosition, getTimeMultiplier, KM_TO_WORLD_UNITS } from './utils.js';
 
 /**
@@ -18,10 +19,9 @@ export function createSolarSystem() {
   const MIN_SIZE = 0.05;
 
   bodies.forEach(data => {
-    let radius = data.radius * KM_TO_WORLD_UNITS;
+    let radius = data.radiusKm * KM_TO_WORLD_UNITS;
     if (radius < MIN_SIZE) radius = MIN_SIZE;
     const geometry = new THREE.SphereGeometry(radius, 32, 32);
-
     let material;
     if (data.texture) {
       if (!materialCache.has(data.texture)) {
@@ -40,24 +40,22 @@ export function createSolarSystem() {
     const group = new THREE.Group();
     group.name = data.name;
     group.add(mesh);
-    group.rotation.z = degToRad(data.tilt || 0);
+    group.rotation.z = degToRad(data.axialTiltDeg || 0);
 
     group.userData = {
       data,
       mesh,
       elements: data.orbitalElements || {
-        a: (data.orbitRadius || 0) * KM_TO_WORLD_UNITS,
-        e: 0,
-        period: data.orbitPeriod || 0,
+        a: (data.semiMajorAxisAU || 0) * AU_KM * KM_TO_WORLD_UNITS,
+        e: data.eccentricity || 0,
+        period: data.orbitalPeriodDays || 0,
         i: 0,
         omega: 0,
         w: 0,
         M0: 0
       },
-      rotationPeriodHours: (data.rotationPeriodHours !== undefined)
-        ? data.rotationPeriodHours
-        : ((data.rotationPeriod || 0) * 24),
-      time: Math.random() * (data.orbitPeriod || 1)
+      rotationPeriodHours: data.rotationPeriodHours,
+      time: Math.random() * (data.orbitalPeriodDays || 1)
     };
 
     groupMap.set(data.name, group);
