@@ -1,131 +1,168 @@
-// Hand‑tracking controls adapted for the lectern cockpit.  This version
-// automatically grabs the throttle and joystick when touched, handles UI
-// interactions on the new radial warp/probe/facts panels and triggers the
-// fire callback when the fire button is pressed.
+// Hand‑tracking controls adapted for the lectern cockpit. This version uses
+// gesture-based grabbing ('select' event) for the throttle and joystick, and
+// 'select' for tapping UI panels, providing a more intuitive and robust
+// interaction model than the previous proximity-based system.
 
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
-import { MAX_FLIGHT_SPEED } from './constants.js';
+import { MAX_FLIGHT_SPEED, MPH_TO_KMPS } from './constants.js';
 
-/**
- * Create VR controls.  The renderer must have XR enabled.  Provide the
- * scene, camera, the lectern cockpit object (which exposes throttle,
- * joystick, fireButton and orreryMount), the UI (from ui.js) and a
- * callback for launching a probe.  The returned controller has an
- * update() function to be called each frame.
- */
 export function createControls(renderer, scene, camera, cockpit, ui, fireCallback) {
   const controllerModelFactory = new XRControllerModelFactory();
-  const handModelFactory = new XRHandModelFactory();
-  const controllers = [];
+  const handModelFactory = new XRHandModelFactory().setPath('./models/hands/'); // Assuming models are served from a path
+
+  let throttleValue = 0; // 0 to 1
+  let joystickX = 0; // -1 to 1
+  let joystickY = 0; // -1 to 1
+
   const hands = [];
+  const handStates = [
+    { isGrabbing: null, activeControl: null, hoverTarget: null }, // Left hand
+    { isGrabbing: null, activeControl: null, hoverTarget: null }  // Right hand
+  ];
+
+  const interactableObjects = [cockpit.throttle, cockpit.joystick, cockpit.fireButton, ui.warpMesh, ui.probeMesh, ui.factsMesh];
+  const raycaster = new THREE.Raycaster();
+
   for (let i = 0; i < 2; i++) {
     const controller = renderer.xr.getController(i);
     scene.add(controller);
-    controller.userData.index = i;
-    controllers.push(controller);
-    const controllerGrip = renderer.xr.getControllerGrip(i);
-    controllerGrip.add(controllerModelFactory.createControllerModel(controllerGrip));
-    scene.add(controllerGrip);
+    hands.push(controller);
+
+    const grip = renderer.xr.getControllerGrip(i);
+    grip.add(controllerModelFactory.createControllerModel(grip));
+    scene.add(grip);
+
     const hand = renderer.xr.getHand(i);
-    const handModel = handModelFactory.createHandModel(hand, 'mesh');
-    hand.add(handModel);
+    hand.add(handModelFactory.createHandModel(hand, 'mesh'));
     scene.add(hand);
-    hand.userData.index = i;
-    hands.push(hand);
+
+    controller.addEventListener('selectstart', onSelectStart);
+    controller.addEventListener('selectend', onSelectEnd);
   }
-  // Interaction boxes computed from cockpit objects
-  const throttleBox = new THREE.Box3().setFromObject(cockpit.throttle);
-  const joystickBox = new THREE.Box3().setFromObject(cockpit.joystick);
-  const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
-  // Per‑hand state
-  const grabState = [
-    { grabbingThrottle: false, grabbingJoystick: false },
-    { grabbingThrottle: false, grabbingJoystick: false }
-  ];
-  // Raycaster for UI
-  const raycaster = new THREE.Raycaster();
-  const uiMeshes = {
-    warp: ui.warpMesh,
-    probe: ui.probeMesh,
-    facts: ui.factsMesh
-  };
-  const uiNames = ['warp', 'probe', 'facts'];
-  let throttleValue = 0;
-  let joystickX = 0;
-  let joystickY = 0;
-  const moveVec = new THREE.Vector3();
-  function update(deltaTime) {
-    throttleBox.setFromObject(cockpit.throttle);
-    joystickBox.setFromObject(cockpit.joystick);
-    fireButtonBox.setFromObject(cockpit.fireButton);
-    hands.forEach((hand, i) => {
-      const state = grabState[i];
-      const indexTip = hand.joints && hand.joints['index-finger-tip'];
-      if (!indexTip) return;
-      const tipPos = new THREE.Vector3();
-      indexTip.getWorldPosition(tipPos);
-      // Grab throttle
-      if (!state.grabbingThrottle && throttleBox.containsPoint(tipPos)) {
-        state.grabbingThrottle = true;
-        cockpit.startGrabbingThrottle(i, tipPos);
-      } else if (state.grabbingThrottle && !throttleBox.containsPoint(tipPos)) {
-        state.grabbingThrottle = false;
-        cockpit.stopGrabbingThrottle(i);
-        throttleValue = 0;
+
+  function onSelectStart(event) {
+    const controller = event.target;
+    const handIndex = hands.indexOf(controller);
+    const state = handStates[handIndex];
+
+    if (state.hoverTarget) {
+      const targetName = state.hoverTarget.object.name;
+      if (targetName === 'Throttle' || targetName === 'Joystick') {
+        state.isGrabbing = true;
+        state.activeControl = state.hoverTarget.object;
+      } else if (targetName === 'FireButton') {
+        cockpit.fireButton.scale.set(1, 0.5, 1);
+        fireCallback();
+      } else { // UI panel interaction
+        const uv = state.hoverTarget.uv;
+        if (ui.warpMesh === state.hoverTarget.object) {
+          ui.handlePointer('warp', uv, true);
+        } else if (ui.probeMesh === state.hoverTarget.object) {
+          ui.handlePointer('probe', uv, true);
+        } else if (ui.factsMesh === state.hoverTarget.object) {
+          ui.handlePointer('facts', uv, true);
+        }
       }
-      // Grab joystick
-      if (!state.grabbingJoystick && joystickBox.containsPoint(tipPos)) {
-        state.grabbingJoystick = true;
-        cockpit.startGrabbingJoystick(i, tipPos);
-      } else if (state.grabbingJoystick && !joystickBox.containsPoint(tipPos)) {
-        state.grabbingJoystick = false;
-        cockpit.stopGrabbingJoystick(i);
+    }
+  }
+
+  function onSelectEnd(event) {
+    const controller = event.target;
+    const handIndex = hands.indexOf(controller);
+    const state = handStates[handIndex];
+
+    if (state.hoverTarget && state.hoverTarget.object.name === 'FireButton') {
+        cockpit.fireButton.scale.set(1, 1, 1);
+    }
+    
+    state.isGrabbing = false;
+    state.activeControl = null;
+
+    // Reset joystick/throttle when released
+    if (state.hoverTarget && state.hoverTarget.object.name === 'Joystick') {
         joystickX = 0;
         joystickY = 0;
-      }
-      if (state.grabbingThrottle) {
-        const local = cockpit.throttle.worldToLocal(tipPos.clone());
-        const y = THREE.MathUtils.clamp(local.y, 0, 0.4);
-        throttleValue = THREE.MathUtils.clamp(y / 0.4, 0, 1);
-      }
-      if (state.grabbingJoystick) {
-        const local = cockpit.joystick.worldToLocal(tipPos.clone());
-        const lx = THREE.MathUtils.clamp(local.x, -0.2, 0.2);
-        const lz = THREE.MathUtils.clamp(local.z, -0.2, 0.2);
-        joystickX = THREE.MathUtils.clamp(lx / 0.2, -1, 1);
-        joystickY = THREE.MathUtils.clamp(lz / 0.2, -1, 1);
-      }
-      // Fire button
-      if (fireButtonBox.containsPoint(tipPos)) {
-        fireCallback();
-      }
-      // UI interaction: cast ray from fingertip along finger direction
-      const direction = new THREE.Vector3();
-      indexTip.getWorldDirection(direction);
-      raycaster.set(tipPos, direction);
-      const intersections = [];
-      uiNames.forEach(name => {
-        const mesh = uiMeshes[name];
-        const hits = raycaster.intersectObject(mesh, false);
-        if (hits.length) {
-          intersections.push({ name, hit: hits[0] });
+        cockpit.joystick.children[1].rotation.set(0,0,0); // Reset stick visual
+    }
+    if (state.hoverTarget && state.hoverTarget.object.name === 'Throttle') {
+        throttleValue = 0;
+        cockpit.throttle.children[1].rotation.set(0,0,0); // Reset lever visual
+    }
+  }
+
+  function update(deltaTime) {
+    let totalMovement = null;
+
+    hands.forEach((controller, i) => {
+      const state = handStates[i];
+      const controllerMatrix = controller.matrixWorld;
+      
+      raycaster.setFromCamera({ x: 0, y: 0 }, { matrixWorld: controllerMatrix, projectionMatrix: camera.projectionMatrix });
+
+      // Handle grabbing state
+      if (state.isGrabbing && state.activeControl) {
+        const handPos = new THREE.Vector3().setFromMatrixPosition(controllerMatrix);
+        const control = state.activeControl.name === 'Throttle' ? cockpit.throttle : cockpit.joystick;
+        const localPos = control.worldToLocal(handPos);
+        
+        cockpit.updateControlVisuals(control.name, localPos);
+
+        if (control.name === 'Throttle') {
+            const val = THREE.MathUtils.mapLinear(localPos.z, 0.1, -0.1, 0, 1);
+            throttleValue = THREE.MathUtils.clamp(val, 0, 1);
+        } else if (control.name === 'Joystick') {
+            joystickX = THREE.MathUtils.clamp(localPos.x / 0.1, -1, 1);
+            joystickY = THREE.MathUtils.clamp(localPos.z / 0.1, -1, 1);
         }
-      });
-      if (intersections.length > 0) {
-        intersections.sort((a, b) => a.hit.distance - b.hit.distance);
-        const { name, hit } = intersections[0];
-        const uv = hit.uv;
-        ui.handlePointer(name, uv);
+
+      } else { // Handle hovering
+        const intersects = raycaster.intersectObjects(interactableObjects, true);
+        const firstHit = intersects.length > 0 ? intersects[0] : null;
+
+        // Clear previous hover state
+        if (state.hoverTarget && (!firstHit || state.hoverTarget.object.uuid !== firstHit.object.uuid)) {
+            const obj = state.hoverTarget.object;
+            if (obj.material.emissive) {
+                obj.material.emissive.setHex(obj.userData.originalEmissive || 0x000000);
+            }
+            state.hoverTarget = null;
+            ui.handlePointer('clear', null);
+        }
+        
+        // Set new hover state
+        if (firstHit) {
+            state.hoverTarget = firstHit;
+            const obj = firstHit.object;
+             if (obj.material.emissive && !obj.userData.originalEmissive) {
+                obj.userData.originalEmissive = obj.material.emissive.getHex();
+                obj.material.emissive.setHex(0xaaaaff);
+            }
+            if (ui.warpMesh === obj || ui.probeMesh === obj || ui.factsMesh === obj) {
+                const panelName = ui.warpMesh === obj ? 'warp' : (ui.probeMesh === obj ? 'probe' : 'facts');
+                ui.handlePointer(panelName, firstHit.uv, false);
+            }
+        }
       }
     });
-    const speed = throttleValue * MAX_FLIGHT_SPEED;
-    const dir = new THREE.Vector3(joystickX, 0, -joystickY);
-    if (dir.lengthSq() > 1) dir.normalize();
-    dir.applyQuaternion(camera.quaternion);
-    moveVec.copy(dir).multiplyScalar(speed * deltaTime);
-    return moveVec;
+
+    // Calculate flight movement based on control state
+    const power = Math.pow(throttleValue, 2); // Exponential response
+    const speed = power * MAX_FLIGHT_SPEED;
+    if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
+        const moveVec = new THREE.Vector3(joystickX, 0, -joystickY);
+        // Prevent moving faster diagonally
+        if (moveVec.lengthSq() > 1) {
+            moveVec.normalize();
+        }
+        moveVec.applyQuaternion(camera.quaternion);
+        moveVec.multiplyScalar(speed * deltaTime);
+        totalMovement = moveVec;
+    }
+
+    return totalMovement;
   }
+
   return { update };
 }
