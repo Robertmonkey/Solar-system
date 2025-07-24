@@ -62,10 +62,12 @@ export function createLecternCockpit() {
   // --- Floor Ring ---
   // A torus that gives the player a sense of platform and orientation.  The
   // radius should be large enough for the player to stand comfortably.  It
-  // doesn’t block movement but anchors the scene visually.
+  // doesn’t block movement but anchors the scene visually.  Leave the
+  // torus in its default orientation so it lies flat on the ground; rotating
+  // it would turn it upright and make it invisible as a floor.  Place it at
+  // y=0 (ground level) so the player stands inside it.
   const floorGeom = new THREE.TorusGeometry(2.2, 0.04, 12, 48);
   const floorRing = new THREE.Mesh(floorGeom, accentMat);
-  floorRing.rotation.x = Math.PI / 2;
   floorRing.position.y = 0;
   cockpitGroup.add(floorRing);
 
@@ -89,6 +91,9 @@ export function createLecternCockpit() {
   const desk = new THREE.Mesh(deskGeom, darkMetalMat);
   desk.position.set(0, 0.8, 0);
   desk.rotation.x = Math.PI / 2; // Lay it horizontally
+  // Make the desk render on both sides so it’s visible from above.  Without
+  // this, the inner surface may be culled and the desk will disappear in VR.
+  desk.material.side = THREE.DoubleSide;
   cockpitGroup.add(desk);
 
   // Add an accent ring along the top edge of the desk for visual interest.
@@ -177,8 +182,10 @@ export function createLecternCockpit() {
       const local = throttleGroup.worldToLocal(tipPosWorld.clone());
       const y = THREE.MathUtils.clamp(local.y, 0, 0.35);
       const angle = THREE.MathUtils.mapLinear(y, 0, 0.35, 0, Math.PI / 2);
-      // When the user pulls back (higher y), rotate the lever forwards.
-      throttlePivot.rotation.x = angle;
+      // When the user pulls back (higher y), rotate the lever backwards.  Use
+      // a negative sign to correct the inversion seen in VR where the lever
+      // was moving opposite the finger motion.
+      throttlePivot.rotation.x = -angle;
     }
     if (grabbingJoystick[handIndex]) {
       const local = joystickGroup.worldToLocal(tipPosWorld.clone());
