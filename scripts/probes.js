@@ -4,12 +4,20 @@
 
 import * as THREE from 'three';
 
-// Active probes in the scene
-const probes = [];
-
-// Parameters controlling probe speed and collision radius
+// Velocity and collision parameters
 const PROBE_SPEED = 0.5; // units per second relative to the solar system scale
-const COLLISION_RADIUS_FACTOR = 1.2; // collision occurs at body.radius * factor
+const COLLISION_RADIUS_FACTOR = 1.0; // intersects when distance < radius * factor
+
+/**
+ * Create the probe container.  Returned object manages an array of active
+ * probes and a group that can be attached to the scene.
+ */
+export function createProbes() {
+  const group = new THREE.Group();
+  group.name = 'Probes';
+  const list = [];
+  return { group, list };
+}
 
 /**
  * Launch a new probe.  Accepts an optional settings object with `mass`
@@ -17,25 +25,23 @@ const COLLISION_RADIUS_FACTOR = 1.2; // collision occurs at body.radius * factor
  * probe’s size and the velocity scales its speed.  Without settings the
  * defaults correspond to a medium sized, moderately fast probe.
  *
- * @param {THREE.Vector3} position Position in solar coordinates.
+ * @param {{group: THREE.Group, list: Array}} probes Container returned from
+ *     createProbes().
+ * @param {THREE.Vector3} origin Launch position in solar coordinates.
  * @param {THREE.Vector3} direction Direction to travel.
- * @param {THREE.Scene} scene The scene to which the probe is added.
- * @param {{mass?: number, velocity?: number}} settings Optional probe settings.
+ * @param {number} massValue Normalised mass in the range [0,1].
+ * @param {number} velocityValue Normalised velocity in the range [0,1].
  */
-export function launchProbe(position, direction, scene, settings = {}) {
-  const mass = typeof settings.mass === 'number' ? settings.mass : 0.5;
-  const vel = typeof settings.velocity === 'number' ? settings.velocity : 0.5;
-  // Scale probe size based on mass.  Small mass yields 0.15 radius, large mass yields 0.4.
-  const radius = 0.15 + 0.25 * mass;
-  const geometry = new THREE.SphereGeometry(radius, 16, 16);
-  const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+export function launchProbe(probes, origin, direction, massValue = 0.5, velocityValue = 0.5) {
+  const radius = 0.05 + 0.1 * massValue;
+  const geometry = new THREE.SphereGeometry(radius, 8, 8);
+  const material = new THREE.MeshPhongMaterial({ color: 0xffffaa, emissive: 0xffffaa });
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.copy(position);
-  scene.add(mesh);
-  // Velocity factor: slowest is 20% of PROBE_SPEED, fastest is 200% of PROBE_SPEED.
-  const speedFactor = 0.2 + 1.8 * vel;
-  const velocityVec = direction.clone().normalize().multiplyScalar(PROBE_SPEED * speedFactor);
-  probes.push({ mesh, velocity: velocityVec });
+  mesh.position.copy(origin);
+  probes.group.add(mesh);
+  const speed = PROBE_SPEED * (0.2 + 1.8 * velocityValue);
+  const velocity = direction.clone().normalize().multiplyScalar(speed);
+  probes.list.push({ mesh, velocity, mass: massValue });
 }
 
 // Update all probes. deltaTime is in seconds. `solarGroup` is the root
@@ -43,10 +49,10 @@ export function launchProbe(position, direction, scene, settings = {}) {
 // returned from createSolarSystem. When a probe collides with a body
 // (distance < body.radius * COLLISION_RADIUS_FACTOR) it is removed and
 // optionally a visual effect could be triggered.
-export function updateProbes(deltaTime, solarGroup, solarBodies, scene) {
+export function updateProbes(probes, deltaTime, solarGroup, solarBodies) {
   const toRemove = [];
   const origin = solarGroup.getWorldPosition(new THREE.Vector3());
-  probes.forEach((probe, index) => {
+  probes.list.forEach((probe, index) => {
     // Integrate position in solar coordinates
     probe.mesh.position.addScaledVector(probe.velocity, deltaTime);
     // Check for collisions against every body
@@ -67,8 +73,8 @@ export function updateProbes(deltaTime, solarGroup, solarBodies, scene) {
   });
   // Remove collided probes from scene and list
   toRemove.reverse().forEach(idx => {
-    const probe = probes[idx];
-    scene.remove(probe.mesh);
-    probes.splice(idx, 1);
+    const probe = probes.list[idx];
+    probes.group.remove(probe.mesh);
+    probes.list.splice(idx, 1);
   });
 }

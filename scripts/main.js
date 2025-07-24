@@ -11,7 +11,7 @@ import { createCockpit } from './lecternCockpit.js';
 import { createUI } from './ui.js';
 import { createControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
-import { launchProbe, updateProbes } from './probes.js';
+import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
 import { setTimeMultiplier } from './constants.js';
 
@@ -85,7 +85,7 @@ async function main() {
   const audio = await initAudio(camera, cockpit.group);
 
   // Orrery: mount on the dedicated stand within the lectern cockpit.
-  const orrery = createOrrery(bodies);
+  const orrery = createOrrery();
   // Scale down the orrery so it fits nicely on the stand.  Smaller scaling
   // prevents the mini planets from overlapping and forming a block.
   orrery.group.scale.setScalar(0.3);
@@ -94,6 +94,8 @@ async function main() {
   orrery.group.position.set(0, 0.05, 0);
 
   // UI panels: radial warp menu, probe sliders and fun‑facts display.
+  const probes = createProbes();
+  scene.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
   const ui = createUI(bodies, {
     onWarp: index => warpToBody(index),
@@ -129,7 +131,7 @@ async function main() {
     const forward = new THREE.Vector3(0, 0, -1);
     const dir = forward.applyQuaternion(camera.quaternion);
     // Launch the probe with customised mass/velocity.
-    launchProbe(launchPos, dir, scene, probeSettings);
+    launchProbe(probes, launchPos, dir, probeSettings.mass, probeSettings.velocity);
     audio.playBeep();
   });
 
@@ -155,12 +157,10 @@ async function main() {
     const deltaSec = (now - lastTime) / 1000;
     lastTime = now;
     updateSolarSystem(solarGroup, deltaSec);
-    updateProbes(deltaSec, solarGroup, bodies, scene);
+    updateProbes(probes, deltaSec, solarGroup, bodies);
     const movement = controls.update(deltaSec);
     solarGroup.position.sub(movement);
-    const cameraPos = new THREE.Vector3();
-    camera.getWorldPosition(cameraPos);
-    updateOrrery(orrery, solarGroup, cameraPos);
+    updateOrrery(orrery, deltaSec);
     // Update grabbing for each hand
     for (let i = 0; i < 2; i++) {
       const hand = renderer.xr.getHand(i);
