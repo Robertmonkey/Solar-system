@@ -1,110 +1,90 @@
 /*
  * ui.js
  *
- * A revamped UI system designed for the lectern cockpit. This module draws
- * three separate panels and handles the new gesture-based interactions
- * for tapping buttons and moving sliders.
+ * This module draws the three UI panels and provides methods for the
+ * controls system to report hover and tap events, which then trigger
+ * state changes and callbacks.
  */
 
 import * as THREE from 'three';
 import { COLORS, FONT_FAMILY } from './constants.js';
 
 export function createUI(bodies, callbacks = {}) {
-  const {
-    onWarp = () => {},
-    onProbeChange = () => {},
-    onTimeChange = () => {},
-    onNarrate = () => {}
-  } = callbacks;
+  const { onWarp = () => {}, onProbeChange = () => {}, onTimeChange = () => {}, onNarrate = () => {} } = callbacks;
 
-  // Internal state
   let selectedIndex = 0;
-  let probeMass = 0.5;
-  let probeVelocity = 0.5;
-  let timeValue = 0.2; // Start at a low time warp
-  let hoverIndex = -1;
-  let activeSlider = null; // 'mass', 'velocity', 'time'
+  let probeMass = 0.5, probeVelocity = 0.5, timeValue = 0.2;
+  let hoverState = { panel: null, item: null };
+  let needsRedraw = true;
 
-  const WARP_SIZE = 0.8;
-  const PROBE_SIZE = 0.8;
-  const FACTS_WIDTH = 1.2;
-  const FACTS_HEIGHT = 0.6;
+  const panels = {
+    warp: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
+    probe: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
+    facts: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
+  };
 
-  function makeCanvas(w, h) {
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    return { canvas, ctx };
+  function setupPanel(name, w, h, planeW, planeH) {
+    const p = panels[name];
+    p.canvas.width = w;
+    p.canvas.height = h;
+    p.ctx = p.canvas.getContext('2d');
+    p.texture = new THREE.CanvasTexture(p.canvas);
+    p.mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), new THREE.MeshBasicMaterial({ map: p.texture, transparent: true }));
+    p.mesh.name = name;
   }
 
-  const warp = makeCanvas(512, 1024);
-  const probe = makeCanvas(512, 512);
-  const facts = makeCanvas(1024, 512);
+  setupPanel('warp', 512, 1024, 0.8, 1.6);
+  setupPanel('probe', 512, 512, 0.8, 0.8);
+  setupPanel('facts', 1024, 512, 1.2, 0.6);
 
-  const warpTexture = new THREE.CanvasTexture(warp.canvas);
-  const probeTexture = new THREE.CanvasTexture(probe.canvas);
-  const factsTexture = new THREE.CanvasTexture(facts.canvas);
-
-  const warpMesh = new THREE.Mesh(new THREE.PlaneGeometry(WARP_SIZE, WARP_SIZE * 2), new THREE.MeshBasicMaterial({ map: warpTexture, transparent: true, side: THREE.DoubleSide }));
-  const probeMesh = new THREE.Mesh(new THREE.PlaneGeometry(PROBE_SIZE, PROBE_SIZE), new THREE.MeshBasicMaterial({ map: probeTexture, transparent: true, side: THREE.DoubleSide }));
-  const factsMesh = new THREE.Mesh(new THREE.PlaneGeometry(FACTS_WIDTH, FACTS_HEIGHT), new THREE.MeshBasicMaterial({ map: factsTexture, transparent: true, side: THREE.DoubleSide }));
-
-  warpMesh.name = 'WarpPanel';
-  probeMesh.name = 'ProbePanel';
-  factsMesh.name = 'FactsPanel';
-  
-  const uiState = { needsRedraw: true };
-
-  function drawWarp() {
-    const ctx = warp.ctx;
+  function drawPanelBackground(ctx, title) {
     const { width, height } = ctx.canvas;
-    ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = COLORS.uiBackground;
     ctx.fillRect(0, 0, width, height);
-
     ctx.fillStyle = COLORS.textPrimary;
     ctx.font = `bold 48px ${FONT_FAMILY}`;
     ctx.textAlign = 'center';
-    ctx.fillText('WARP TARGETS', width / 2, 50);
-
-    const count = bodies.length;
-    const rowH = (height - 80) / count;
-    ctx.font = `32px ${FONT_FAMILY}`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    for (let i = 0; i < count; i++) {
-      const y = 80 + i * rowH;
-      if (i === hoverIndex) {
-        ctx.fillStyle = COLORS.uiRowHighlight;
-        ctx.fillRect(10, y, width - 20, rowH);
-        ctx.fillStyle = COLORS.textInvert;
-      } else if (i === selectedIndex) {
-        ctx.strokeStyle = COLORS.uiHighlight;
-        ctx.lineWidth = 4;
-        ctx.strokeRect(10, y, width - 20, rowH);
-        ctx.fillStyle = COLORS.textPrimary;
-      } else {
-        ctx.fillStyle = COLORS.textSecondary;
-      }
-      ctx.fillText(bodies[i].data.name, 30, y + rowH / 2);
-    }
-    warpTexture.needsUpdate = true;
+    ctx.textBaseline = 'top';
+    ctx.fillText(title, width / 2, 20);
   }
 
-  function drawSlider(ctx, label, x, y, w, h, value, orientation = 'vertical') {
+  function drawWarp() {
+    const { ctx, canvas } = panels.warp;
+    drawPanelBackground(ctx, 'WARP TARGETS');
+    const rowH = (canvas.height - 80) / bodies.length;
+    bodies.forEach((body, i) => {
+      const y = 80 + i * rowH;
+      if (hoverState.panel === 'warp' && hoverState.item === i) {
+        ctx.fillStyle = COLORS.uiRowHighlight;
+        ctx.fillRect(10, y, canvas.width - 20, rowH);
+        ctx.fillStyle = COLORS.textInvert;
+      } else {
+        ctx.fillStyle = i === selectedIndex ? COLORS.textPrimary : COLORS.textSecondary;
+        if(i === selectedIndex) {
+            ctx.strokeStyle = COLORS.uiHighlight;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(10, y, canvas.width - 20, rowH);
+        }
+      }
+      ctx.font = `32px ${FONT_FAMILY}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(body.data.name, 30, y + rowH / 2);
+    });
+    panels.warp.texture.needsUpdate = true;
+  }
+
+  function drawSlider(ctx, label, x, y, w, h, value, item) {
+    if (hoverState.panel === 'probe' && hoverState.item === item) {
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.3)';
+        ctx.fillRect(x-10, y-10, w+20, h+20);
+    }
     ctx.fillStyle = COLORS.sliderTrack;
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = COLORS.uiHighlight;
-    if (orientation === 'vertical') {
-        const knobH = 15;
-        const knobY = y + (1 - value) * (h - knobH);
-        ctx.fillRect(x - 5, knobY, w + 10, knobH);
-    } else { // horizontal
-        const knobW = 15;
-        const knobX = x + value * (w - knobW);
-        ctx.fillRect(knobX, y - 5, knobW, h + 10);
-    }
+    const knobH = 15;
+    const knobY = y + (1 - value) * (h - knobH);
+    ctx.fillRect(x - 5, knobY, w + 10, knobH);
     ctx.fillStyle = COLORS.textPrimary;
     ctx.font = `24px ${FONT_FAMILY}`;
     ctx.textAlign = 'center';
@@ -112,146 +92,82 @@ export function createUI(bodies, callbacks = {}) {
   }
 
   function drawProbe() {
-    const ctx = probe.ctx;
-    const { width, height } = ctx.canvas;
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = COLORS.uiBackground;
-    ctx.fillRect(0, 0, width, height);
-    
-    ctx.fillStyle = COLORS.textPrimary;
-    ctx.font = `bold 48px ${FONT_FAMILY}`;
-    ctx.textAlign = 'center';
-    ctx.fillText('CONTROLS', width / 2, 50);
-
-    drawSlider(ctx, 'Probe Mass', width * 0.15, 120, 50, height - 200, probeMass);
-    drawSlider(ctx, 'Probe Velocity', width * 0.45, 120, 50, height - 200, probeVelocity);
-    drawSlider(ctx, 'Time Warp', width * 0.75, 120, 50, height - 200, timeValue);
-    
-    probeTexture.needsUpdate = true;
-  }
-
-  function drawFacts() {
-    const ctx = facts.ctx;
-    const { width, height } = ctx.canvas;
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = COLORS.uiBackground;
-    ctx.fillRect(0, 0, width, height);
-
-    const body = bodies[selectedIndex].data;
-    ctx.font = `bold 48px ${FONT_FAMILY}`;
-    ctx.fillStyle = COLORS.textPrimary;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(body.name, 20, 20);
-
-    const factsList = body.facts || [];
-    const fact = factsList[0] || 'No data available.';
-    ctx.font = `32px ${FONT_FAMILY}`;
-    ctx.fillStyle = COLORS.textSecondary;
-    // Simple word wrap
-    const words = fact.split(' ');
-    let line = '';
-    let y = 100;
-    for (const word of words) {
-        const testLine = line + word + ' ';
-        if (ctx.measureText(testLine).width > width - 40 && line.length > 0) {
-            ctx.fillText(line, 20, y);
-            line = word + ' ';
-            y += 40;
-        } else {
-            line = testLine;
-        }
-    }
-    ctx.fillText(line, 20, y);
-
-    // Narrate button
-    const btnX = width - 270, btnY = height - 100, btnW = 250, btnH = 80;
-    ctx.fillStyle = (hoverIndex === -2) ? COLORS.uiRowHighlight : COLORS.uiHighlight;
-    ctx.fillRect(btnX, btnY, btnW, btnH);
-    ctx.fillStyle = COLORS.textInvert;
-    ctx.font = `bold 32px ${FONT_FAMILY}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('NARRATE', btnX + btnW / 2, btnY + btnH / 2);
-
-    factsTexture.needsUpdate = true;
-  }
-
-  function handlePointer(panel, uv, isSelect) {
-    let needsRedraw = false;
-    
-    if (panel === 'clear') {
-        if(hoverIndex !== -1) {
-            hoverIndex = -1;
-            needsRedraw = true;
-        }
-        activeSlider = null;
-        return uiState.needsRedraw = needsRedraw;
-    }
-      
-    if (panel === 'warp') {
-      const index = Math.floor(((1 - uv.y) * warp.canvas.height - 80) / ((warp.canvas.height - 80) / bodies.length));
-      if (index >= 0 && index < bodies.length) {
-        if (isSelect) {
-            onWarp(index);
-        } else if (hoverIndex !== index) {
-            hoverIndex = index;
-            needsRedraw = true;
-        }
-      }
-    } else if (panel === 'probe') {
-        const sliderHit = (x, w) => uv.x > x && uv.x < x + w;
-        let sliderChanged = false;
-
-        if (isSelect) {
-            if (sliderHit(0.15, 0.2)) activeSlider = 'mass';
-            else if (sliderHit(0.45, 0.2)) activeSlider = 'velocity';
-            else if (sliderHit(0.75, 0.2)) activeSlider = 'time';
-        }
-
-        if(activeSlider) {
-            const val = THREE.MathUtils.clamp(1 - (uv.y - 0.2) / 0.7, 0, 1);
-            if(activeSlider === 'mass') { probeMass = val; sliderChanged = true; }
-            if(activeSlider === 'velocity') { probeVelocity = val; sliderChanged = true; }
-            if(activeSlider === 'time') { timeValue = val; onTimeChange(val); needsRedraw = true; }
-            if (sliderChanged) onProbeChange({ mass: probeMass, velocity: probeVelocity });
-            needsRedraw = true;
-        }
-
-        if (!isSelect) activeSlider = null;
-
-    } else if (panel === 'facts') {
-        const btnHit = uv.x > 0.7 && uv.y < 0.3;
-        const newHover = btnHit ? -2 : -1;
-        if (hoverIndex !== newHover) {
-            hoverIndex = newHover;
-            needsRedraw = true;
-        }
-        if (isSelect && btnHit) {
-            onNarrate((bodies[selectedIndex].data.facts || [])[0] || 'No fact available.');
-        }
-    }
-    uiState.needsRedraw = needsRedraw;
+    const { ctx, canvas } = panels.probe;
+    drawPanelBackground(ctx, 'CONTROLS');
+    drawSlider(ctx, 'Probe Mass', canvas.width * 0.2, 120, 50, canvas.height - 200, probeMass, 'mass');
+    drawSlider(ctx, 'Probe Velocity', canvas.width * 0.5, 120, 50, canvas.height - 200, probeVelocity, 'velocity');
+    drawSlider(ctx, 'Time Warp', canvas.width * 0.8, 120, 50, canvas.height - 200, timeValue, 'time');
+    panels.probe.texture.needsUpdate = true;
   }
   
-  function update() {
-    if (uiState.needsRedraw) {
-        drawWarp();
-        drawProbe();
-        drawFacts();
-        uiState.needsRedraw = false;
+  function drawFacts() {
+    const { ctx, canvas } = panels.facts;
+    const body = bodies[selectedIndex].data;
+    drawPanelBackground(ctx, body.name);
+    // Draw fun fact text...
+    const fact = (body.facts || [])[0] || 'No data available.';
+    ctx.font = `32px ${FONT_FAMILY}`;
+    ctx.fillStyle = COLORS.textSecondary;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    // word wrap
+    const words = fact.split(' '); let line = ''; let y = 100;
+    for (const word of words) {
+        const testLine = line + word + ' ';
+        if (ctx.measureText(testLine).width > canvas.width - 40 && line.length > 0) {
+            ctx.fillText(line, 20, y); line = word + ' '; y += 40;
+        } else { line = testLine; }
+    }
+    ctx.fillText(line, 20, y);
+    // Draw narrate button
+    const btnX = canvas.width - 270, btnY = canvas.height - 100, btnW = 250, btnH = 80;
+    ctx.fillStyle = (hoverState.panel === 'facts' && hoverState.item === 'narrate') ? COLORS.uiRowHighlight : COLORS.uiHighlight;
+    ctx.fillRect(btnX, btnY, btnW, btnH);
+    ctx.fillStyle = COLORS.textInvert; ctx.font = `bold 32px ${FONT_FAMILY}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('NARRATE', btnX + btnW / 2, btnY + btnH / 2);
+    panels.facts.texture.needsUpdate = true;
+  }
+
+  function setHover(panel, localPos) {
+    let newHover = { panel: null, item: null };
+    if (panel === 'warp' && localPos) {
+      const index = Math.floor((1 - localPos.y / 1.6 - 0.05) * bodies.length);
+      if (index >= 0 && index < bodies.length) newHover = { panel: 'warp', item: index };
+    } else if (panel === 'probe' && localPos) {
+      if (localPos.x > -0.3 && localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
+      else if (localPos.x > 0 && localPos.x < 0.2) newHover = { panel: 'probe', item: 'velocity'};
+      else if (localPos.x > 0.3 && localPos.x < 0.5) newHover = { panel: 'probe', item: 'time'};
+    } else if (panel === 'facts' && localPos) {
+      if (localPos.x > 0.3 && localPos.y < -0.15) newHover = { panel: 'facts', item: 'narrate' };
+    }
+    if (newHover.panel !== hoverState.panel || newHover.item !== hoverState.item) {
+      hoverState = newHover;
+      needsRedraw = true;
     }
   }
 
-  onTimeChange(timeValue); // Set initial time warp
+  function handleTap(panel, localPos) {
+    if (panel === 'warp') {
+      const index = Math.floor((1 - localPos.y / 1.6 - 0.05) * bodies.length);
+      if (index >= 0 && index < bodies.length) onWarp(index);
+    } else if (panel === 'facts') {
+      if (localPos.x > 0.3 && localPos.y < -0.15) onNarrate((bodies[selectedIndex].data.facts || [])[0]);
+    } else if (panel === 'probe') {
+        const val = THREE.MathUtils.clamp(1 - (localPos.y + 0.35) / 0.7, 0, 1);
+        if (hoverState.item === 'mass') { probeMass = val; }
+        if (hoverState.item === 'velocity') { probeVelocity = val; }
+        if (hoverState.item === 'time') { timeValue = val; onTimeChange(val); }
+        onProbeChange({ mass: probeMass, velocity: probeVelocity });
+        needsRedraw = true;
+    }
+  }
 
+  onTimeChange(timeValue); // Set initial time
+  
   return {
-    warpMesh, probeMesh, factsMesh, handlePointer, update,
-    setSelectedIndex: index => {
-      if (index >= 0 && index < bodies.length && selectedIndex !== index) {
-        selectedIndex = index;
-        uiState.needsRedraw = true;
-      }
-    },
+    warpMesh: panels.warp.mesh, probeMesh: panels.probe.mesh, factsMesh: panels.facts.mesh,
+    update: () => { if(needsRedraw) { drawWarp(); drawProbe(); drawFacts(); needsRedraw = false; } },
+    setSelectedIndex: (i) => { if (i !== selectedIndex) { selectedIndex = i; needsRedraw = true; }},
+    setHover, handleTap,
   };
 }
