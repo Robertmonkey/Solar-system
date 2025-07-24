@@ -9,7 +9,8 @@ import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { createCockpit } from './lecternCockpit.js';
 import { createUI } from './ui.js';
-import { createControls } from './controls.js';
+// Import controls with an alias matching the instructions
+import { createControls as setupControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
 import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
@@ -26,8 +27,8 @@ async function main() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
-  const sessionInit = { optionalFeatures: ['hand-tracking'] };
-  document.body.appendChild(VRButton.createButton(renderer, sessionInit));
+  // Attach the WebXR button using the default initialisation
+  document.body.appendChild(VRButton.createButton(renderer));
 
   // XR status overlay handling (copied from original).
   const overlay = document.getElementById('overlay');
@@ -97,15 +98,22 @@ async function main() {
   const probes = createProbes();
   scene.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
+  // Set up UI with callbacks wired to the new behaviour
   const ui = createUI(bodies, {
-    onWarp: index => warpToBody(index),
-    onProbeChange: settings => {
-      probeSettings = settings;
+    onWarp: index => handleWarpSelect(bodies[index]),
+    onProbeChange: ({ mass, velocity }) => {
+      probeSettings = { mass, velocity };
     },
     onTimeChange: value => {
       setTimeMultiplier(Math.pow(1000, value) - 1);
     },
-    onNarrate: fact => audio.speak(fact)
+    onNarrate: text => {
+      if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(text);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+      }
+    }
   });
   // Position the panels around the desk.  Warp on the left, probe on the right,
   // facts in the centre front.  Rotate them slightly to face the user.
@@ -121,7 +129,7 @@ async function main() {
 
   // Controls: connect hand tracking, grabbing and UI interaction.  When the
   // fire button is pressed we launch a probe using the current probe settings.
-  const controls = createControls(renderer, scene, camera, cockpit, ui, () => {
+  const controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
     // Compute muzzle position relative to cockpit to launch from.
     const muzzle = new THREE.Vector3(0, 0.82, 1.05);
     cockpit.group.localToWorld(muzzle);
@@ -138,16 +146,28 @@ async function main() {
   let showLabels = true;
   let autopilotEnabled = false;
 
-  // Warp to the selected body.
-  function warpToBody(index) {
-    const target = bodies[index];
-    if (!target) return;
-    const targetWorld = new THREE.Vector3();
-    target.group.getWorldPosition(targetWorld);
-    const origin = solarGroup.getWorldPosition(new THREE.Vector3());
-    const offset = targetWorld.clone().sub(origin);
-    solarGroup.position.sub(offset);
+  // Warp so the selected body appears a short distance in front of the cockpit
+  function handleWarpSelect(body) {
+    if (!body) return;
+    // Current world positions
+    const bodyPos = new THREE.Vector3();
+    body.group.getWorldPosition(bodyPos);
+    const cockpitPos = new THREE.Vector3();
+    cockpit.group.getWorldPosition(cockpitPos);
+    // Desired position is three units ahead of the cockpit
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const desired = cockpitPos.clone().addScaledVector(forward, 3);
+    const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+    const currentOffset = bodyPos.sub(solarOrigin);
+    const desiredOffset = desired.sub(solarOrigin);
+    solarGroup.position.sub(currentOffset.clone().sub(desiredOffset));
     audio.playWarp();
+    const fact = (body.data.facts || body.data.funFacts || [])[0];
+    if (fact && 'speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(fact);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }
   }
 
   // Render loop.
