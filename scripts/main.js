@@ -11,17 +11,18 @@ import { createCockpit } from './lecternCockpit.js';
 import { createUI } from './ui.js';
 // Import controls with an alias matching the instructions
 import { createControls as setupControls } from './controls.js';
-import { createOrrery, updateOrrery } from './orrery.js';
+import { createOrrery, updateOrrery, createPlayerMarker } from './orrery.js';
 import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
-import { setTimeMultiplier } from './constants.js';
+import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS } from './constants.js';
 
 
 async function main() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000010);
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 0, 5);
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 50000);
+  // Initial non-VR camera position is outside the cockpit
+  camera.position.set(0, 1.6, 2);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -56,30 +57,21 @@ async function main() {
   }
 
   // Lighting
-  const ambient = new THREE.AmbientLight(0x888888);
+  const ambient = new THREE.AmbientLight(0xaaaaaa, 0.5);
   scene.add(ambient);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-  dirLight.position.set(5, 10, 7);
-  scene.add(dirLight);
+  // The sun mesh itself will be emissive and provide primary light
 
   // Solar system
-  const { solarGroup, bodies } = createSolarSystem();
+  const { solarGroup, bodies } = await createSolarSystem();
+  // Start the player near Earth by default. 1 AU = ~150 world units.
+  solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
 
   // Cockpit
   const cockpit = createCockpit();
-  // Do not scale the lectern cockpit.  Its dimensions are designed for a
-  // standing user: the desk top is at y=0.8 and the floor ring at y=0.  In
-  // WebXR the floor (ground) is typically at y=0 and the player’s head is
-  // around y=1.6.  Leaving the cockpit unscaled and unshifted ensures the
-  // platform sits on the ground and the desk is approximately at chest height.
-  cockpit.group.scale.setScalar(1.0);
-  // Position the lectern cockpit a little in front of the player.  This
-  // offset along the z‑axis moves the desk forward so the user doesn’t
-  // intersect the controls when entering VR.  We keep the y‑position at 0
-  // so the floor ring rests on the ground.  A negative z translates the
-  // cockpit away from the camera.
-  cockpit.group.position.set(0, 0, -1.2);
+  // Position the lectern cockpit directly in front of the player's origin.
+  // The player's head in VR is at approx (0, 1.6, 0).
+  cockpit.group.position.set(0, 0, -0.5);
   scene.add(cockpit.group);
 
   // Audio
@@ -87,12 +79,16 @@ async function main() {
 
   // Orrery: mount on the dedicated stand within the lectern cockpit.
   const orrery = createOrrery();
-  // Scale down the orrery so it fits nicely on the stand.  Smaller scaling
-  // prevents the mini planets from overlapping and forming a block.
-  orrery.group.scale.setScalar(0.3);
+  // Scale down the orrery so it fits nicely on the stand.
+  orrery.group.scale.setScalar(0.25);
   // Attach to the mount provided by the lectern cockpit.
   cockpit.orreryMount.add(orrery.group);
-  orrery.group.position.set(0, 0.05, 0);
+  orrery.group.position.set(0, 0.1, 0); // Position it on top of the stand
+
+  // Orrery "You Are Here" marker
+  const playerMarker = createPlayerMarker();
+  orrery.group.add(playerMarker);
+
 
   // UI panels: radial warp menu, probe sliders and fun‑facts display.
   const probes = createProbes();
@@ -105,7 +101,9 @@ async function main() {
       probeSettings = { mass, velocity };
     },
     onTimeChange: value => {
-      setTimeMultiplier(Math.pow(1000, value) - 1);
+      // Use an exponential scale for more control at lower speeds
+      const multiplier = Math.pow(10, 5 * value) - 1 + value * 10;
+      setTimeMultiplier(multiplier);
     },
     onNarrate: text => {
       audio.speak(text);
@@ -113,11 +111,11 @@ async function main() {
   });
   // Position the panels around the desk.  Warp on the left, probe on the right,
   // facts in the centre front.  Rotate them slightly to face the user.
-  ui.warpMesh.position.set(-0.7, 0.8, 1.0);
-  ui.warpMesh.rotation.y = 0.25;
-  ui.probeMesh.position.set(0.7, 0.8, 1.0);
-  ui.probeMesh.rotation.y = -0.25;
-  ui.factsMesh.position.set(0, 0.65, 1.2);
+  ui.warpMesh.position.set(-0.6, 1.05, 0.4);
+  ui.warpMesh.rotation.y = 0.45;
+  ui.probeMesh.position.set(0.6, 1.05, 0.4);
+  ui.probeMesh.rotation.y = -0.45;
+  ui.factsMesh.position.set(0, 1.0, 0.6);
   // Add the UI panels to the cockpit.
   cockpit.group.add(ui.warpMesh);
   cockpit.group.add(ui.probeMesh);
@@ -127,7 +125,7 @@ async function main() {
   // fire button is pressed we launch a probe using the current probe settings.
   const controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
     // Compute muzzle position relative to cockpit to launch from.
-    const muzzle = new THREE.Vector3(0, 0.82, 1.05);
+    const muzzle = new THREE.Vector3(0, 1.0, 0.5); // Front of the desk
     cockpit.group.localToWorld(muzzle);
     const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
     const launchPos = muzzle.clone().sub(solarOrigin);
@@ -139,26 +137,27 @@ async function main() {
     audio.playBeep();
   });
 
-  let showLabels = true;
-  let autopilotEnabled = false;
-
   // Warp so the selected body appears a short distance in front of the cockpit
   function handleWarpSelect(body) {
     if (!body) return;
-    // Current world positions
-    const bodyPos = new THREE.Vector3();
-    body.group.getWorldPosition(bodyPos);
-    const cockpitPos = new THREE.Vector3();
-    cockpit.group.getWorldPosition(cockpitPos);
-    // Desired position is three units ahead of the cockpit
+    const bodyWorldPos = new THREE.Vector3();
+    body.group.getWorldPosition(bodyWorldPos);
+
+    // Calculate a safe arrival point just outside the body's radius
+    const scaledRadius = body.group.userData.radius || 1;
+    const safeDistance = scaledRadius * 4; // Arrive at 4x radius distance
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    const desired = cockpitPos.clone().addScaledVector(forward, 3);
-    const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
-    const currentOffset = bodyPos.sub(solarOrigin);
-    const desiredOffset = desired.sub(solarOrigin);
-    solarGroup.position.sub(currentOffset.clone().sub(desiredOffset));
+    const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(forward, -safeDistance);
+
+    // The amount to shift the solar system is the difference between where
+    // the player *should* be and where they currently are (which is 0,0,0).
+    const shift = desiredPlayerPos.negate();
+    solarGroup.position.copy(shift);
+
     audio.playWarp();
-    const fact = (body.data.facts || body.data.funFacts || [])[0];
+    // Also set the selected index in the UI so the facts panel updates
+    ui.setSelectedIndex(bodies.findIndex(b => b.data.name === body.data.name));
+    const fact = (body.data.facts || [])[0];
     if (fact) {
       audio.speak(fact);
     }
@@ -170,24 +169,23 @@ async function main() {
     const now = performance.now();
     const deltaSec = (now - lastTime) / 1000;
     lastTime = now;
-    updateSolarSystem(solarGroup, deltaSec);
-    updateProbes(probes, deltaSec, solarGroup, bodies);
+
     const movement = controls.update(deltaSec);
-    solarGroup.position.sub(movement);
+    if (movement) {
+      solarGroup.position.sub(movement);
+    }
+
+    updateSolarSystem(solarGroup, deltaSec);
+    updateProbes(probes, deltaSec, bodies);
     updateOrrery(orrery, deltaSec);
-    // Update grabbing for each hand
-    for (let i = 0; i < 2; i++) {
-      const hand = renderer.xr.getHand(i);
-      const indexTip = hand && hand.joints && hand.joints['index-finger-tip'];
-      if (indexTip) {
-        const tipPos = new THREE.Vector3();
-        indexTip.getWorldPosition(tipPos);
-        cockpit.updateGrab(i, tipPos);
-      }
-    }
-    if (autopilotEnabled) {
-      // Autopilot logic can be added here.
-    }
+
+    // Update the "You Are Here" marker on the orrery
+    // Its position is the inverse of the solar group's position, scaled down.
+    const playerPosInOrrerySpace = solarGroup.position.clone().negate();
+    playerMarker.position.copy(playerPosInOrrerySpace).multiplyScalar(orrery.group.scale.x);
+
+    ui.update(camera);
+
     renderer.render(scene, camera);
   });
 }
