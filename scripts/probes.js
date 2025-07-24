@@ -11,18 +11,31 @@ const probes = [];
 const PROBE_SPEED = 0.5; // units per second relative to the solar system scale
 const COLLISION_RADIUS_FACTOR = 1.2; // collision occurs at body.radius * factor
 
-// Launch a new probe. `position` and `direction` are THREE.Vector3 objects
-// expressed in solar-system coordinates (relative to the Sun). The probe is
-// created at the given position and travels in the given direction at a
-// constant speed.
-export function launchProbe(position, direction, scene) {
-  const geometry = new THREE.SphereGeometry(0.2, 16, 16);
+/**
+ * Launch a new probe.  Accepts an optional settings object with `mass`
+ * and `velocity` properties in the range [0,1].  The mass scales the
+ * probe’s size and the velocity scales its speed.  Without settings the
+ * defaults correspond to a medium sized, moderately fast probe.
+ *
+ * @param {THREE.Vector3} position Position in solar coordinates.
+ * @param {THREE.Vector3} direction Direction to travel.
+ * @param {THREE.Scene} scene The scene to which the probe is added.
+ * @param {{mass?: number, velocity?: number}} settings Optional probe settings.
+ */
+export function launchProbe(position, direction, scene, settings = {}) {
+  const mass = typeof settings.mass === 'number' ? settings.mass : 0.5;
+  const vel = typeof settings.velocity === 'number' ? settings.velocity : 0.5;
+  // Scale probe size based on mass.  Small mass yields 0.15 radius, large mass yields 0.4.
+  const radius = 0.15 + 0.25 * mass;
+  const geometry = new THREE.SphereGeometry(radius, 16, 16);
   const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.copy(position);
   scene.add(mesh);
-  const velocity = direction.clone().normalize().multiplyScalar(PROBE_SPEED);
-  probes.push({ mesh, velocity });
+  // Velocity factor: slowest is 20% of PROBE_SPEED, fastest is 200% of PROBE_SPEED.
+  const speedFactor = 0.2 + 1.8 * vel;
+  const velocityVec = direction.clone().normalize().multiplyScalar(PROBE_SPEED * speedFactor);
+  probes.push({ mesh, velocity: velocityVec });
 }
 
 // Update all probes. deltaTime is in seconds. `solarGroup` is the root
@@ -40,7 +53,7 @@ export function updateProbes(deltaTime, solarGroup, solarBodies, scene) {
     for (const obj of solarBodies) {
       const bodyWorldPos = new THREE.Vector3();
       obj.group.getWorldPosition(bodyWorldPos);
-      // Convert body position to solar coordinates relative to Sun
+      // Convert body position to solar-system-centric coordinates by subtracting the Sun
       bodyWorldPos.sub(origin);
       const distance = probe.mesh.position.distanceTo(bodyWorldPos);
       const threshold = obj.data.radius * COLLISION_RADIUS_FACTOR;
