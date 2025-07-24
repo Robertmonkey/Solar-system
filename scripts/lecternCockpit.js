@@ -11,6 +11,7 @@
  */
 
 import * as THREE from 'three';
+import { PALETTE } from './constants.js';
 
 /**
  * Creates a lectern‑style cockpit.  The returned object exposes the group
@@ -41,22 +42,23 @@ export function createLecternCockpit() {
   // Materials.  Dark metallic surfaces with subtle emissive accents to achieve
   // the cosmic aesthetic.
   const darkMetalMat = new THREE.MeshStandardMaterial({
-    color: 0x1a1a20,
+    color: PALETTE.Mercury,
     metalness: 0.9,
-    roughness: 0.3
+    roughness: 0.35
   });
   const accentMat = new THREE.MeshStandardMaterial({
-    color: 0x224466,
+    color: PALETTE.Neptune,
     metalness: 0.9,
     roughness: 0.2,
-    emissive: 0x112244,
+    emissive: PALETTE.Sun,
     emissiveIntensity: 0.6
   });
   const controlMat = new THREE.MeshStandardMaterial({
-    color: 0x00aaff,
+    color: PALETTE.Earth,
     metalness: 0.8,
     roughness: 0.4,
-    emissive: 0x001133
+    emissive: PALETTE.Saturn,
+    emissiveIntensity: 0.4
   });
 
   // --- Floor Ring ---
@@ -149,6 +151,7 @@ export function createLecternCockpit() {
   throttlePivot.add(throttleLever);
   throttleGroup.add(throttleBase, throttlePivot);
   throttleGroup.name = 'Throttle';
+  throttleGroup.userData = { type: 'throttle' };
   throttleGroup.position.set(-0.5, 0.82, 0.9);
   cockpitGroup.add(throttleGroup);
 
@@ -162,6 +165,7 @@ export function createLecternCockpit() {
   joystickPivot.add(stick, stickTop);
   joystickGroup.add(stickBase, joystickPivot);
   joystickGroup.name = 'Joystick';
+  joystickGroup.userData = { type: 'joystick' };
   joystickGroup.position.set(0.5, 0.82, 0.9);
   cockpitGroup.add(joystickGroup);
 
@@ -170,6 +174,7 @@ export function createLecternCockpit() {
   const fireButtonMat = new THREE.MeshStandardMaterial({ color: 0xff2222, metalness: 0.5, roughness: 0.4, emissive: 0x330000 });
   const fireButton = new THREE.Mesh(fireButtonGeom, fireButtonMat);
   fireButton.name = 'FireButton';
+  fireButton.userData = { type: 'fireButton' };
   fireButton.position.set(0, 0.82, 1.05);
   cockpitGroup.add(fireButton);
 
