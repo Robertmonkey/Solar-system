@@ -37,6 +37,10 @@ export function createSolarSystem() {
     group.name = data.name;
     group.add(mesh);
 
+    // --- Corrected Tilt Logic ---
+    // Apply the axial tilt to the group's rotation once during creation.
+    group.rotation.z = THREE.MathUtils.degToRad(data.tilt || 0);
+
     // Copy useful data onto the group for easy access during update.
     group.userData = {
       orbitRadius: data.orbitRadius,
@@ -49,10 +53,7 @@ export function createSolarSystem() {
     solarBodies.push({ data, group });
   });
 
-  // Second pass: parent the groups according to the data. Bodies with no
-  // parent are attached directly to the solarGroup; others are nested under
-  // their parent’s group. Moons therefore inherit the motion of their
-  // planets automatically.
+  // Second pass: parent the groups according to the data.
   solarBodies.forEach(obj => {
     const parentName = obj.data.parent;
     if (!parentName) {
@@ -62,7 +63,6 @@ export function createSolarSystem() {
       if (parent) {
         parent.group.add(obj.group);
       } else {
-        // If no parent is found, attach to the root as a fallback.
         solarGroup.add(obj.group);
       }
     }
@@ -70,8 +70,7 @@ export function createSolarSystem() {
   return { solarGroup, bodies: solarBodies };
 }
 
-// Update orbital positions and rotations based on elapsed time. deltaTime is
-// specified in Earth days; you can convert from seconds by dividing by 86400.
+// Update orbital positions and rotations based on elapsed time.
 export function updateSolarSystem(deltaTime) {
   solarBodies.forEach(obj => {
     const group = obj.group;
@@ -82,18 +81,14 @@ export function updateSolarSystem(deltaTime) {
       ud.orbitAngle = (ud.orbitAngle + angleIncrement) % (Math.PI * 2);
       const r = ud.orbitRadius;
       const angle = ud.orbitAngle;
-      // Place the group in the X–Z plane around its parent.
       group.position.set(Math.cos(angle) * r, 0, Math.sin(angle) * r);
     }
     // Apply axial rotation if rotationPeriod is non-zero.
     if (ud.rotationPeriod !== 0) {
-      // Convert full rotation per period to radians per unit time. Negative
-      // periods result in retrograde rotation.
       const rotSpeed = (deltaTime / Math.abs(ud.rotationPeriod)) * Math.PI * 2;
+      // Only update the spin around the Y-axis. The tilt is already set.
       group.rotation.y += rotSpeed * Math.sign(ud.rotationPeriod);
     }
-    // Apply axial tilt by rotating around the Z axis. Note that because
-    // rotations accumulate, we set the tilt directly each frame.
-    group.rotation.z = THREE.MathUtils.degToRad(ud.tilt);
+    // The incorrect tilt logic has been removed from the update loop.
   });
 }
