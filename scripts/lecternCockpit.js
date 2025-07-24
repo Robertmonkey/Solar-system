@@ -11,6 +11,7 @@
  */
 
 import * as THREE from 'three';
+import { PALETTE, EMISSIVE } from './constants.js';
 
 /**
  * Creates a lectern‑style cockpit.  The returned object exposes the group
@@ -41,22 +42,22 @@ export function createLecternCockpit() {
   // Materials.  Dark metallic surfaces with subtle emissive accents to achieve
   // the cosmic aesthetic.
   const darkMetalMat = new THREE.MeshStandardMaterial({
-    color: 0x1a1a20,
+    color: PALETTE.base,
     metalness: 0.9,
     roughness: 0.3
   });
   const accentMat = new THREE.MeshStandardMaterial({
-    color: 0x224466,
+    color: PALETTE.accent,
     metalness: 0.9,
     roughness: 0.2,
-    emissive: 0x112244,
+    emissive: EMISSIVE.accent,
     emissiveIntensity: 0.6
   });
   const controlMat = new THREE.MeshStandardMaterial({
-    color: 0x00aaff,
+    color: PALETTE.control,
     metalness: 0.8,
     roughness: 0.4,
-    emissive: 0x001133
+    emissive: EMISSIVE.control
   });
 
   // --- Floor Ring ---
@@ -82,35 +83,23 @@ export function createLecternCockpit() {
   cockpitGroup.add(floorPlate);
 
   // --- Lectern Desk ---
-  // Use a half‑cylinder to create a wrap‑around desk.  The desk is open
-  // towards the player and spans 180 degrees around them.  We use
-  // CylinderGeometry with a start angle of ‑π/2 so the flat edge faces the
-  // player’s back.  The height is small to resemble a tabletop.
+  // A torus segment forms the wrap‑around desk.  The arc spans 180 degrees so
+  // the desk surrounds the front half of the player, leaving an opening at the
+  // back.  Rotating it 90° around X aligns the surface horizontally.
   const deskRadius = 1.5;
-  const deskThickness = 0.12;
-  const deskGeom = new THREE.CylinderGeometry(
-    deskRadius,
-    deskRadius,
-    deskThickness,
-    64,
-    1,
-    true,
-    -Math.PI / 2,
-    Math.PI
-  );
+  const deskTube = 0.15;
+  const deskGeom = new THREE.TorusGeometry(deskRadius, deskTube, 24, 64, Math.PI);
   const desk = new THREE.Mesh(deskGeom, darkMetalMat);
   desk.position.set(0, 0.8, 0);
-  desk.rotation.x = Math.PI / 2; // Lay it horizontally
-  // Make the desk render on both sides so it’s visible from above.  Without
-  // this, the inner surface may be culled and the desk will disappear in VR.
-  desk.material.side = THREE.DoubleSide;
+  desk.rotation.x = Math.PI / 2;
+  desk.rotation.y = Math.PI; // open behind the player
   cockpitGroup.add(desk);
 
   // Add an accent ring along the top edge of the desk for visual interest.
   const deskEdgeGeom = new THREE.TorusGeometry(deskRadius + 0.01, 0.01, 8, 64, Math.PI);
   const deskEdge = new THREE.Mesh(deskEdgeGeom, accentMat);
-  deskEdge.position.set(0, 0.86, 0);
-  deskEdge.rotation.y = Math.PI; // Align the opening
+  deskEdge.position.set(0, 0.8 + deskTube, 0);
+  deskEdge.rotation.y = Math.PI;
   cockpitGroup.add(deskEdge);
 
   // --- Orrery Mount ---
@@ -142,13 +131,19 @@ export function createLecternCockpit() {
   const throttleBase = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.04, 0.2), darkMetalMat);
   const throttleLever = new THREE.Mesh(
     new THREE.BoxGeometry(0.04, 0.35, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.8, roughness: 0.3, emissive: 0x331100 })
+    new THREE.MeshStandardMaterial({
+      color: PALETTE.highlight,
+      metalness: 0.8,
+      roughness: 0.3,
+      emissive: EMISSIVE.highlight
+    })
   );
   throttleLever.position.y = 0.175;
   const throttlePivot = new THREE.Object3D();
   throttlePivot.add(throttleLever);
   throttleGroup.add(throttleBase, throttlePivot);
   throttleGroup.name = 'Throttle';
+  throttleGroup.userData = { type: 'throttle' };
   throttleGroup.position.set(-0.5, 0.82, 0.9);
   cockpitGroup.add(throttleGroup);
 
@@ -162,14 +157,16 @@ export function createLecternCockpit() {
   joystickPivot.add(stick, stickTop);
   joystickGroup.add(stickBase, joystickPivot);
   joystickGroup.name = 'Joystick';
+  joystickGroup.userData = { type: 'joystick' };
   joystickGroup.position.set(0.5, 0.82, 0.9);
   cockpitGroup.add(joystickGroup);
 
   // Launch/Fire button near the probe controls (front centre).
   const fireButtonGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.05, 32);
-  const fireButtonMat = new THREE.MeshStandardMaterial({ color: 0xff2222, metalness: 0.5, roughness: 0.4, emissive: 0x330000 });
+  const fireButtonMat = new THREE.MeshStandardMaterial({ color: PALETTE.danger, metalness: 0.5, roughness: 0.4, emissive: EMISSIVE.danger });
   const fireButton = new THREE.Mesh(fireButtonGeom, fireButtonMat);
   fireButton.name = 'FireButton';
+  fireButton.userData = { type: 'fireButton' };
   fireButton.position.set(0, 0.82, 1.05);
   cockpitGroup.add(fireButton);
 

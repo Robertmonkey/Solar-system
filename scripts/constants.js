@@ -26,3 +26,22 @@ export const C_KMPS = 299_792.458;
 // Conversion from miles per hour to kilometres per second.  The throttle slider
 // uses an exponential mapping between 1 mph and c.
 export const MPH_TO_KMPS = 1.60934 / 3600;
+
+// --- Visual Palette ---
+// Colours used throughout the cockpit and UI.  These provide a consistent
+// cosmic aesthetic and centralise tweaks in one place.  Each entry defines the
+// base colour as well as the emissive colour used for subtle glow effects.
+export const PALETTE = {
+  base: 0x1a1a20,       // dark metal surfaces
+  accent: 0x224466,     // glowing rim and desk edges
+  control: 0x00aaff,    // joystick shafts and similar details
+  highlight: 0xffaa00,  // throttle lever
+  danger: 0xff2222      // fire button and warnings
+};
+
+export const EMISSIVE = {
+  accent: 0x112244,
+  control: 0x001133,
+  highlight: 0x331100,
+  danger: 0x330000
+};
