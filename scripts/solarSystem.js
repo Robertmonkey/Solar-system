@@ -3,6 +3,8 @@
 
 import * as THREE from 'three';
 import { bodies as bodyData } from './data.js';
+import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER } from './constants.js';
+import { degToRad, getOrbitalPosition } from './utils.js';
 
 // Global list of body instances. Each entry holds the original data and the
 // corresponding THREE.Group used to update its orbit and rotation.
@@ -18,9 +20,9 @@ export function createSolarSystem() {
   // First pass: create groups for every body. We defer parenting until after
   // all groups exist so that lookups are simple.
   bodyData.forEach(data => {
-    // Create a mesh for the body: simple sphere with a basic material. Use
-    // lambert material so the lighting (if any) can shade the sphere.
-    const geometry = new THREE.SphereGeometry(data.radius, 32, 32);
+    // Convert physical radius from kilometres into world units
+    const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER;
+    const geometry = new THREE.SphereGeometry(radius, 32, 32);
     let material;
     if (data.texture) {
       const texture = loader.load(data.texture);
@@ -39,15 +41,20 @@ export function createSolarSystem() {
 
     // --- Corrected Tilt Logic ---
     // Apply the axial tilt to the group's rotation once during creation.
-    group.rotation.z = THREE.MathUtils.degToRad(data.tilt || 0);
+    group.rotation.z = degToRad(data.axialTiltDeg || 0);
 
     // Copy useful data onto the group for easy access during update.
     group.userData = {
-      orbitRadius: data.orbitRadius,
-      orbitPeriod: data.orbitPeriod,
-      rotationPeriod: data.rotationPeriod,
-      tilt: data.tilt || 0,
-      orbitAngle: Math.random() * Math.PI * 2 // randomise starting positions
+      name: data.name,
+      parent: data.parent,
+      massKg: data.massKg,
+      semiMajorAxisAU: data.semiMajorAxisAU,
+      eccentricity: data.eccentricity,
+      orbitalPeriodDays: data.orbitalPeriodDays,
+      rotationPeriodHours: data.rotationPeriodHours,
+      axialTiltDeg: data.axialTiltDeg || 0,
+      meanAnomaly0: Math.random() * Math.PI * 2,
+      elapsedDays: 0
     };
 
     solarBodies.push({ data, group });
@@ -71,24 +78,23 @@ export function createSolarSystem() {
 }
 
 // Update orbital positions and rotations based on elapsed time.
-export function updateSolarSystem(deltaTime) {
+export function updateSolarSystem(deltaDays) {
   solarBodies.forEach(obj => {
     const group = obj.group;
     const ud = group.userData;
-    // Update orbital angle for objects with non-zero orbit periods.
-    if (ud.orbitPeriod > 0 && ud.orbitRadius > 0) {
-      const angleIncrement = (deltaTime / ud.orbitPeriod) * Math.PI * 2;
-      ud.orbitAngle = (ud.orbitAngle + angleIncrement) % (Math.PI * 2);
-      const r = ud.orbitRadius;
-      const angle = ud.orbitAngle;
-      group.position.set(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+    if (ud.orbitalPeriodDays > 0 && ud.semiMajorAxisAU > 0) {
+      ud.elapsedDays += deltaDays;
+      const pos = getOrbitalPosition({
+        semiMajorAxisAU: ud.semiMajorAxisAU,
+        eccentricity: ud.eccentricity,
+        orbitalPeriodDays: ud.orbitalPeriodDays,
+        meanAnomaly0: ud.meanAnomaly0
+      }, ud.elapsedDays);
+      group.position.copy(pos);
     }
-    // Apply axial rotation if rotationPeriod is non-zero.
-    if (ud.rotationPeriod !== 0) {
-      const rotSpeed = (deltaTime / Math.abs(ud.rotationPeriod)) * Math.PI * 2;
-      // Only update the spin around the Y-axis. The tilt is already set.
-      group.rotation.y += rotSpeed * Math.sign(ud.rotationPeriod);
+    if (ud.rotationPeriodHours) {
+      const rotSpeed = (deltaDays * 24 / Math.abs(ud.rotationPeriodHours)) * Math.PI * 2;
+      group.rotation.y += rotSpeed * Math.sign(ud.rotationPeriodHours);
     }
-    // The incorrect tilt logic has been removed from the update loop.
   });
 }
