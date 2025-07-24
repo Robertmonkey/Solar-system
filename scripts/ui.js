@@ -40,8 +40,7 @@ export function createUI(bodies, callbacks = {}) {
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
-    // Improve text rendering quality on high DPI displays.
-    ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    // NOTE: The incorrect ctx.scale() line has been removed.
     return { canvas, ctx };
   }
 
@@ -100,7 +99,7 @@ export function createUI(bodies, callbacks = {}) {
     ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-    ctx.font = '18px sans-serif';
+    ctx.font = '18px Orbitron, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
 
@@ -135,7 +134,7 @@ export function createUI(bodies, callbacks = {}) {
     const itemCount = bodies.length;
     const itemHeight = ctx.canvas.height / itemCount;
     const fontSize = Math.max(14, Math.floor(itemHeight * 0.5));
-    ctx.font = `${fontSize}px sans-serif`;
+    ctx.font = `${fontSize}px Orbitron, sans-serif`;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
 
@@ -161,7 +160,7 @@ export function createUI(bodies, callbacks = {}) {
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
     const body = bodies[selectedIndex].data;
-    ctx.font = '16px sans-serif';
+    ctx.font = '16px Orbitron, sans-serif';
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#fff';
@@ -198,7 +197,7 @@ export function createUI(bodies, callbacks = {}) {
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '18px sans-serif';
+    ctx.font = '18px Orbitron, sans-serif';
     ctx.fillText('Narrate', btnX + btnW / 2, btnY + btnH / 2);
 
     bottomTexture.needsUpdate = true;
@@ -209,10 +208,7 @@ export function createUI(bodies, callbacks = {}) {
   drawRight();
   drawBottom();
 
-  // Handle pointer interactions. The caller should provide a raycaster and
-  // call this function when a ray intersects the UI panels. `panel` is one
-  // of 'left', 'right' or 'bottom', and `uv` is the texture coordinate of
-  // the intersection point (with x and y in the range 0–1).
+  // Handle pointer interactions.
   function handlePointer(panel, uv) {
     if (panel === 'left') {
       const index = Math.floor(uv.y * bodies.length);
@@ -224,22 +220,24 @@ export function createUI(bodies, callbacks = {}) {
       }
     } else if (panel === 'right') {
       // Determine which toggle was hit based on uv.y
-      if (uv.y > 0.2 && uv.y < 0.35) {
+      if (uv.y > 0.2 && uv.y < 0.35) { // Simplified hit detection
         labelsEnabled = !labelsEnabled;
         drawRight();
         onToggleLabels(labelsEnabled);
-      } else if (uv.y > 0.35 && uv.y < 0.5) {
+      } else if (uv.y > 0.45 && uv.y < 0.6) { // Adjusted for font
         autopilotEnabled = !autopilotEnabled;
         drawRight();
         onToggleAutopilot(autopilotEnabled);
       }
     } else if (panel === 'bottom') {
       // Check if the narrate button was pressed
-      const btnTop = 1 - (40 + 20) / bottom.canvas.height;
-      const btnBottom = 1 - 20 / bottom.canvas.height;
-      const btnLeft = (1 - 0.3) / 2;
-      const btnRight = (1 + 0.3) / 2;
-      if (uv.x > btnLeft && uv.x < btnRight && uv.y > btnTop && uv.y < btnBottom) {
+      const btnTopUV = (bottom.canvas.height - 60) / bottom.canvas.height;
+      const btnBottomUV = (bottom.canvas.height - 20) / bottom.canvas.height;
+      const btnLeftUV = (1 - 0.3) / 2;
+      const btnRightUV = (1 + 0.3) / 2;
+      
+      // Note: UV.y is often inverted (0=top). Assuming 0=top.
+      if (uv.x > btnLeftUV && uv.x < btnRightUV && uv.y > btnTopUV && uv.y < btnBottomUV) {
         const fact = bodies[selectedIndex].data.funFacts[0];
         onNarrate(fact);
       }
