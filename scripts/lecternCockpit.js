@@ -71,6 +71,16 @@ export function createLecternCockpit() {
   floorRing.position.y = 0;
   cockpitGroup.add(floorRing);
 
+  // --- Floor Plate ---
+  // Provide a solid surface under the player’s feet.  Without this disc the
+  // ring alone can feel insubstantial.  Make the plate slightly smaller
+  // than the torus so the ring frames it.  Use a very low height to avoid
+  // creating a step.  Position it so the top of the disc sits at y=0.
+  const floorPlateGeom = new THREE.CylinderGeometry(2.1, 2.1, 0.02, 64);
+  const floorPlate = new THREE.Mesh(floorPlateGeom, darkMetalMat);
+  floorPlate.position.y = -0.01; // half of height so top surface is at 0
+  cockpitGroup.add(floorPlate);
+
   // --- Lectern Desk ---
   // Use a half‑cylinder to create a wrap‑around desk.  The desk is open
   // towards the player and spans 180 degrees around them.  We use
@@ -110,6 +120,19 @@ export function createLecternCockpit() {
   stand.position.set(0, 0.96, 0);
   orreryMount.add(stand);
   cockpitGroup.add(orreryMount);
+
+  // --- Desk Support ---
+  // Add a vertical support under the desk to visually anchor it to the
+  // platform.  This cylindrical column runs from the floor up to the
+  // underside of the desk, centred along the z‑axis so it doesn’t block
+  // the player’s view.  Positioning the support at roughly the middle of
+  // the desk radius helps it look like a robust lectern rather than
+  // floating furniture.
+  const supportHeight = desk.position.y - floorPlate.position.y;
+  const supportGeom = new THREE.CylinderGeometry(0.15, 0.12, supportHeight, 16);
+  const support = new THREE.Mesh(supportGeom, darkMetalMat);
+  support.position.set(0, floorPlate.position.y + supportHeight / 2, deskRadius * 0.6);
+  cockpitGroup.add(support);
 
   // --- Controls ---
   // Position the throttle on the left side of the desk and the joystick on
