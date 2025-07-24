@@ -108,11 +108,7 @@ async function main() {
       setTimeMultiplier(Math.pow(1000, value) - 1);
     },
     onNarrate: text => {
-      if ('speechSynthesis' in window) {
-        const u = new SpeechSynthesisUtterance(text);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(u);
-      }
+      audio.speak(text);
     }
   });
   // Position the panels around the desk.  Warp on the left, probe on the right,
@@ -163,10 +159,8 @@ async function main() {
     solarGroup.position.sub(currentOffset.clone().sub(desiredOffset));
     audio.playWarp();
     const fact = (body.data.facts || body.data.funFacts || [])[0];
-    if (fact && 'speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(fact);
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+    if (fact) {
+      audio.speak(fact);
     }
   }
 

@@ -352,11 +352,14 @@ export function createUI(bodies, callbacks = {}) {
       }
     } else if (panel === 'facts') {
       // Narrate button detection
-      const btnTopUV = 1 - (50 + 20) / facts.canvas.height;
-      const btnBottomUV = 1 - 20 / facts.canvas.height;
+      const btnH = 50;
+      const margin = 20;
+      const btnY = facts.canvas.height - btnH - margin;
+      const btnTopUV = 1 - btnY / facts.canvas.height;
+      const btnBottomUV = 1 - (btnY + btnH) / facts.canvas.height;
       const btnLeftUV = (1 - 0.3) / 2;
       const btnRightUV = (1 + 0.3) / 2;
-      if (uv.x > btnLeftUV && uv.x < btnRightUV && uv.y > btnTopUV && uv.y < btnBottomUV) {
+      if (uv.x > btnLeftUV && uv.x < btnRightUV && uv.y < btnTopUV && uv.y > btnBottomUV) {
         const data = bodies[selectedIndex].data;
         const fact = (data.facts || data.funFacts || [])[0];
         if (fact) onNarrate(fact);
