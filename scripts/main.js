@@ -13,7 +13,7 @@ import { createControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
 import { launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
-import { SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
+
 
 async function main() {
   const scene = new THREE.Scene();
@@ -150,8 +150,7 @@ async function main() {
     const now = performance.now();
     const deltaSec = (now - lastTime) / 1000;
     lastTime = now;
-    const deltaDays = deltaSec * SEC_TO_DAYS * getTimeMultiplier();
-    updateSolarSystem(deltaDays);
+    updateSolarSystem(solarGroup, deltaSec);
     updateProbes(deltaSec, solarGroup, bodies, scene);
     const cameraPos = new THREE.Vector3();
     camera.getWorldPosition(cameraPos);
