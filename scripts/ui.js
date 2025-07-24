@@ -6,7 +6,7 @@
  * fun‑facts panel.  Each panel is rendered to its own canvas and mapped
  * onto a Three.js plane.  The warp menu lists all bodies vertically and
  * allows the user to warp by selecting a row with their fingertip.  The probe
- * panel provides sliders for adjusting mass and velocity before firing a
+ * panel provides sliders for adjusting mass, velocity and time before firing a
  * probe.  The facts panel displays basic data and fun facts about the
  * currently selected body and exposes a narrate button.
  */
@@ -23,6 +23,7 @@ import * as THREE from 'three';
  *   - onWarp(index: number): Called when the user selects a warp target.
  *   - onProbeChange(settings: { mass: number, velocity: number }): Called when
  *       probe sliders are changed.
+ *   - onTimeChange(value: number): Called when the time slider is adjusted.
  *   - onNarrate(fact: string): Called when the narrate button is pressed.
  * @returns {{ warpMesh: THREE.Mesh, probeMesh: THREE.Mesh, factsMesh: THREE.Mesh,
  *            handlePointer: Function, setSelectedIndex: Function,
@@ -32,6 +33,7 @@ export function createUI(bodies, callbacks = {}) {
   const {
     onWarp = () => {},
     onProbeChange = () => {},
+    onTimeChange = () => {},
     onNarrate = () => {}
   } = callbacks;
 
@@ -39,6 +41,7 @@ export function createUI(bodies, callbacks = {}) {
   let selectedIndex = 0;
   let probeMass = 0.5;     // Range [0,1]
   let probeVelocity = 0.5; // Range [0,1]
+  let timeValue = 0.5;     // Range [0,1]
 
   // Panel dimensions (world units).  The warp and probe panels are square while
   // the facts panel is wider to accommodate text.
@@ -176,6 +179,22 @@ export function createUI(bodies, callbacks = {}) {
     ctx.fillStyle = '#e0f0ff';
     ctx.font = '18px Orbitron, sans-serif';
     ctx.fillText(`Velocity: ${(probeVelocity * 100).toFixed(0)}%`, hSliderX, hSliderY + hSliderH);
+
+    // Time slider background (vertical on the right)
+    const tSliderX = width * 0.85;
+    const tSliderY = height * 0.3;
+    const tSliderW = width * 0.1;
+    const tSliderH = height * 0.4;
+    ctx.fillStyle = 'rgba(90, 120, 160, 0.6)';
+    ctx.fillRect(tSliderX - tSliderW / 2, tSliderY - tSliderH / 2, tSliderW, tSliderH);
+    // Time knob
+    const timeY = tSliderY + tSliderH / 2 - timeValue * tSliderH;
+    ctx.fillStyle = '#4caf50';
+    ctx.fillRect(tSliderX - tSliderW / 2, timeY - 5, tSliderW, 10);
+    // Time label
+    ctx.fillStyle = '#e0f0ff';
+    ctx.font = '18px Orbitron, sans-serif';
+    ctx.fillText(`Time: ${(timeValue * 100).toFixed(0)}%`, tSliderX, tSliderY + tSliderH / 2 + 30);
     probeTexture.needsUpdate = true;
   }
 
@@ -314,6 +333,20 @@ export function createUI(bodies, callbacks = {}) {
         probeVelocity = t;
         drawProbe();
         onProbeChange({ mass: probeMass, velocity: probeVelocity });
+        return;
+      }
+      // Check time slider region
+      const tSliderX = 0.85;
+      const tSliderW = 0.1;
+      const tSliderY = 0.3;
+      const tSliderH = 0.4;
+      if (Math.abs(x - tSliderX) < tSliderW / 2) {
+        const top = tSliderY - tSliderH / 2;
+        const bottom = tSliderY + tSliderH / 2;
+        const t = THREE.MathUtils.clamp((bottom - y) / tSliderH, 0, 1);
+        timeValue = t;
+        drawProbe();
+        onTimeChange(timeValue);
         return;
       }
     } else if (panel === 'facts') {

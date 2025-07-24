@@ -13,6 +13,7 @@ import { createControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
 import { launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
+import { setTimeMultiplier } from './constants.js';
 
 
 async function main() {
@@ -98,6 +99,9 @@ async function main() {
     onWarp: index => warpToBody(index),
     onProbeChange: settings => {
       probeSettings = settings;
+    },
+    onTimeChange: value => {
+      setTimeMultiplier(Math.pow(1000, value) - 1);
     },
     onNarrate: fact => audio.speak(fact)
   });
