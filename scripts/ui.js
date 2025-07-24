@@ -1,264 +1,364 @@
-// Simple UI system for the VR cockpit. This module draws three panels: a
-// warp menu on the left, a settings menu on the right and a fun facts panel
-// along the bottom. The panels are drawn onto canvases and converted to
-// textures for use in Three.js. The UI exposes callbacks for user actions
-// such as warping, toggling labels, toggling autopilot and narrating facts.
+/*
+ * ui.js
+ *
+ * A revamped UI system designed for the lectern cockpit.  This module draws
+ * three separate panels: a radial warp menu, a probe control panel and a
+ * fun‑facts panel.  Each panel is rendered to its own canvas and mapped
+ * onto a Three.js plane.  The radial menu allows the user to warp to any
+ * celestial body by selecting a wedge with their fingertip.  The probe
+ * panel provides sliders for adjusting mass and velocity before firing a
+ * probe.  The facts panel displays basic data and fun facts about the
+ * currently selected body and exposes a narrate button.
+ */
 
 import * as THREE from 'three';
 
-// Create the UI. `bodies` is an array of solar bodies returned from
-// createSolarSystem. `callbacks` is an object with optional functions:
-//   onWarp(index)       – called when the user selects a warp target.
-//   onToggleLabels()    – called when the user toggles labels.
-//   onToggleAutopilot() – called when the user toggles autopilot mode.
-//   onNarrate(fact)     – called when the user presses the narrate button.
+/**
+ * Create the UI panels.
+ *
+ * @param {Array} bodies Array of solar bodies returned from createSolarSystem().
+ * Each element should expose a `data` field with `name`, `mass`, `radius`, and
+ * `funFacts` properties.
+ * @param {Object} callbacks Optional callbacks:
+ *   - onWarp(index: number): Called when the user selects a warp target.
+ *   - onProbeChange(settings: { mass: number, velocity: number }): Called when
+ *       probe sliders are changed.
+ *   - onNarrate(fact: string): Called when the narrate button is pressed.
+ * @returns {{ warpMesh: THREE.Mesh, probeMesh: THREE.Mesh, factsMesh: THREE.Mesh,
+ *            handlePointer: Function, setSelectedIndex: Function,
+ *            getSelectedIndex: Function, getProbeSettings: Function }}
+ */
 export function createUI(bodies, callbacks = {}) {
   const {
     onWarp = () => {},
-    onToggleLabels = () => {},
-    onToggleAutopilot = () => {},
+    onProbeChange = () => {},
     onNarrate = () => {}
   } = callbacks;
 
-  // Keep track of which body is currently selected for warping so that we
-  // can highlight it in the menu and update the facts panel.
+  // Internal state
   let selectedIndex = 0;
+  let probeMass = 0.5;     // Range [0,1]
+  let probeVelocity = 0.5; // Range [0,1]
 
-  // Dimensions of the panels in world units. These can be adjusted to fit
-  // your cockpit geometry. The aspect ratios of the canvases below should
-  // match these values.
-  const LEFT_WIDTH = 0.7;
-  const LEFT_HEIGHT = 1.5;
-  const RIGHT_WIDTH = 0.7;
-  const RIGHT_HEIGHT = 1.5;
-  const BOTTOM_WIDTH = 1.4;
-  const BOTTOM_HEIGHT = 0.6;
+  // Panel dimensions (world units).  The warp and probe panels are square for
+  // radial/sliders; the facts panel is wider to accommodate text.
+  const WARP_SIZE = 1.0;
+  const PROBE_SIZE = 1.0;
+  const FACTS_WIDTH = 1.6;
+  const FACTS_HEIGHT = 0.6;
 
-  // Utility to create a canvas and 2D context with given pixel dimensions.
+  // Utility: create a canvas and 2D context.
   function makeCanvas(w, h) {
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
-    // NOTE: The incorrect ctx.scale() line has been removed.
     return { canvas, ctx };
   }
 
-  // Create canvases for each panel. The resolution is arbitrary but should
-  // maintain a reasonable aspect ratio relative to the panel size.
-  const left = makeCanvas(256, 512);
-  const right = makeCanvas(256, 512);
-  const bottom = makeCanvas(512, 256);
+  // Create canvases.  Higher resolutions yield better text quality.
+  const warp = makeCanvas(512, 512);
+  const probe = makeCanvas(512, 512);
+  const facts = makeCanvas(1024, 384);
 
-  // Create textures from the canvases. We enable transparency so the panels
-  // blend nicely into the cockpit. Set min/mag filters to linear for smooth
-  // scaling.
-  const leftTexture = new THREE.CanvasTexture(left.canvas);
-  leftTexture.minFilter = THREE.LinearFilter;
-  leftTexture.magFilter = THREE.LinearFilter;
-  leftTexture.wrapS = THREE.ClampToEdgeWrapping;
-  leftTexture.wrapT = THREE.ClampToEdgeWrapping;
+  // Create textures
+  const warpTexture = new THREE.CanvasTexture(warp.canvas);
+  warpTexture.minFilter = THREE.LinearFilter;
+  warpTexture.magFilter = THREE.LinearFilter;
+  warpTexture.wrapS = THREE.ClampToEdgeWrapping;
+  warpTexture.wrapT = THREE.ClampToEdgeWrapping;
+  const probeTexture = new THREE.CanvasTexture(probe.canvas);
+  probeTexture.minFilter = THREE.LinearFilter;
+  probeTexture.magFilter = THREE.LinearFilter;
+  probeTexture.wrapS = THREE.ClampToEdgeWrapping;
+  probeTexture.wrapT = THREE.ClampToEdgeWrapping;
+  const factsTexture = new THREE.CanvasTexture(facts.canvas);
+  factsTexture.minFilter = THREE.LinearFilter;
+  factsTexture.magFilter = THREE.LinearFilter;
+  factsTexture.wrapS = THREE.ClampToEdgeWrapping;
+  factsTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-  const rightTexture = new THREE.CanvasTexture(right.canvas);
-  rightTexture.minFilter = THREE.LinearFilter;
-  rightTexture.magFilter = THREE.LinearFilter;
-  rightTexture.wrapS = THREE.ClampToEdgeWrapping;
-  rightTexture.wrapT = THREE.ClampToEdgeWrapping;
-
-  const bottomTexture = new THREE.CanvasTexture(bottom.canvas);
-  bottomTexture.minFilter = THREE.LinearFilter;
-  bottomTexture.magFilter = THREE.LinearFilter;
-  bottomTexture.wrapS = THREE.ClampToEdgeWrapping;
-  bottomTexture.wrapT = THREE.ClampToEdgeWrapping;
-
-  // Create planes for the panels. These meshes can be positioned and
-  // oriented anywhere in your cockpit. They are returned via the UI
-  // object so that you can add them to the scene.
-  const leftMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(LEFT_WIDTH, LEFT_HEIGHT),
-    new THREE.MeshBasicMaterial({ map: leftTexture, transparent: true })
+  // Create meshes for each panel
+  const warpMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(WARP_SIZE, WARP_SIZE),
+    new THREE.MeshBasicMaterial({ map: warpTexture, transparent: true })
   );
-  const rightMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(RIGHT_WIDTH, RIGHT_HEIGHT),
-    new THREE.MeshBasicMaterial({ map: rightTexture, transparent: true })
+  const probeMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(PROBE_SIZE, PROBE_SIZE),
+    new THREE.MeshBasicMaterial({ map: probeTexture, transparent: true })
   );
-  const bottomMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(BOTTOM_WIDTH, BOTTOM_HEIGHT),
-    new THREE.MeshBasicMaterial({ map: bottomTexture, transparent: true })
+  const factsMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(FACTS_WIDTH, FACTS_HEIGHT),
+    new THREE.MeshBasicMaterial({ map: factsTexture, transparent: true })
   );
 
-  // Draw the static parts of the right panel once. The right panel shows
-  // toggle buttons for labels and autopilot. We draw simple boxes with
-  // text inside. When toggled, we invert the colour of the box.
-  let labelsEnabled = true;
-  let autopilotEnabled = false;
-
-  function drawRight() {
-    const ctx = right.ctx;
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-    ctx.font = '18px Orbitron, sans-serif';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-
-    // Draw Labels toggle
-    const boxW = ctx.canvas.width * 0.8;
-    const boxH = 40;
-    let y = 60;
-    ctx.fillStyle = labelsEnabled ? '#4caf50' : '#777';
-    ctx.fillRect((ctx.canvas.width - boxW) / 2, y, boxW, boxH);
-    ctx.fillStyle = '#fff';
-    ctx.fillText('Show Labels', (ctx.canvas.width - boxW) / 2 + 10, y + boxH / 2);
-
-    // Draw Autopilot toggle
-    y += 60;
-    ctx.fillStyle = autopilotEnabled ? '#4caf50' : '#777';
-    ctx.fillRect((ctx.canvas.width - boxW) / 2, y, boxW, boxH);
-    ctx.fillStyle = '#fff';
-    ctx.fillText('Autopilot', (ctx.canvas.width - boxW) / 2 + 10, y + boxH / 2);
-
-    // Update texture
-    rightTexture.needsUpdate = true;
-  }
-
-  // Draw the warp target list on the left panel. The list is scaled to fit
-  // all bodies; when there are many entries the text will be smaller.
-  function drawLeft() {
-    const ctx = left.ctx;
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-    const itemCount = bodies.length;
-    const itemHeight = ctx.canvas.height / itemCount;
-    const fontSize = Math.max(14, Math.floor(itemHeight * 0.5));
-    ctx.font = `${fontSize}px Orbitron, sans-serif`;
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-
-    for (let i = 0; i < itemCount; i++) {
-      const y = i * itemHeight;
-      // Highlight the selected row
+  /**
+   * Draw the radial warp menu.  Each body is represented as a wedge in a
+   * circular menu.  The selected body is highlighted with a brighter fill.
+   */
+  function drawWarp() {
+    const ctx = warp.ctx;
+    const { width, height } = ctx.canvas;
+    ctx.clearRect(0, 0, width, height);
+    // Background with slight translucency for blending
+    ctx.fillStyle = 'rgba(40, 40, 50, 0.85)';
+    ctx.fillRect(0, 0, width, height);
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = Math.min(cx, cy) * 0.9;
+    const count = bodies.length;
+    const twoPi = Math.PI * 2;
+    // Draw sectors
+    for (let i = 0; i < count; i++) {
+      const startAngle = twoPi * i / count - Math.PI / 2;
+      const endAngle = twoPi * (i + 1) / count - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, startAngle, endAngle);
+      ctx.closePath();
+      // Highlight the selected wedge
       if (i === selectedIndex) {
-        ctx.fillStyle = 'rgba(76, 175, 80, 0.6)';
-        ctx.fillRect(0, y, ctx.canvas.width, itemHeight);
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.7)';
+      } else {
+        ctx.fillStyle = 'rgba(70, 70, 90, 0.6)';
       }
-      ctx.fillStyle = '#fff';
-      ctx.fillText(bodies[i].data.name, 10, y + itemHeight / 2);
+      ctx.fill();
+      // Draw dividing lines
+      ctx.strokeStyle = 'rgba(100, 100, 130, 0.8)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, startAngle, endAngle);
+      ctx.closePath();
+      ctx.stroke();
+      // Label: place text at the middle of the sector
+      const midAngle = (startAngle + endAngle) / 2;
+      const tx = cx + (radius * 0.6) * Math.cos(midAngle);
+      const ty = cy + (radius * 0.6) * Math.sin(midAngle);
+      ctx.save();
+      ctx.translate(tx, ty);
+      ctx.rotate(midAngle + Math.PI / 2);
+      ctx.font = '20px Orbitron, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const name = bodies[i].data.name;
+      // Shorten long names if necessary
+      const label = name.length > 10 ? name.slice(0, 9) + '…' : name;
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
     }
-    leftTexture.needsUpdate = true;
+    warpTexture.needsUpdate = true;
   }
 
-  // Draw the fun facts panel. We show the first few facts for the selected
-  // body and draw a button that the user can press to trigger narration.
-  function drawBottom() {
-    const ctx = bottom.ctx;
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-    const body = bodies[selectedIndex].data;
+  /**
+   * Draw the probe control panel.  Two sliders allow adjustment of mass and
+   * velocity.  Values are displayed numerically to aid precise tuning.
+   */
+  function drawProbe() {
+    const ctx = probe.ctx;
+    const { width, height } = ctx.canvas;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = 'rgba(40, 40, 50, 0.85)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.font = '20px Orbitron, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Titles
+    ctx.fillText('Probe Controls', width / 2, 40);
+    // Mass slider background
+    const sliderX = width * 0.25;
+    const sliderY = height * 0.3;
+    const sliderW = width * 0.1;
+    const sliderH = height * 0.4;
+    ctx.fillStyle = 'rgba(90, 90, 120, 0.6)';
+    ctx.fillRect(sliderX - sliderW / 2, sliderY - sliderH / 2, sliderW, sliderH);
+    // Mass knob
+    const massY = sliderY + sliderH / 2 - probeMass * sliderH;
+    ctx.fillStyle = '#4caf50';
+    ctx.fillRect(sliderX - sliderW / 2, massY - 5, sliderW, 10);
+    // Mass label
+    ctx.fillStyle = '#ffffff';
     ctx.font = '16px Orbitron, sans-serif';
-    ctx.textBaseline = 'top';
+    ctx.fillText(`Mass: ${(probeMass * 100).toFixed(0)}%`, sliderX, sliderY + sliderH / 2 + 30);
+    // Velocity slider background
+    const hSliderX = width * 0.55;
+    const hSliderY = height * 0.55;
+    const hSliderW = width * 0.4;
+    const hSliderH = height * 0.08;
+    ctx.fillStyle = 'rgba(90, 90, 120, 0.6)';
+    ctx.fillRect(hSliderX - hSliderW / 2, hSliderY - hSliderH / 2, hSliderW, hSliderH);
+    // Velocity knob
+    const velX = hSliderX - hSliderW / 2 + probeVelocity * hSliderW;
+    ctx.fillStyle = '#4caf50';
+    ctx.fillRect(velX - 5, hSliderY - hSliderH / 2, 10, hSliderH);
+    // Velocity label
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px Orbitron, sans-serif';
+    ctx.fillText(`Velocity: ${(probeVelocity * 100).toFixed(0)}%`, hSliderX, hSliderY + hSliderH);
+    probeTexture.needsUpdate = true;
+  }
+
+  /**
+   * Draw the facts panel.  Displays the name and basic data of the selected
+   * body along with up to three fun facts.  A button at the bottom triggers
+   * narration via the provided callback.
+   */
+  function drawFacts() {
+    const ctx = facts.ctx;
+    const { width, height } = ctx.canvas;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = 'rgba(40, 40, 50, 0.85)';
+    ctx.fillRect(0, 0, width, height);
+    const body = bodies[selectedIndex].data;
+    ctx.font = '24px Orbitron, sans-serif';
+    ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`${body.name} – Fun Facts:`, 10, 10);
-    let y = 40;
-    const maxWidth = ctx.canvas.width - 20;
-    const lineHeight = 18;
-    body.funFacts.forEach(fact => {
-      // Wrap long facts into multiple lines
-      const words = fact.split(' ');
+    ctx.textBaseline = 'top';
+    // Header: name
+    ctx.fillText(body.name, 20, 20);
+    ctx.font = '16px Orbitron, sans-serif';
+    // Data lines (mass and radius if available)
+    let y = 60;
+    if (body.mass !== undefined) {
+      ctx.fillText(`Mass: ${body.mass}`, 20, y);
+      y += 22;
+    }
+    if (body.radius !== undefined) {
+      ctx.fillText(`Radius: ${body.radius}`, 20, y);
+      y += 22;
+    }
+    // Fun facts
+    ctx.font = '16px Orbitron, sans-serif';
+    ctx.fillStyle = '#cccccc';
+    ctx.fillText('Fun Facts:', 20, y);
+    y += 22;
+    const maxWidth = width - 40;
+    const lineHeight = 20;
+    const factsList = body.funFacts || [];
+    for (let i = 0; i < Math.min(factsList.length, 3); i++) {
+      const text = factsList[i];
       let line = '';
-      for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
+      const words = text.split(' ');
+      for (let w = 0; w < words.length; w++) {
+        const testLine = line + words[w] + ' ';
         const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && n > 0) {
-          ctx.fillText(line, 10, y);
-          line = words[n] + ' ';
+        if (metrics.width > maxWidth && w > 0) {
+          ctx.fillText(line.trim(), 20, y);
+          line = words[w] + ' ';
           y += lineHeight;
         } else {
           line = testLine;
         }
       }
-      ctx.fillText(line.trim(), 10, y);
+      ctx.fillText(line.trim(), 20, y);
       y += lineHeight;
-    });
-
-    // Draw narrate button
-    const btnW = ctx.canvas.width * 0.3;
-    const btnH = 40;
-    const btnX = (ctx.canvas.width - btnW) / 2;
-    const btnY = ctx.canvas.height - btnH - 20;
+    }
+    // Narrate button
+    const btnW = width * 0.3;
+    const btnH = 50;
+    const btnX = (width - btnW) / 2;
+    const btnY = height - btnH - 20;
     ctx.fillStyle = '#4caf50';
     ctx.fillRect(btnX, btnY, btnW, btnH);
-    ctx.fillStyle = '#fff';
+    ctx.font = '20px Orbitron, sans-serif';
+    ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '18px Orbitron, sans-serif';
     ctx.fillText('Narrate', btnX + btnW / 2, btnY + btnH / 2);
-
-    bottomTexture.needsUpdate = true;
+    factsTexture.needsUpdate = true;
   }
 
-  // Initial draw
-  drawLeft();
-  drawRight();
-  drawBottom();
+  // Initial draws
+  drawWarp();
+  drawProbe();
+  drawFacts();
 
-  // Handle pointer interactions.
+  /**
+   * Handle pointer interaction.  Based on which panel is hit and the UV
+   * coordinates, update the appropriate state and call callbacks.
+   * @param {'warp'|'probe'|'facts'} panel
+   * @param {{ x: number, y: number }} uv UV coordinates (0–1)
+   */
   function handlePointer(panel, uv) {
-    if (panel === 'left') {
-      const index = Math.floor(uv.y * bodies.length);
+    if (panel === 'warp') {
+      // Convert UV to polar coordinates centred at (0.5,0.5)
+      const dx = uv.x - 0.5;
+      const dy = uv.y - 0.5;
+      const angle = Math.atan2(dy, dx); // range -π to π
+      const twoPi = Math.PI * 2;
+      let normalized = angle;
+      if (normalized < 0) normalized += twoPi;
+      // Adjust for start angle offset (-π/2)
+      normalized = (normalized + Math.PI / 2) % twoPi;
+      const index = Math.floor(normalized / twoPi * bodies.length);
       if (index >= 0 && index < bodies.length && index !== selectedIndex) {
         selectedIndex = index;
-        drawLeft();
-        drawBottom();
+        drawWarp();
+        drawProbe();
+        drawFacts();
         onWarp(index);
       }
-    } else if (panel === 'right') {
-      // Determine which toggle was hit based on uv.y
-      if (uv.y > 0.2 && uv.y < 0.35) { // Simplified hit detection
-        labelsEnabled = !labelsEnabled;
-        drawRight();
-        onToggleLabels(labelsEnabled);
-      } else if (uv.y > 0.45 && uv.y < 0.6) { // Adjusted for font
-        autopilotEnabled = !autopilotEnabled;
-        drawRight();
-        onToggleAutopilot(autopilotEnabled);
+    } else if (panel === 'probe') {
+      const x = uv.x;
+      const y = uv.y;
+      // Determine if within vertical mass slider region
+      // Using same coordinates as drawProbe()
+      const sliderX = 0.25;
+      const sliderW = 0.1;
+      const sliderY = 0.3;
+      const sliderH = 0.4;
+      // Check horizontal proximity
+      if (Math.abs(x - sliderX) < sliderW / 2) {
+        // Convert y to slider domain (0 at bottom, 1 at top)
+        const top = sliderY - sliderH / 2;
+        const bottom = sliderY + sliderH / 2;
+        const t = THREE.MathUtils.clamp((bottom - y) / sliderH, 0, 1);
+        probeMass = t;
+        drawProbe();
+        onProbeChange({ mass: probeMass, velocity: probeVelocity });
+        return;
       }
-    } else if (panel === 'bottom') {
-      // Check if the narrate button was pressed
-      const btnTopUV = (bottom.canvas.height - 60) / bottom.canvas.height;
-      const btnBottomUV = (bottom.canvas.height - 20) / bottom.canvas.height;
+      // Check velocity slider region
+      const hSliderX = 0.55;
+      const hSliderW = 0.4;
+      const hSliderY = 0.55;
+      const hSliderH = 0.08;
+      if (Math.abs(y - hSliderY) < hSliderH / 2 && x > hSliderX - hSliderW / 2 && x < hSliderX + hSliderW / 2) {
+        const t = THREE.MathUtils.clamp((x - (hSliderX - hSliderW / 2)) / hSliderW, 0, 1);
+        probeVelocity = t;
+        drawProbe();
+        onProbeChange({ mass: probeMass, velocity: probeVelocity });
+        return;
+      }
+    } else if (panel === 'facts') {
+      // Narrate button detection
+      const btnTopUV = 1 - (50 + 20) / facts.canvas.height;
+      const btnBottomUV = 1 - 20 / facts.canvas.height;
       const btnLeftUV = (1 - 0.3) / 2;
       const btnRightUV = (1 + 0.3) / 2;
-      
-      // Note: UV.y is often inverted (0=top). Assuming 0=top.
       if (uv.x > btnLeftUV && uv.x < btnRightUV && uv.y > btnTopUV && uv.y < btnBottomUV) {
-        const fact = bodies[selectedIndex].data.funFacts[0];
-        onNarrate(fact);
+        const fact = bodies[selectedIndex].data.funFacts && bodies[selectedIndex].data.funFacts[0];
+        if (fact) onNarrate(fact);
       }
     }
   }
 
   return {
-    leftMesh,
-    rightMesh,
-    bottomMesh,
-    draw: () => {
-      drawLeft();
-      drawRight();
-      drawBottom();
-    },
+    warpMesh,
+    probeMesh,
+    factsMesh,
     handlePointer,
     setSelectedIndex: index => {
-      selectedIndex = index;
-      drawLeft();
-      drawBottom();
+      if (index >= 0 && index < bodies.length) {
+        selectedIndex = index;
+        drawWarp();
+        drawProbe();
+        drawFacts();
+      }
     },
-    getSelectedIndex: () => selectedIndex
+    getSelectedIndex: () => selectedIndex,
+    getProbeSettings: () => ({ mass: probeMass, velocity: probeVelocity })
   };
 }
