@@ -156,10 +156,11 @@ async function main() {
     lastTime = now;
     updateSolarSystem(solarGroup, deltaSec);
     updateProbes(deltaSec, solarGroup, bodies, scene);
+    const movement = controls.update(deltaSec);
+    solarGroup.position.sub(movement);
     const cameraPos = new THREE.Vector3();
     camera.getWorldPosition(cameraPos);
     updateOrrery(orrery, solarGroup, cameraPos);
-    controls.update(deltaSec);
     // Update grabbing for each hand
     for (let i = 0; i < 2; i++) {
       const hand = renderer.xr.getHand(i);

@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
+import { MAX_FLIGHT_SPEED } from './constants.js';
 
 /**
  * Create VR controls.  The renderer must have XR enabled.  Provide the
@@ -51,6 +52,10 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     facts: ui.factsMesh
   };
   const uiNames = ['warp', 'probe', 'facts'];
+  let throttleValue = 0;
+  let joystickX = 0;
+  let joystickY = 0;
+  const moveVec = new THREE.Vector3();
   function update(deltaTime) {
     throttleBox.setFromObject(cockpit.throttle);
     joystickBox.setFromObject(cockpit.joystick);
@@ -68,6 +73,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       } else if (state.grabbingThrottle && !throttleBox.containsPoint(tipPos)) {
         state.grabbingThrottle = false;
         cockpit.stopGrabbingThrottle(i);
+        throttleValue = 0;
       }
       // Grab joystick
       if (!state.grabbingJoystick && joystickBox.containsPoint(tipPos)) {
@@ -76,6 +82,20 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       } else if (state.grabbingJoystick && !joystickBox.containsPoint(tipPos)) {
         state.grabbingJoystick = false;
         cockpit.stopGrabbingJoystick(i);
+        joystickX = 0;
+        joystickY = 0;
+      }
+      if (state.grabbingThrottle) {
+        const local = cockpit.throttle.worldToLocal(tipPos.clone());
+        const y = THREE.MathUtils.clamp(local.y, 0, 0.4);
+        throttleValue = THREE.MathUtils.clamp(y / 0.4, 0, 1);
+      }
+      if (state.grabbingJoystick) {
+        const local = cockpit.joystick.worldToLocal(tipPos.clone());
+        const lx = THREE.MathUtils.clamp(local.x, -0.2, 0.2);
+        const lz = THREE.MathUtils.clamp(local.z, -0.2, 0.2);
+        joystickX = THREE.MathUtils.clamp(lx / 0.2, -1, 1);
+        joystickY = THREE.MathUtils.clamp(lz / 0.2, -1, 1);
       }
       // Fire button
       if (fireButtonBox.containsPoint(tipPos)) {
@@ -100,6 +120,12 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         ui.handlePointer(name, uv);
       }
     });
+    const speed = throttleValue * MAX_FLIGHT_SPEED;
+    const dir = new THREE.Vector3(joystickX, 0, -joystickY);
+    if (dir.lengthSq() > 1) dir.normalize();
+    dir.applyQuaternion(camera.quaternion);
+    moveVec.copy(dir).multiplyScalar(speed * deltaTime);
+    return moveVec;
   }
   return { update };
 }

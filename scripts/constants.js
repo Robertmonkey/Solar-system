@@ -26,6 +26,11 @@ export const SIZE_MULTIPLIER = 1_000;
 // Earth from the Sun at this world scale.
 export const C_KMPS = 299_792.458;
 
+// Maximum ship speed in world units per second.  We use the speed of light
+// converted to the internal scaling so the throttle value maps directly to a
+// meaningful velocity.
+export const MAX_FLIGHT_SPEED = C_KMPS * KM_TO_WORLD_UNITS;
+
 // Conversion from miles per hour to kilometres per second.  The throttle slider
 // uses an exponential mapping between 1 mph and c.
 export const MPH_TO_KMPS = 1.60934 / 3600;
