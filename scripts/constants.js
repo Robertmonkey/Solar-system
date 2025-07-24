@@ -2,7 +2,8 @@
 // Gravitational constant expressed in km^3/(kg·s²) to match the rest of the
 // code which performs physics calculations using kilometres.
 export const G = 6.67430e-20;
-export const AU_IN_KM = 149_597_870.7; // astronomical unit in kilometres
+// Astronomical unit in kilometres
+export const AU_KM = 149_597_870.7;
 
 // Base conversion for world units.  One world unit corresponds to this many kilometres.
 // Choosing one million kilometres per world unit allows the entire solar system to be
@@ -10,7 +11,9 @@ export const AU_IN_KM = 149_597_870.7; // astronomical unit in kilometres
 // this scale the Earth–Sun distance (~150 million km) is 150 world units and the
 // Earth’s radius (~6,371 km) becomes ~0.0063 world units.  The SIZE_MULTIPLIER
 // defined below enlarges bodies to make them visible at VR scale.
+// Conversion from kilometres to internal world units
 export const KM_PER_WORLD_UNIT = 1e6;
+export const KM_TO_WORLD_UNITS = 1 / KM_PER_WORLD_UNIT;
 
 // Body radii are multiplied by this factor when converted to world units so they
 // remain visible at the KM_PER_WORLD_UNIT scale.  Without a size multiplier the
@@ -26,3 +29,31 @@ export const C_KMPS = 299_792.458;
 // Conversion from miles per hour to kilometres per second.  The throttle slider
 // uses an exponential mapping between 1 mph and c.
 export const MPH_TO_KMPS = 1.60934 / 3600;
+
+// Time conversion helpers
+export const TIME_BASE_SECONDS_PER_DAY = 86_400;
+export const SEC_TO_DAYS = 1 / TIME_BASE_SECONDS_PER_DAY;
+
+// Simulation time multiplier (modifiable)
+let timeMultiplier = 50;
+export function getTimeMultiplier() {
+  return timeMultiplier;
+}
+export function setTimeMultiplier(value) {
+  timeMultiplier = value;
+}
+
+// Simple colour palette for the main bodies
+export const PALETTE = {
+  Sun: 0xffcc00,
+  Mercury: 0xb1b1b1,
+  Venus: 0xeedd82,
+  Earth: 0x3366cc,
+  Moon: 0x999999,
+  Mars: 0xcc5533,
+  Jupiter: 0xddaa77,
+  Saturn: 0xffddaa,
+  Uranus: 0x66ccff,
+  Neptune: 0x3366aa,
+  Pluto: 0x9999cc
+};

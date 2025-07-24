@@ -17,8 +17,8 @@ import * as THREE from 'three';
  * Create the UI panels.
  *
  * @param {Array} bodies Array of solar bodies returned from createSolarSystem().
- * Each element should expose a `data` field with `name`, `mass`, `radius`, and
- * `funFacts` properties.
+ * Each element should expose a `data` field with `name`, `massKg`, `radiusKm`,
+ * and `facts` properties.
  * @param {Object} callbacks Optional callbacks:
  *   - onWarp(index: number): Called when the user selects a warp target.
  *   - onProbeChange(settings: { mass: number, velocity: number }): Called when
@@ -221,12 +221,12 @@ export function createUI(bodies, callbacks = {}) {
     ctx.font = '16px Orbitron, sans-serif';
     // Data lines (mass and radius if available)
     let y = 60;
-    if (body.mass !== undefined) {
-      ctx.fillText(`Mass: ${body.mass}`, 20, y);
+    if (body.massKg !== undefined) {
+      ctx.fillText(`Mass: ${body.massKg.toExponential(2)} kg`, 20, y);
       y += 22;
     }
-    if (body.radius !== undefined) {
-      ctx.fillText(`Radius: ${body.radius}`, 20, y);
+    if (body.radiusKm !== undefined) {
+      ctx.fillText(`Radius: ${body.radiusKm} km`, 20, y);
       y += 22;
     }
     // Fun facts
@@ -236,7 +236,7 @@ export function createUI(bodies, callbacks = {}) {
     y += 22;
     const maxWidth = width - 40;
     const lineHeight = 20;
-    const factsList = body.funFacts || [];
+    const factsList = body.facts || body.funFacts || [];
     for (let i = 0; i < Math.min(factsList.length, 3); i++) {
       const text = factsList[i];
       let line = '';
@@ -339,7 +339,8 @@ export function createUI(bodies, callbacks = {}) {
       const btnLeftUV = (1 - 0.3) / 2;
       const btnRightUV = (1 + 0.3) / 2;
       if (uv.x > btnLeftUV && uv.x < btnRightUV && uv.y > btnTopUV && uv.y < btnBottomUV) {
-        const fact = bodies[selectedIndex].data.funFacts && bodies[selectedIndex].data.funFacts[0];
+        const data = bodies[selectedIndex].data;
+        const fact = (data.facts || data.funFacts || [])[0];
         if (fact) onNarrate(fact);
       }
     }

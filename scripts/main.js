@@ -13,11 +13,7 @@ import { createControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
 import { launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
-
-// Utility to convert seconds into Earth days.
-const SEC_TO_DAYS = 1 / 86400;
-// Speed multiplier for orbital motion.
-const TIME_SCALE = 50;
+import { SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 
 async function main() {
   const scene = new THREE.Scene();
@@ -154,7 +150,7 @@ async function main() {
     const now = performance.now();
     const deltaSec = (now - lastTime) / 1000;
     lastTime = now;
-    const deltaDays = deltaSec * SEC_TO_DAYS * TIME_SCALE;
+    const deltaDays = deltaSec * SEC_TO_DAYS * getTimeMultiplier();
     updateSolarSystem(deltaDays);
     updateProbes(deltaSec, solarGroup, bodies, scene);
     const cameraPos = new THREE.Vector3();
