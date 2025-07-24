@@ -9,7 +9,7 @@ const maxOrbit = bodyData.reduce((max, b) => Math.max(max, b.orbitRadius || 0), 
 
 // How big the orrery should be in metres (game units). All distances will be
 // scaled to this size.
-const ORRERY_RADIUS = 4.0;
+const ORRERY_RADIUS = 0.5;
 
 // Create the orrery. Accepts the array of solarBodies produced by
 // createSolarSystem and returns an object with the THREE.Group representing

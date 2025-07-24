@@ -3,6 +3,7 @@
 // coordinate mismatch that previously caused probes to explode immediately.
 
 import * as THREE from 'three';
+import { computeGravity } from './utils.js';
 
 // Active probes in the scene
 const probes = [];
@@ -34,7 +35,11 @@ export function updateProbes(deltaTime, solarGroup, solarBodies, scene) {
   const toRemove = [];
   const origin = solarGroup.getWorldPosition(new THREE.Vector3());
   probes.forEach((probe, index) => {
-    // Integrate position in solar coordinates
+    // Compute gravity at the probe's world position
+    const worldPos = probe.mesh.position.clone().add(origin);
+    const gravity = computeGravity(worldPos, solarBodies);
+    // Integrate velocity and position (simple Euler)
+    probe.velocity.addScaledVector(gravity, deltaTime);
     probe.mesh.position.addScaledVector(probe.velocity, deltaTime);
     // Check for collisions against every body
     for (const obj of solarBodies) {

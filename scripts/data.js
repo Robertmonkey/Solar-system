@@ -11,6 +11,7 @@ export const bodies = [
     orbitPeriod: 0.0,
     rotationPeriod: 25.0,
     tilt: 7.25,
+    mass: 1.989e30,
     texture: 'textures/sun.jpg',
     funFacts: [
       'The Sun contains more than 99% of the mass of the entire Solar System.',
@@ -26,6 +27,7 @@ export const bodies = [
     orbitPeriod: 88.0,
     rotationPeriod: 58.6,
     tilt: 0.0,
+    mass: 3.285e23,
     texture: 'textures/mercury.jpg',
     funFacts: [
       'Mercury is the smallest planet in the solar system.',
@@ -41,6 +43,7 @@ export const bodies = [
     orbitPeriod: 224.7,
     rotationPeriod: -243.0, // retrograde rotation
     tilt: 177.4,
+    mass: 4.867e24,
     texture: 'textures/venus.jpg',
     funFacts: [
       'Venus rotates backwards relative to most planets.',
@@ -56,6 +59,7 @@ export const bodies = [
     orbitPeriod: 365.25,
     rotationPeriod: 1.0,
     tilt: 23.5,
+    mass: 5.972e24,
     texture: 'textures/earth.jpg',
     funFacts: [
       'Earth is the only known planet to support life.',
@@ -71,6 +75,7 @@ export const bodies = [
     orbitPeriod: 27.3,
     rotationPeriod: 27.3,
     tilt: 6.7,
+    mass: 7.348e22,
     texture: 'textures/moon.jpg',
     funFacts: [
       'The Moon always shows the same face to the Earth.',
@@ -86,6 +91,7 @@ export const bodies = [
     orbitPeriod: 687.0,
     rotationPeriod: 1.03,
     tilt: 25.0,
+    mass: 6.39e23,
     texture: 'textures/mars.jpg',
     funFacts: [
       'Mars has the largest volcano in the solar system, Olympus Mons.',
@@ -101,6 +107,7 @@ export const bodies = [
     orbitPeriod: 4332.0,
     rotationPeriod: 0.41,
     tilt: 3.1,
+    mass: 1.898e27,
     texture: 'textures/jupiter.jpg',
     funFacts: [
       'Jupiter is the largest planet in the solar system.',
@@ -116,6 +123,7 @@ export const bodies = [
     orbitPeriod: 3.55,
     rotationPeriod: 3.55,
     tilt: 0.1,
+    mass: 4.8e22,
     texture: 'textures/europa.jpg',
     funFacts: [
       'Europa is thought to have a subsurface ocean beneath its icy crust.',
@@ -131,6 +139,7 @@ export const bodies = [
     orbitPeriod: 10759.0,
     rotationPeriod: 0.44,
     tilt: 26.7,
+    mass: 5.683e26,
     texture: 'textures/saturn.jpg',
     funFacts: [
       'Saturn is known for its beautiful ring system.',
@@ -146,6 +155,7 @@ export const bodies = [
     orbitPeriod: 15.9,
     rotationPeriod: 15.9,
     tilt: 0.3,
+    mass: 1.3452e23,
     texture: 'textures/titan.jpg',
     funFacts: [
       'Titan is the only moon known to have a dense atmosphere.',
@@ -161,6 +171,7 @@ export const bodies = [
     orbitPeriod: 30687.0,
     rotationPeriod: -0.72, // retrograde rotation
     tilt: 97.8,
+    mass: 8.681e25,
     texture: 'textures/uranus.jpg',
     funFacts: [
       'Uranus rotates on its side, making its seasons extreme.',
@@ -176,6 +187,7 @@ export const bodies = [
     orbitPeriod: 60190.0,
     rotationPeriod: 0.67,
     tilt: 28.3,
+    mass: 1.024e26,
     texture: 'textures/neptune.jpg',
     funFacts: [
       'Neptune has the strongest winds in the solar system.',
@@ -191,6 +203,7 @@ export const bodies = [
     orbitPeriod: 90560.0,
     rotationPeriod: -6.39,
     tilt: 122.5,
+    mass: 1.309e22,
     texture: 'textures/pluto.jpg',
     funFacts: [
       'Pluto was reclassified as a dwarf planet in 2006.',
@@ -206,6 +219,7 @@ export const bodies = [
     orbitPeriod: 365.25, // treat as 1 Earth year for convenience
     rotationPeriod: 0.0,
     tilt: 0.0,
+    mass: 722,
     texture: null,
     funFacts: [
       'Voyager 1 is the farthest human‑made object from Earth.',
@@ -221,6 +235,7 @@ export const bodies = [
     orbitPeriod: 365.25,
     rotationPeriod: 0.0,
     tilt: 0.0,
+    mass: 722,
     texture: null,
     funFacts: [
       'Voyager 2 is the only spacecraft to have visited both Uranus and Neptune.',

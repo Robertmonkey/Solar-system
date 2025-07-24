@@ -12,9 +12,11 @@ import { createControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
 import { launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
+import { createShip } from './ship.js';
 
 // Utility to convert seconds into Earth days. One day is 86 400 seconds.
 const SEC_TO_DAYS = 1 / 86400;
+const TIME_SCALE = 86400; // simulate one day per real second
 
 // Main async function to set up the scene
 async function main() {
@@ -72,8 +74,13 @@ async function main() {
 
   // Build cockpit and attach to scene.
   const cockpit = createCockpit();
-  cockpit.root.position.set(0, -0.5, -1.0);
+  cockpit.root.position.set(0, -0.2, -1.0);
   scene.add(cockpit.root);
+
+  // Visual spaceship model attached to cockpit
+  const shipMesh = createShip();
+  shipMesh.position.set(0, 0, -1.5);
+  cockpit.root.add(shipMesh);
   
   // Initialize audio system
   const audio = await initAudio(camera, cockpit.root);
@@ -113,6 +120,10 @@ async function main() {
   let showLabels = true;
   let autopilotEnabled = false;
 
+  const shipVelocity = new THREE.Vector3();
+  const MAX_SPEED = 0.5; // world units per second
+  const ROT_SPEED = Math.PI / 4; // radians per second
+
   // Hide/show the overlay on session start/end.
   renderer.xr.addEventListener('sessionstart', () => {
     if (overlay) overlay.style.display = 'none';
@@ -140,7 +151,7 @@ async function main() {
     const now = performance.now();
     const deltaSec = (now - lastTime) / 1000;
     lastTime = now;
-    const deltaDays = deltaSec * SEC_TO_DAYS;
+    const deltaDays = deltaSec * SEC_TO_DAYS * TIME_SCALE;
 
     updateSolarSystem(deltaDays);
     updateProbes(deltaSec, solarGroup, bodies, scene);
@@ -148,6 +159,14 @@ async function main() {
     camera.getWorldPosition(cameraPos);
     updateOrrery(orrery, solarGroup, cameraPos);
     controls.update(deltaSec);
+
+    // Ship movement based on cockpit controls
+    const speed = cockpit.throttleValue * MAX_SPEED;
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    solarGroup.position.addScaledVector(forward, speed * deltaSec);
+    const joy = cockpit.joystickValue;
+    solarGroup.rotation.y -= joy.x * ROT_SPEED * deltaSec;
+    solarGroup.rotation.x -= joy.y * ROT_SPEED * deltaSec;
     for (let i = 0; i < 2; i++) {
       const hand = renderer.xr.getHand(i);
       const indexTip = hand && hand.joints && hand.joints['index-finger-tip'];
