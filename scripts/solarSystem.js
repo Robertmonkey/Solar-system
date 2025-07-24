@@ -1,68 +1,70 @@
-// Provides functions for constructing and updating a miniature solar system.
-// The solar system consists of nested groups for the Sun, planets, moons and probes.
+// Provides functions for constructing and updating a scaled solar system.
+// Celestial bodies are enlarged for visibility in VR.
 
 import * as THREE from 'three';
 import { bodies } from './data.js';
-import { KM_TO_WORLD_UNITS, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
+import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition } from './utils.js';
-
-// Global list of body instances. Each entry holds the original data and the
-// corresponding THREE.Group used to update its orbit and rotation.
-export const solarBodies = [];
 
 // Create the solar system hierarchy. Returns the root group and a flat list
 // of bodies that can be used by the UI and other subsystems.
-export function createSolarSystem() {
+export async function createSolarSystem() {
   const solarGroup = new THREE.Group();
   solarGroup.name = 'SolarSystemRoot';
   const loader = new THREE.TextureLoader();
-  const materialCache = {};
   const byName = {};
+  const solarBodies = [];
 
-  bodies.forEach(data => {
-    const radius = Math.max(data.radiusKm * KM_TO_WORLD_UNITS, 0.1);
-    const geometry = new THREE.SphereGeometry(radius, 32, 32);
-    let material;
-    const key = data.texture || 'default';
-    if (materialCache[key]) {
-      material = materialCache[key];
-    } else {
+  const promises = bodies.map(data => {
+    return new Promise(async (resolve) => {
+      // Use SIZE_MULTIPLIER to make planets visible and not just specks.
+      const radius = data.radiusKm * KM_TO_WORLD_UNITS * (data.name === 'Sun' ? 1 : SIZE_MULTIPLIER);
+      const geometry = new THREE.SphereGeometry(Math.max(radius, 0.01), 64, 64);
+
+      let material;
       if (data.texture) {
-        material = new THREE.MeshLambertMaterial({ map: loader.load(data.texture) });
+        const texture = await loader.loadAsync(data.texture);
+        if (data.name === 'Sun') {
+          // The sun should glow and not be affected by other lights.
+          material = new THREE.MeshBasicMaterial({ map: texture, color: 0xffffff });
+        } else {
+          material = new THREE.MeshStandardMaterial({ map: texture });
+        }
       } else {
-        material = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
       }
-      materialCache[key] = material;
-    }
-    const mesh = new THREE.Mesh(geometry, material);
 
-    const group = new THREE.Group();
-    group.name = data.name;
-    group.add(mesh);
+      const mesh = new THREE.Mesh(geometry, material);
+      const group = new THREE.Group();
+      group.name = data.name;
+      group.add(mesh);
 
-    // --- Corrected Tilt Logic ---
-    // Apply the axial tilt to the group's rotation once during creation.
-    group.rotation.z = degToRad(data.axialTiltDeg || 0);
+      // Add a point light to the sun so it illuminates other planets
+      if (data.name === 'Sun') {
+        const sunLight = new THREE.PointLight(0xffffff, 350000, 0, 1);
+        group.add(sunLight);
+      }
 
-    // Copy useful data onto the group for easy access during update.
-    group.userData = {
-      name: data.name,
-      parent: data.parent,
-      massKg: data.massKg,
-      semiMajorAxisAU: data.semiMajorAxisAU,
-      eccentricity: data.eccentricity,
-      orbitalPeriodDays: data.orbitalPeriodDays,
-      rotationPeriodHours: data.rotationPeriodHours,
-      axialTiltDeg: data.axialTiltDeg || 0,
-      meanAnomaly0: Math.random() * Math.PI * 2,
-      elapsedDays: 0
-    };
+      group.rotation.z = degToRad(data.axialTiltDeg || 0);
 
-    byName[data.name] = group;
-    solarBodies.push({ data, group });
+      // Copy useful data onto the group for easy access.
+      group.userData = {
+        ...data,
+        radius, // Store the final scaled radius
+        meanAnomaly0: Math.random() * Math.PI * 2,
+        elapsedDays: 0
+      };
+
+      byName[data.name] = group;
+      solarBodies.push({ data, group });
+      resolve();
+    });
   });
 
+  await Promise.all(promises);
+
   // Second pass: parent the groups according to the data.
+  solarBodies.sort((a,b) => (a.data.parent === b.data.name) ? -1 : (b.data.parent === a.data.name) ? 1 : 0);
   solarBodies.forEach(obj => {
     const parentName = obj.data.parent;
     if (!parentName) {
@@ -98,8 +100,8 @@ export function updateSolarSystem(solarGroup, elapsedSec) {
       group.position.copy(pos);
     }
     if (ud.rotationPeriodHours) {
-      const rotSpeed = (deltaDays * 24 / Math.abs(ud.rotationPeriodHours)) * Math.PI * 2;
-      group.rotation.y += rotSpeed * Math.sign(ud.rotationPeriodHours);
+      const rotSpeed = (2 * Math.PI) / (ud.rotationPeriodHours * 3600); // rad/sec
+      group.children[0].rotation.y += rotSpeed * elapsedSec * getTimeMultiplier() * 24 * 3600 / 86400;
     }
   });
 }
