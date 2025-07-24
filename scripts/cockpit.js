@@ -177,6 +177,46 @@ export function createDashboardCockpit() {
   cannon.rotation.x = Math.PI / 2;
   cockpitGroup.add(cannon);
 
+  // --- Grabbing helpers ---
+  // Track which hand is currently grabbing each control so that the
+  // fingertip position can drive the lever/joystick animations.
+  const grabbingThrottle = [false, false];
+  const grabbingJoystick = [false, false];
+
+  function startGrabbingThrottle(handIndex) {
+    grabbingThrottle[handIndex] = true;
+  }
+
+  function stopGrabbingThrottle(handIndex) {
+    grabbingThrottle[handIndex] = false;
+  }
+
+  function startGrabbingJoystick(handIndex) {
+    grabbingJoystick[handIndex] = true;
+  }
+
+  function stopGrabbingJoystick(handIndex) {
+    grabbingJoystick[handIndex] = false;
+  }
+
+  // Update the throttle/joystick orientation based on the fingertip position
+  // of the controlling hand.
+  function updateGrab(handIndex, tipPosWorld) {
+    if (grabbingThrottle[handIndex]) {
+      const local = throttleGroup.worldToLocal(tipPosWorld.clone());
+      const y = THREE.MathUtils.clamp(local.y, 0, 0.3);
+      const angle = THREE.MathUtils.mapLinear(y, 0, 0.3, 0, Math.PI / 2);
+      throttlePivot.rotation.x = -angle;
+    }
+    if (grabbingJoystick[handIndex]) {
+      const local = joystickGroup.worldToLocal(tipPosWorld.clone());
+      const maxAngle = Math.PI / 4;
+      const xAngle = THREE.MathUtils.clamp(local.x * 2, -maxAngle, maxAngle);
+      const yAngle = THREE.MathUtils.clamp(-local.z * 2, -maxAngle, maxAngle);
+      joystickPivot.rotation.set(yAngle, 0, xAngle);
+    }
+  }
+
   return {
     group: cockpitGroup,
     dashboard: dashboard,
@@ -186,6 +226,11 @@ export function createDashboardCockpit() {
     joystickPivot,
     fireButton,
     cannon,
+    startGrabbingThrottle,
+    stopGrabbingThrottle,
+    startGrabbingJoystick,
+    stopGrabbingJoystick,
+    updateGrab,
   };
 }
 
