@@ -7,13 +7,7 @@
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-// The cockpit implementation already exports `createCockpit` from
-// `cockpit.js`.  A previous refactor accidentally changed the import to
-// `lecternCockpit.js`, but that file does not exist which causes the entire
-// application script to fail and the VR button never appears.  Revert to
-// importing from the correct module so the page can load and WebXR entry works
-// again.
-import { createCockpit } from './cockpit.js';
+import { createCockpit } from './lecternCockpit.js';
 import { createUI } from './ui.js';
 import { createControls } from './controls.js';
 import { createOrrery, updateOrrery } from './orrery.js';
