@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem, solarBodies } from './solarSystem.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { createCockpit } from './cockpit.js';
 import { createUI } from './ui.js';
 import { createControls } from './controls.js';
@@ -26,6 +27,26 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 document.body.appendChild(renderer.domElement);
+// Add the standard VRButton for entering immersive mode
+const sessionInit = { optionalFeatures: ['hand-tracking'] };
+document.body.appendChild(VRButton.createButton(renderer, sessionInit));
+
+// Display WebXR availability status in the overlay
+const overlay = document.getElementById('overlay');
+const xrMessage = document.getElementById('xr-message');
+if ('xr' in navigator && navigator.xr.isSessionSupported) {
+  navigator.xr.isSessionSupported('immersive-vr').then(supported => {
+    if (supported) {
+      overlay.classList.add('hidden');
+    } else {
+      xrMessage.textContent = 'VR NOT SUPPORTED';
+    }
+  }).catch(() => {
+    xrMessage.textContent = 'VR NOT ALLOWED';
+  });
+} else if (overlay) {
+  xrMessage.textContent = window.isSecureContext ? 'WEBXR NOT AVAILABLE' : 'WEBXR NEEDS HTTPS';
+}
 
 // Add some ambient and directional light to shade the bodies. Without
 // lighting the lambert materials on the planets will appear black.
@@ -91,7 +112,6 @@ let autopilotEnabled = false;
 // Hide the overlay when the XR session starts. Some browsers leave the
 // overlay visible in VR until explicitly hidden. Conversely, show it when
 // exiting VR so the user can click the Enter VR button again.
-const overlay = document.getElementById('overlay');
 renderer.xr.addEventListener('sessionstart', () => {
   if (overlay) overlay.style.display = 'none';
 });
@@ -165,9 +185,3 @@ renderer.setAnimationLoop(function () {
   renderer.render(scene, camera);
 });
 
-// Allow the user to enter VR with a button on the page
-document.getElementById('VRButton').addEventListener('click', () => {
-  renderer.xr.requestSession('immersive-vr', { optionalFeatures: ['hand-tracking'] }).then(session => {
-    renderer.xr.setSession(session);
-  });
-});
