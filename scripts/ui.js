@@ -12,6 +12,7 @@
  */
 
 import * as THREE from 'three';
+import { COLORS, FONT_FAMILY } from './constants.js';
 
 /**
  * Create the UI panels.
@@ -107,12 +108,12 @@ export function createUI(bodies, callbacks = {}) {
     const ctx = warp.ctx;
     const { width, height } = ctx.canvas;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
+    ctx.fillStyle = COLORS.uiBackground;
     ctx.fillRect(0, 0, width, height);
 
     const count = bodies.length;
     const rowH = height / count;
-    ctx.font = '24px Orbitron, sans-serif';
+    ctx.font = `28px ${FONT_FAMILY}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     for (let i = 0; i < count; i++) {
@@ -122,11 +123,11 @@ export function createUI(bodies, callbacks = {}) {
         end: 1 - i / count
       };
       if (i === hoverIndex || i === selectedIndex) {
-        ctx.fillStyle = 'rgba(76, 175, 80, 0.7)';
+        ctx.fillStyle = COLORS.uiRowHighlight;
         ctx.fillRect(0, y, width, rowH);
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = COLORS.textInvert;
       } else {
-        ctx.fillStyle = '#cceeff';
+        ctx.fillStyle = COLORS.textSecondary;
       }
       ctx.fillText(bodies[i].data.name, 20, y + rowH / 2);
     }
@@ -141,10 +142,10 @@ export function createUI(bodies, callbacks = {}) {
     const ctx = probe.ctx;
     const { width, height } = ctx.canvas;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
+    ctx.fillStyle = COLORS.uiBackground;
     ctx.fillRect(0, 0, width, height);
-    ctx.font = '24px Orbitron, sans-serif';
-    ctx.fillStyle = '#e0f0ff';
+    ctx.font = `28px ${FONT_FAMILY}`;
+    ctx.fillStyle = COLORS.textPrimary;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Titles
@@ -154,30 +155,30 @@ export function createUI(bodies, callbacks = {}) {
     const sliderY = height * 0.3;
     const sliderW = width * 0.1;
     const sliderH = height * 0.4;
-    ctx.fillStyle = 'rgba(90, 120, 160, 0.6)';
+    ctx.fillStyle = COLORS.sliderTrack;
     ctx.fillRect(sliderX - sliderW / 2, sliderY - sliderH / 2, sliderW, sliderH);
     // Mass knob
     const massY = sliderY + sliderH / 2 - probeMass * sliderH;
-    ctx.fillStyle = '#4caf50';
+    ctx.fillStyle = COLORS.uiHighlight;
     ctx.fillRect(sliderX - sliderW / 2, massY - 5, sliderW, 10);
     // Mass label
-    ctx.fillStyle = '#e0f0ff';
-    ctx.font = '18px Orbitron, sans-serif';
+    ctx.fillStyle = COLORS.textPrimary;
+    ctx.font = `20px ${FONT_FAMILY}`;
     ctx.fillText(`Mass: ${(probeMass * 100).toFixed(0)}%`, sliderX, sliderY + sliderH / 2 + 30);
     // Velocity slider background
     const hSliderX = width * 0.55;
     const hSliderY = height * 0.55;
     const hSliderW = width * 0.4;
     const hSliderH = height * 0.08;
-    ctx.fillStyle = 'rgba(90, 120, 160, 0.6)';
+    ctx.fillStyle = COLORS.sliderTrack;
     ctx.fillRect(hSliderX - hSliderW / 2, hSliderY - hSliderH / 2, hSliderW, hSliderH);
     // Velocity knob
     const velX = hSliderX - hSliderW / 2 + probeVelocity * hSliderW;
-    ctx.fillStyle = '#4caf50';
+    ctx.fillStyle = COLORS.uiHighlight;
     ctx.fillRect(velX - 5, hSliderY - hSliderH / 2, 10, hSliderH);
     // Velocity label
-    ctx.fillStyle = '#e0f0ff';
-    ctx.font = '18px Orbitron, sans-serif';
+    ctx.fillStyle = COLORS.textPrimary;
+    ctx.font = `20px ${FONT_FAMILY}`;
     ctx.fillText(`Velocity: ${(probeVelocity * 100).toFixed(0)}%`, hSliderX, hSliderY + hSliderH);
 
     // Time slider background (vertical on the right)
@@ -185,15 +186,15 @@ export function createUI(bodies, callbacks = {}) {
     const tSliderY = height * 0.3;
     const tSliderW = width * 0.1;
     const tSliderH = height * 0.4;
-    ctx.fillStyle = 'rgba(90, 120, 160, 0.6)';
+    ctx.fillStyle = COLORS.sliderTrack;
     ctx.fillRect(tSliderX - tSliderW / 2, tSliderY - tSliderH / 2, tSliderW, tSliderH);
     // Time knob
     const timeY = tSliderY + tSliderH / 2 - timeValue * tSliderH;
-    ctx.fillStyle = '#4caf50';
+    ctx.fillStyle = COLORS.uiHighlight;
     ctx.fillRect(tSliderX - tSliderW / 2, timeY - 5, tSliderW, 10);
     // Time label
-    ctx.fillStyle = '#e0f0ff';
-    ctx.font = '18px Orbitron, sans-serif';
+    ctx.fillStyle = COLORS.textPrimary;
+    ctx.font = `20px ${FONT_FAMILY}`;
     ctx.fillText(`Time: ${(timeValue * 100).toFixed(0)}%`, tSliderX, tSliderY + tSliderH / 2 + 30);
     probeTexture.needsUpdate = true;
   }
@@ -207,16 +208,16 @@ export function createUI(bodies, callbacks = {}) {
     const ctx = facts.ctx;
     const { width, height } = ctx.canvas;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
+    ctx.fillStyle = COLORS.uiBackground;
     ctx.fillRect(0, 0, width, height);
     const body = bodies[selectedIndex].data;
-    ctx.font = '24px Orbitron, sans-serif';
-    ctx.fillStyle = '#e0f0ff';
+    ctx.font = `28px ${FONT_FAMILY}`;
+    ctx.fillStyle = COLORS.textPrimary;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     // Header: name
     ctx.fillText(body.name, 20, 20);
-    ctx.font = '18px Orbitron, sans-serif';
+    ctx.font = `20px ${FONT_FAMILY}`;
     // Data lines (mass and radius if available)
     let y = 60;
     if (body.massKg !== undefined) {
@@ -228,8 +229,8 @@ export function createUI(bodies, callbacks = {}) {
       y += 22;
     }
     // Fun facts
-    ctx.font = '18px Orbitron, sans-serif';
-    ctx.fillStyle = '#cceeff';
+    ctx.font = `20px ${FONT_FAMILY}`;
+    ctx.fillStyle = COLORS.textSecondary;
     ctx.fillText('Fun Facts:', 20, y);
     y += 22;
     const maxWidth = width - 40;
@@ -258,10 +259,10 @@ export function createUI(bodies, callbacks = {}) {
     const btnH = 50;
     const btnX = (width - btnW) / 2;
     const btnY = height - btnH - 20;
-    ctx.fillStyle = '#4caf50';
+    ctx.fillStyle = COLORS.uiHighlight;
     ctx.fillRect(btnX, btnY, btnW, btnH);
-    ctx.font = '20px Orbitron, sans-serif';
-    ctx.fillStyle = '#ffffff';
+    ctx.font = `22px ${FONT_FAMILY}`;
+    ctx.fillStyle = COLORS.textInvert;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Narrate', btnX + btnW / 2, btnY + btnH / 2);

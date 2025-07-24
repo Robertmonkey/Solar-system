@@ -62,3 +62,22 @@ export const PALETTE = {
   Neptune: 0x3366aa,
   Pluto: 0x9999cc
 };
+
+// Centralised colour scheme for the cockpit and UI
+export const COLORS = {
+  uiBackground: 'rgba(10, 10, 20, 0.95)',
+  uiHighlight: '#4caf50',
+  uiRowHighlight: 'rgba(76, 175, 80, 0.7)',
+  textPrimary: '#e0f0ff',
+  textSecondary: '#cceeff',
+  textInvert: '#ffffff',
+  sliderTrack: 'rgba(90, 120, 160, 0.6)',
+  cockpitBase: 0xb1b1b1,
+  cockpitAccent: 0x3366aa,
+  cockpitEmissive: 0xffcc00,
+  controlBase: 0x3366cc,
+  controlEmissive: 0xffddaa
+};
+
+// Shared font family used across the UI
+export const FONT_FAMILY = "'Orbitron', sans-serif";

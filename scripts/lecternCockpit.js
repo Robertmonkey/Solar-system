@@ -11,7 +11,7 @@
  */
 
 import * as THREE from 'three';
-import { PALETTE } from './constants.js';
+import { PALETTE, COLORS } from './constants.js';
 
 /**
  * Creates a lectern‑style cockpit.  The returned object exposes the group
@@ -42,22 +42,22 @@ export function createLecternCockpit() {
   // Materials.  Dark metallic surfaces with subtle emissive accents to achieve
   // the cosmic aesthetic.
   const darkMetalMat = new THREE.MeshStandardMaterial({
-    color: PALETTE.Mercury,
+    color: COLORS.cockpitBase,
     metalness: 0.9,
     roughness: 0.35
   });
   const accentMat = new THREE.MeshStandardMaterial({
-    color: PALETTE.Neptune,
+    color: COLORS.cockpitAccent,
     metalness: 0.9,
     roughness: 0.2,
-    emissive: PALETTE.Sun,
+    emissive: COLORS.cockpitEmissive,
     emissiveIntensity: 0.6
   });
   const controlMat = new THREE.MeshStandardMaterial({
-    color: PALETTE.Earth,
+    color: COLORS.controlBase,
     metalness: 0.8,
     roughness: 0.4,
-    emissive: PALETTE.Saturn,
+    emissive: COLORS.controlEmissive,
     emissiveIntensity: 0.4
   });
 
@@ -144,7 +144,7 @@ export function createLecternCockpit() {
   const throttleBase = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.04, 0.2), darkMetalMat);
   const throttleLever = new THREE.Mesh(
     new THREE.BoxGeometry(0.04, 0.35, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0xffaa00, metalness: 0.8, roughness: 0.3, emissive: 0x331100 })
+    new THREE.MeshStandardMaterial({ color: COLORS.uiHighlight, metalness: 0.8, roughness: 0.3, emissive: 0x331100 })
   );
   throttleLever.position.y = 0.175;
   const throttlePivot = new THREE.Object3D();
