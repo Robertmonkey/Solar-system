@@ -13,6 +13,19 @@
 
 import * as THREE from 'three';
 import { G, KM_PER_WORLD_UNIT } from './constants.js';
+export const KM_TO_WORLD_UNITS = 1 / KM_PER_WORLD_UNIT;
+
+// Internal time multiplier used by update functions. Exposed via getter/setter
+// so other modules (e.g. UI sliders) can modify the simulation speed.
+let _timeMultiplier = 1;
+
+export function setTimeMultiplier(mult) {
+  _timeMultiplier = mult;
+}
+
+export function getTimeMultiplier() {
+  return _timeMultiplier;
+}
 
 /**
  * Convert degrees to radians.

@@ -11,6 +11,8 @@ export const AU_IN_KM = 149_597_870.7; // astronomical unit in kilometres
 // Earth’s radius (~6,371 km) becomes ~0.0063 world units.  The SIZE_MULTIPLIER
 // defined below enlarges bodies to make them visible at VR scale.
 export const KM_PER_WORLD_UNIT = 1e6;
+// Inverse conversion: multiply kilometres by this factor to obtain world units.
+export const KM_TO_WORLD_UNITS = 1 / KM_PER_WORLD_UNIT;
 
 // Body radii are multiplied by this factor when converted to world units so they
 // remain visible at the KM_PER_WORLD_UNIT scale.  Without a size multiplier the

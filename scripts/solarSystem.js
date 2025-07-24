@@ -1,94 +1,112 @@
-// Provides functions for constructing and updating a miniature solar system.
-// The solar system consists of nested groups for the Sun, planets, moons and probes.
-
 import * as THREE from 'three';
-import { bodies as bodyData } from './data.js';
+import { bodies } from './data.js';
+import { degToRad, getOrbitalPosition, getTimeMultiplier, KM_TO_WORLD_UNITS } from './utils.js';
 
-// Global list of body instances. Each entry holds the original data and the
-// corresponding THREE.Group used to update its orbit and rotation.
-export const solarBodies = [];
-
-// Create the solar system hierarchy. Returns the root group and a flat list
-// of bodies that can be used by the UI and other subsystems.
+/**
+ * Build the hierarchy of solar-system objects.
+ * Returns an object containing the root group and a flat array of body objects
+ * with their associated groups for convenience.
+ */
 export function createSolarSystem() {
-  const solarGroup = new THREE.Group();
-  solarGroup.name = 'SolarSystemRoot';
-  const loader = new THREE.TextureLoader();
+  const root = new THREE.Group();
+  root.name = 'SolarSystem';
 
-  // First pass: create groups for every body. We defer parenting until after
-  // all groups exist so that lookups are simple.
-  bodyData.forEach(data => {
-    // Create a mesh for the body: simple sphere with a basic material. Use
-    // lambert material so the lighting (if any) can shade the sphere.
-    const geometry = new THREE.SphereGeometry(data.radius, 32, 32);
+  const loader = new THREE.TextureLoader();
+  const materialCache = new Map();
+  const bodiesList = [];
+  const groupMap = new Map();
+  const MIN_SIZE = 0.05;
+
+  bodies.forEach(data => {
+    let radius = data.radius * KM_TO_WORLD_UNITS;
+    if (radius < MIN_SIZE) radius = MIN_SIZE;
+    const geometry = new THREE.SphereGeometry(radius, 32, 32);
+
     let material;
     if (data.texture) {
-      const texture = loader.load(data.texture);
-      material = new THREE.MeshLambertMaterial({ map: texture });
+      if (!materialCache.has(data.texture)) {
+        const tex = loader.load(data.texture);
+        materialCache.set(data.texture, new THREE.MeshLambertMaterial({ map: tex }));
+      }
+      material = materialCache.get(data.texture);
     } else {
-      // Default colour for probes or placeholder objects
-      material = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      if (!materialCache.has('default')) {
+        materialCache.set('default', new THREE.MeshLambertMaterial({ color: 0xffffff }));
+      }
+      material = materialCache.get('default');
     }
-    const mesh = new THREE.Mesh(geometry, material);
 
-    // Place the mesh at the origin of its group; rotations will occur around
-    // the centre by default.
+    const mesh = new THREE.Mesh(geometry, material);
     const group = new THREE.Group();
     group.name = data.name;
     group.add(mesh);
+    group.rotation.z = degToRad(data.tilt || 0);
 
-    // --- Corrected Tilt Logic ---
-    // Apply the axial tilt to the group's rotation once during creation.
-    group.rotation.z = THREE.MathUtils.degToRad(data.tilt || 0);
-
-    // Copy useful data onto the group for easy access during update.
     group.userData = {
-      orbitRadius: data.orbitRadius,
-      orbitPeriod: data.orbitPeriod,
-      rotationPeriod: data.rotationPeriod,
-      tilt: data.tilt || 0,
-      orbitAngle: Math.random() * Math.PI * 2 // randomise starting positions
+      data,
+      mesh,
+      elements: data.orbitalElements || {
+        a: (data.orbitRadius || 0) * KM_TO_WORLD_UNITS,
+        e: 0,
+        period: data.orbitPeriod || 0,
+        i: 0,
+        omega: 0,
+        w: 0,
+        M0: 0
+      },
+      rotationPeriodHours: (data.rotationPeriodHours !== undefined)
+        ? data.rotationPeriodHours
+        : ((data.rotationPeriod || 0) * 24),
+      time: Math.random() * (data.orbitPeriod || 1)
     };
 
-    solarBodies.push({ data, group });
+    groupMap.set(data.name, group);
+    bodiesList.push({ data, group });
   });
 
-  // Second pass: parent the groups according to the data.
-  solarBodies.forEach(obj => {
-    const parentName = obj.data.parent;
-    if (!parentName) {
-      solarGroup.add(obj.group);
-    } else {
-      const parent = solarBodies.find(b => b.data.name === parentName);
-      if (parent) {
-        parent.group.add(obj.group);
+  bodies.forEach(data => {
+    const group = groupMap.get(data.name);
+    const parentName = data.parent;
+    if (parentName) {
+      const parentGroup = groupMap.get(parentName);
+      if (parentGroup) {
+        parentGroup.add(group);
       } else {
-        solarGroup.add(obj.group);
+        root.add(group);
       }
+    } else {
+      root.add(group);
     }
   });
-  return { solarGroup, bodies: solarBodies };
+
+  root.userData.bodies = bodiesList;
+  return { solarGroup: root, bodies: bodiesList };
 }
 
-// Update orbital positions and rotations based on elapsed time.
-export function updateSolarSystem(deltaTime) {
-  solarBodies.forEach(obj => {
+/**
+ * Update the solar system for the given elapsed seconds.
+ * @param {THREE.Group} root root group returned from createSolarSystem
+ * @param {number} elapsedSec real time in seconds since last update
+ */
+export function updateSolarSystem(root, elapsedSec) {
+  const scaledSec = elapsedSec * getTimeMultiplier();
+  const deltaDays = scaledSec / 86400;
+  const bodiesList = root.userData.bodies || [];
+
+  bodiesList.forEach(obj => {
     const group = obj.group;
     const ud = group.userData;
-    // Update orbital angle for objects with non-zero orbit periods.
-    if (ud.orbitPeriod > 0 && ud.orbitRadius > 0) {
-      const angleIncrement = (deltaTime / ud.orbitPeriod) * Math.PI * 2;
-      ud.orbitAngle = (ud.orbitAngle + angleIncrement) % (Math.PI * 2);
-      const r = ud.orbitRadius;
-      const angle = ud.orbitAngle;
-      group.position.set(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+
+    if (ud.elements.period > 0 && ud.elements.a > 0) {
+      ud.time += deltaDays;
+      const pos = getOrbitalPosition(ud.elements, ud.time);
+      group.position.copy(pos);
     }
-    // Apply axial rotation if rotationPeriod is non-zero.
-    if (ud.rotationPeriod !== 0) {
-      const rotSpeed = (deltaTime / Math.abs(ud.rotationPeriod)) * Math.PI * 2;
-      // Only update the spin around the Y-axis. The tilt is already set.
-      group.rotation.y += rotSpeed * Math.sign(ud.rotationPeriod);
+
+    const rotHours = ud.rotationPeriodHours;
+    if (rotHours && rotHours !== 0) {
+      const rotDelta = (scaledSec / Math.abs(rotHours * 3600)) * Math.PI * 2;
+      group.rotation.y += rotDelta * Math.sign(rotHours);
     }
-    // The incorrect tilt logic has been removed from the update loop.
   });
 }
