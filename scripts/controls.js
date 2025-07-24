@@ -1,34 +1,32 @@
-// Hand-tracking controls for the Solar System simulator. This version
-// automatically grabs the throttle and joystick when the user’s index finger
-// touches them, without requiring the controller squeeze button. It also
-// handles UI interaction and firing probes via the physical button on the
-// cockpit.
+// Hand‑tracking controls adapted for the lectern cockpit.  This version
+// automatically grabs the throttle and joystick when touched, handles UI
+// interactions on the new radial warp/probe/facts panels and triggers the
+// fire callback when the fire button is pressed.
 
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
 
-// Create controls. The renderer must have XR enabled. Provide the scene,
-// camera, cockpit (which should expose throttle, joystick and fireButton
-// meshes) and UI (from ui.js) as well as a fireCallback to launch probes.
+/**
+ * Create VR controls.  The renderer must have XR enabled.  Provide the
+ * scene, camera, the lectern cockpit object (which exposes throttle,
+ * joystick, fireButton and orreryMount), the UI (from ui.js) and a
+ * callback for launching a probe.  The returned controller has an
+ * update() function to be called each frame.
+ */
 export function createControls(renderer, scene, camera, cockpit, ui, fireCallback) {
   const controllerModelFactory = new XRControllerModelFactory();
   const handModelFactory = new XRHandModelFactory();
-
-  // XR controllers for each hand. We attach rays to them for UI interaction.
   const controllers = [];
   const hands = [];
-
   for (let i = 0; i < 2; i++) {
     const controller = renderer.xr.getController(i);
     scene.add(controller);
     controller.userData.index = i;
     controllers.push(controller);
-
     const controllerGrip = renderer.xr.getControllerGrip(i);
     controllerGrip.add(controllerModelFactory.createControllerModel(controllerGrip));
     scene.add(controllerGrip);
-
     const hand = renderer.xr.getHand(i);
     const handModel = handModelFactory.createHandModel(hand, 'mesh');
     hand.add(handModel);
@@ -36,44 +34,34 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     hand.userData.index = i;
     hands.push(hand);
   }
-
-  // Boxes for interaction targets. We compute them in local space and update
-  // them in world space every frame.
+  // Interaction boxes computed from cockpit objects
   const throttleBox = new THREE.Box3().setFromObject(cockpit.throttle);
   const joystickBox = new THREE.Box3().setFromObject(cockpit.joystick);
   const fireButtonBox = new THREE.Box3().setFromObject(cockpit.fireButton);
-
-  // Per-hand state for grabbing
+  // Per‑hand state
   const grabState = [
     { grabbingThrottle: false, grabbingJoystick: false },
     { grabbingThrottle: false, grabbingJoystick: false }
   ];
-
-  // Raycaster for UI interaction
+  // Raycaster for UI
   const raycaster = new THREE.Raycaster();
   const uiMeshes = {
-    left: ui.leftMesh,
-    right: ui.rightMesh,
-    bottom: ui.bottomMesh
+    warp: ui.warpMesh,
+    probe: ui.probeMesh,
+    facts: ui.factsMesh
   };
-  const uiNames = ['left', 'right', 'bottom'];
-
+  const uiNames = ['warp', 'probe', 'facts'];
   function update(deltaTime) {
-    // Update bounding boxes to world space
     throttleBox.setFromObject(cockpit.throttle);
     joystickBox.setFromObject(cockpit.joystick);
     fireButtonBox.setFromObject(cockpit.fireButton);
-
-    // For each hand, update grabbing and interactions
     hands.forEach((hand, i) => {
       const state = grabState[i];
-      // Determine fingertip position. We look for the index finger tip joint.
       const indexTip = hand.joints && hand.joints['index-finger-tip'];
       if (!indexTip) return;
       const tipPos = new THREE.Vector3();
       indexTip.getWorldPosition(tipPos);
-
-      // Auto‑grab throttle when touching
+      // Grab throttle
       if (!state.grabbingThrottle && throttleBox.containsPoint(tipPos)) {
         state.grabbingThrottle = true;
         cockpit.startGrabbingThrottle(i, tipPos);
@@ -81,8 +69,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         state.grabbingThrottle = false;
         cockpit.stopGrabbingThrottle(i);
       }
-
-      // Auto‑grab joystick when touching
+      // Grab joystick
       if (!state.grabbingJoystick && joystickBox.containsPoint(tipPos)) {
         state.grabbingJoystick = true;
         cockpit.startGrabbingJoystick(i, tipPos);
@@ -90,14 +77,11 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         state.grabbingJoystick = false;
         cockpit.stopGrabbingJoystick(i);
       }
-
-      // Fire button: if fingertip enters the button box, trigger fire.
+      // Fire button
       if (fireButtonBox.containsPoint(tipPos)) {
         fireCallback();
       }
-
-      // UI interaction: cast a short ray from the fingertip forward along
-      // the finger’s direction to detect intersections with UI panels.
+      // UI interaction: cast ray from fingertip along finger direction
       const direction = new THREE.Vector3();
       indexTip.getWorldDirection(direction);
       raycaster.set(tipPos, direction);
@@ -110,17 +94,12 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         }
       });
       if (intersections.length > 0) {
-        // Choose the closest intersection
         intersections.sort((a, b) => a.hit.distance - b.hit.distance);
         const { name, hit } = intersections[0];
-        // Compute UV coordinates on the panel
         const uv = hit.uv;
         ui.handlePointer(name, uv);
       }
     });
   }
-
-  return {
-    update
-  };
+  return { update };
 }
