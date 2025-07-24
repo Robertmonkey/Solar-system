@@ -4,17 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solar System VR</title>
-  <!-- Preload the Orbitron font family for the UI -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 
-  <!-- Import map for three.js and its examples -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
     }
   }
   </script>
@@ -32,8 +30,8 @@
     }
 
 
-    /* Overlay for XR status messages.  Hidden by default so it does not
-       obstruct the user's view once the app is running in VR.  The
+    /* Overlay for XR status messages. Hidden by default so it does not
+       obstruct the user's view once the app is running in VR. The
        `.hidden` class toggles `display: none`. */
     #overlay {
       position: absolute;
@@ -57,15 +55,10 @@
   </style>
 </head>
 <body>
-  <!-- Overlay shows XR initialisation and fallback messages.  It starts
-       hidden so it doesn’t show up as a translucent square in VR.  The
-       message has been updated to instruct the user to tap panels with
-       their index finger rather than pinching. -->
-  <div id="overlay" class="hidden">
+  <div id="overlay">
     <span id="xr-message">Initialising WebXR…</span><br>
     <small>Tap panels with your index finger to interact. Close your hand to grab controls.</small>
   </div>
-  <!-- Main application script -->
   <script type="module" src="./scripts/main.js"></script>
 </body>
 </html>
