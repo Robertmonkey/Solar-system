@@ -2,10 +2,10 @@
  * ui.js
  *
  * A revamped UI system designed for the lectern cockpit.  This module draws
- * three separate panels: a radial warp menu, a probe control panel and a
+ * three separate panels: a warp menu, a probe control panel and a
  * fun‑facts panel.  Each panel is rendered to its own canvas and mapped
- * onto a Three.js plane.  The radial menu allows the user to warp to any
- * celestial body by selecting a wedge with their fingertip.  The probe
+ * onto a Three.js plane.  The warp menu lists all bodies vertically and
+ * allows the user to warp by selecting a row with their fingertip.  The probe
  * panel provides sliders for adjusting mass and velocity before firing a
  * probe.  The facts panel displays basic data and fun facts about the
  * currently selected body and exposes a narrate button.
@@ -40,8 +40,8 @@ export function createUI(bodies, callbacks = {}) {
   let probeMass = 0.5;     // Range [0,1]
   let probeVelocity = 0.5; // Range [0,1]
 
-  // Panel dimensions (world units).  The warp and probe panels are square for
-  // radial/sliders; the facts panel is wider to accommodate text.
+  // Panel dimensions (world units).  The warp and probe panels are square while
+  // the facts panel is wider to accommodate text.
   const WARP_SIZE = 1.0;
   const PROBE_SIZE = 1.0;
   const FACTS_WIDTH = 1.6;
@@ -58,8 +58,8 @@ export function createUI(bodies, callbacks = {}) {
 
   // Create canvases.  Higher resolutions yield better text quality.
   const warp = makeCanvas(512, 512);
-  const probe = makeCanvas(512, 512);
-  const facts = makeCanvas(1024, 384);
+  const probe = makeCanvas(512, 1024); // higher resolution for controls
+  const facts = makeCanvas(1024, 512); // larger facts panel resolution
 
   // Create textures
   const warpTexture = new THREE.CanvasTexture(warp.canvas);
@@ -92,61 +92,40 @@ export function createUI(bodies, callbacks = {}) {
     new THREE.MeshBasicMaterial({ map: factsTexture, transparent: true })
   );
 
+  // Track row bounds for hit detection
+  const warpRowBounds = [];
+  let hoverIndex = -1;
+
   /**
-   * Draw the radial warp menu.  Each body is represented as a wedge in a
-   * circular menu.  The selected body is highlighted with a brighter fill.
+   * Draw the warp menu as a vertical list of rows. Each row spans the width of
+   * the canvas. The selected or hovered row is highlighted.
    */
   function drawWarp() {
     const ctx = warp.ctx;
     const { width, height } = ctx.canvas;
     ctx.clearRect(0, 0, width, height);
-    // Background with slight translucency for blending
-    ctx.fillStyle = 'rgba(40, 40, 50, 0.85)';
+    ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
     ctx.fillRect(0, 0, width, height);
-    const cx = width / 2;
-    const cy = height / 2;
-    const radius = Math.min(cx, cy) * 0.9;
+
     const count = bodies.length;
-    const twoPi = Math.PI * 2;
-    // Draw sectors
+    const rowH = height / count;
+    ctx.font = '24px Orbitron, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
     for (let i = 0; i < count; i++) {
-      const startAngle = twoPi * i / count - Math.PI / 2;
-      const endAngle = twoPi * (i + 1) / count - Math.PI / 2;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, radius, startAngle, endAngle);
-      ctx.closePath();
-      // Highlight the selected wedge
-      if (i === selectedIndex) {
+      const y = i * rowH;
+      warpRowBounds[i] = {
+        start: 1 - (i + 1) / count,
+        end: 1 - i / count
+      };
+      if (i === hoverIndex || i === selectedIndex) {
         ctx.fillStyle = 'rgba(76, 175, 80, 0.7)';
+        ctx.fillRect(0, y, width, rowH);
+        ctx.fillStyle = '#ffffff';
       } else {
-        ctx.fillStyle = 'rgba(70, 70, 90, 0.6)';
+        ctx.fillStyle = '#cceeff';
       }
-      ctx.fill();
-      // Draw dividing lines
-      ctx.strokeStyle = 'rgba(100, 100, 130, 0.8)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, radius, startAngle, endAngle);
-      ctx.closePath();
-      ctx.stroke();
-      // Label: place text at the middle of the sector
-      const midAngle = (startAngle + endAngle) / 2;
-      const tx = cx + (radius * 0.6) * Math.cos(midAngle);
-      const ty = cy + (radius * 0.6) * Math.sin(midAngle);
-      ctx.save();
-      ctx.translate(tx, ty);
-      ctx.rotate(midAngle + Math.PI / 2);
-      ctx.font = '20px Orbitron, sans-serif';
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const name = bodies[i].data.name;
-      // Shorten long names if necessary
-      const label = name.length > 10 ? name.slice(0, 9) + '…' : name;
-      ctx.fillText(label, 0, 0);
-      ctx.restore();
+      ctx.fillText(bodies[i].data.name, 20, y + rowH / 2);
     }
     warpTexture.needsUpdate = true;
   }
@@ -159,10 +138,10 @@ export function createUI(bodies, callbacks = {}) {
     const ctx = probe.ctx;
     const { width, height } = ctx.canvas;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = 'rgba(40, 40, 50, 0.85)';
+    ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
     ctx.fillRect(0, 0, width, height);
-    ctx.font = '20px Orbitron, sans-serif';
-    ctx.fillStyle = '#ffffff';
+    ctx.font = '24px Orbitron, sans-serif';
+    ctx.fillStyle = '#e0f0ff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Titles
@@ -172,30 +151,30 @@ export function createUI(bodies, callbacks = {}) {
     const sliderY = height * 0.3;
     const sliderW = width * 0.1;
     const sliderH = height * 0.4;
-    ctx.fillStyle = 'rgba(90, 90, 120, 0.6)';
+    ctx.fillStyle = 'rgba(90, 120, 160, 0.6)';
     ctx.fillRect(sliderX - sliderW / 2, sliderY - sliderH / 2, sliderW, sliderH);
     // Mass knob
     const massY = sliderY + sliderH / 2 - probeMass * sliderH;
     ctx.fillStyle = '#4caf50';
     ctx.fillRect(sliderX - sliderW / 2, massY - 5, sliderW, 10);
     // Mass label
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '16px Orbitron, sans-serif';
+    ctx.fillStyle = '#e0f0ff';
+    ctx.font = '18px Orbitron, sans-serif';
     ctx.fillText(`Mass: ${(probeMass * 100).toFixed(0)}%`, sliderX, sliderY + sliderH / 2 + 30);
     // Velocity slider background
     const hSliderX = width * 0.55;
     const hSliderY = height * 0.55;
     const hSliderW = width * 0.4;
     const hSliderH = height * 0.08;
-    ctx.fillStyle = 'rgba(90, 90, 120, 0.6)';
+    ctx.fillStyle = 'rgba(90, 120, 160, 0.6)';
     ctx.fillRect(hSliderX - hSliderW / 2, hSliderY - hSliderH / 2, hSliderW, hSliderH);
     // Velocity knob
     const velX = hSliderX - hSliderW / 2 + probeVelocity * hSliderW;
     ctx.fillStyle = '#4caf50';
     ctx.fillRect(velX - 5, hSliderY - hSliderH / 2, 10, hSliderH);
     // Velocity label
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '16px Orbitron, sans-serif';
+    ctx.fillStyle = '#e0f0ff';
+    ctx.font = '18px Orbitron, sans-serif';
     ctx.fillText(`Velocity: ${(probeVelocity * 100).toFixed(0)}%`, hSliderX, hSliderY + hSliderH);
     probeTexture.needsUpdate = true;
   }
@@ -209,16 +188,16 @@ export function createUI(bodies, callbacks = {}) {
     const ctx = facts.ctx;
     const { width, height } = ctx.canvas;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = 'rgba(40, 40, 50, 0.85)';
+    ctx.fillStyle = 'rgba(10, 10, 20, 0.95)';
     ctx.fillRect(0, 0, width, height);
     const body = bodies[selectedIndex].data;
     ctx.font = '24px Orbitron, sans-serif';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#e0f0ff';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     // Header: name
     ctx.fillText(body.name, 20, 20);
-    ctx.font = '16px Orbitron, sans-serif';
+    ctx.font = '18px Orbitron, sans-serif';
     // Data lines (mass and radius if available)
     let y = 60;
     if (body.massKg !== undefined) {
@@ -230,8 +209,8 @@ export function createUI(bodies, callbacks = {}) {
       y += 22;
     }
     // Fun facts
-    ctx.font = '16px Orbitron, sans-serif';
-    ctx.fillStyle = '#cccccc';
+    ctx.font = '18px Orbitron, sans-serif';
+    ctx.fillStyle = '#cceeff';
     ctx.fillText('Fun Facts:', 20, y);
     y += 22;
     const maxWidth = width - 40;
@@ -283,24 +262,29 @@ export function createUI(bodies, callbacks = {}) {
    */
   function handlePointer(panel, uv) {
     if (panel === 'warp') {
-      // Convert UV to polar coordinates centred at (0.5,0.5)
-      const dx = uv.x - 0.5;
-      const dy = uv.y - 0.5;
-      const angle = Math.atan2(dy, dx); // range -π to π
-      const twoPi = Math.PI * 2;
-      let normalized = angle;
-      if (normalized < 0) normalized += twoPi;
-      // Adjust for start angle offset (-π/2)
-      normalized = (normalized + Math.PI / 2) % twoPi;
-      const index = Math.floor(normalized / twoPi * bodies.length);
-      if (index >= 0 && index < bodies.length && index !== selectedIndex) {
+      const raw = (1 - uv.y) * bodies.length;
+      let index = Math.floor(raw);
+      if (index < 0) index = 0;
+      if (index >= bodies.length) index = bodies.length - 1;
+      hoverIndex = index;
+      if (index !== selectedIndex) {
         selectedIndex = index;
         drawWarp();
         drawProbe();
         drawFacts();
         onWarp(index);
+      } else {
+        drawWarp();
       }
-    } else if (panel === 'probe') {
+      return;
+    }
+
+    if (hoverIndex !== -1) {
+      hoverIndex = -1;
+      drawWarp();
+    }
+
+    if (panel === 'probe') {
       const x = uv.x;
       const y = uv.y;
       // Determine if within vertical mass slider region
