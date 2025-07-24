@@ -70,10 +70,18 @@ async function main() {
 
   // Cockpit
   const cockpit = createCockpit();
-  // Position the lectern cockpit so the desk sits at waist height and at
-  // comfortable reach in front of the player.  Adjust these values to suit
-  // your own VR environment.
-  cockpit.group.position.set(0, -0.8, -1.5);
+  // Do not scale the lectern cockpit.  Its dimensions are designed for a
+  // standing user: the desk top is at y=0.8 and the floor ring at y=0.  In
+  // WebXR the floor (ground) is typically at y=0 and the player’s head is
+  // around y=1.6.  Leaving the cockpit unscaled and unshifted ensures the
+  // platform sits on the ground and the desk is approximately at chest height.
+  cockpit.group.scale.setScalar(1.0);
+  // Position the lectern cockpit a little in front of the player.  This
+  // offset along the z‑axis moves the desk forward so the user doesn’t
+  // intersect the controls when entering VR.  We keep the y‑position at 0
+  // so the floor ring rests on the ground.  A negative z translates the
+  // cockpit away from the camera.
+  cockpit.group.position.set(0, 0, -1.2);
   scene.add(cockpit.group);
 
   // Audio
@@ -81,8 +89,9 @@ async function main() {
 
   // Orrery: mount on the dedicated stand within the lectern cockpit.
   const orrery = createOrrery(bodies);
-  // Scale down the orrery slightly so it fits nicely on the stand.
-  orrery.group.scale.setScalar(0.8);
+  // Scale down the orrery so it fits nicely on the stand.  Smaller scaling
+  // prevents the mini planets from overlapping and forming a block.
+  orrery.group.scale.setScalar(0.3);
   // Attach to the mount provided by the lectern cockpit.
   cockpit.orreryMount.add(orrery.group);
   orrery.group.position.set(0, 0.05, 0);
@@ -98,11 +107,11 @@ async function main() {
   });
   // Position the panels around the desk.  Warp on the left, probe on the right,
   // facts in the centre front.  Rotate them slightly to face the user.
-  ui.warpMesh.position.set(-0.9, 0.9, 1.2);
-  ui.warpMesh.rotation.y = 0.3;
-  ui.probeMesh.position.set(0.9, 0.9, 1.2);
-  ui.probeMesh.rotation.y = -0.3;
-  ui.factsMesh.position.set(0, 0.75, 1.4);
+  ui.warpMesh.position.set(-0.7, 0.8, 1.0);
+  ui.warpMesh.rotation.y = 0.25;
+  ui.probeMesh.position.set(0.7, 0.8, 1.0);
+  ui.probeMesh.rotation.y = -0.25;
+  ui.factsMesh.position.set(0, 0.65, 1.2);
   // Add the UI panels to the cockpit.
   cockpit.group.add(ui.warpMesh);
   cockpit.group.add(ui.probeMesh);
