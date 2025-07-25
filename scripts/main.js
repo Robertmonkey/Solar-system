@@ -70,7 +70,8 @@ async function main() {
   orrery.group.add(playerMarker);
 
   const probes = createProbes();
-  scene.add(probes.group);
+  // Attach probes to the solar system so they travel with it when warping
+  solarGroup.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
 
   const ui = createUI(bodies, {
@@ -108,8 +109,8 @@ async function main() {
   renderer.xr.addEventListener('sessionstart', () => {
     controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
-      const launchPos = muzzlePos.clone().sub(solarOrigin);
+      // Convert to solar system local coordinates so probes spawn at the muzzle
+      const launchPos = solarGroup.worldToLocal(muzzlePos.clone());
       const launchDir = new THREE.Vector3();
       cockpit.launcherMuzzle.getWorldDirection(launchDir);
       launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
