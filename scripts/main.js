@@ -1,5 +1,5 @@
-// This file integrates all redesigned components, including the new cockpit,
-// robust controls, and corrected panel/orrery layout and scale.
+// This file integrates the standalone orrery and correctly positions
+// the smaller UI panels on the redesigned cockpit desk.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -25,7 +25,6 @@ async function main() {
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(VRButton.createButton(renderer));
   
-  // Hide the overlay once VR is supported, the button will handle the rest.
   if (navigator.xr) {
     const overlay = document.getElementById('overlay');
     navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
@@ -43,14 +42,20 @@ async function main() {
 
   const audio = await initAudio(camera, cockpit.group);
 
-  // --- Orrery (Resized and positioned) ---
+  // --- FIX: Standalone Orrery on a pillar behind the player ---
+  const orreryPillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2, 0.2, 1.2, 32),
+    new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.5 })
+  );
+  orreryPillar.position.set(0, 0.6, -2); // Approx 6ft behind player
+  scene.add(orreryPillar);
   const orrery = createOrrery();
-  orrery.group.scale.setScalar(0.2); // "Beach ball" size
-  cockpit.orreryMount.add(orrery.group);
-  orrery.group.position.set(0, 0.1, 0); // On top of podium
+  orrery.group.scale.setScalar(0.4); // Beach ball size
+  orrery.group.position.set(0, 1.3, -2);
+  scene.add(orrery.group);
   const playerMarker = createPlayerMarker();
   orrery.group.add(playerMarker);
-
+  
   const probes = createProbes();
   scene.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
@@ -62,21 +67,27 @@ async function main() {
     onNarrate: text => audio.speak(text)
   });
 
-  // --- Corrected UI Panel Layout & Scale ---
-  const panelY = 1.085; // Y-position for panels to sit ON the desk
-  // Center panel
-  ui.factsMesh.position.set(0, panelY, -0.9);
-  ui.factsMesh.scale.setScalar(0.7);
-  cockpit.group.add(ui.factsMesh);
-  // Left angled panel
-  ui.warpMesh.position.set(-0.8, panelY, -0.65);
-  ui.warpMesh.scale.setScalar(0.45);
-  ui.warpMesh.rotation.y = Math.PI / 5;
+  // --- FIX: Corrected UI Panel Layout, Scale, and Y-Position ---
+  const deskSurfaceY = 1.04;
+  const panelScale = { warp: 0.35, facts: 0.6, probe: 0.5 };
+  
+  ui.warpMesh.scale.setScalar(panelScale.warp);
+  ui.factsMesh.scale.setScalar(panelScale.facts);
+  ui.probeMesh.scale.setScalar(panelScale.probe);
+
+  // Position panels so their bottom edge rests on the desk
+  const warpHeight = 1.6 * panelScale.warp;
+  ui.warpMesh.position.set(-0.9, deskSurfaceY + warpHeight / 2, -0.6);
+  ui.warpMesh.rotation.y = Math.PI / 6;
   cockpit.group.add(ui.warpMesh);
-  // Right angled panel
-  ui.probeMesh.position.set(0.8, panelY, -0.65);
-  ui.probeMesh.scale.setScalar(0.6);
-  ui.probeMesh.rotation.y = -Math.PI / 5;
+
+  const factsHeight = 0.6 * panelScale.facts;
+  ui.factsMesh.position.set(0, deskSurfaceY + factsHeight / 2, -0.95);
+  cockpit.group.add(ui.factsMesh);
+
+  const probeHeight = 0.8 * panelScale.probe;
+  ui.probeMesh.position.set(0.9, deskSurfaceY + probeHeight / 2, -0.6);
+  ui.probeMesh.rotation.y = -Math.PI / 6;
   cockpit.group.add(ui.probeMesh);
 
   const controls = setupControls(renderer, scene, cockpit, ui, () => {
