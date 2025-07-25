@@ -1,20 +1,19 @@
-// This version of the orrery has larger, more visible planets and orbits,
-// and features a new "YOU ARE HERE" marker.
+// This version of the orrery has dramatically smaller orbits for a more
+// compact and usable navigational display.
 
 import * as THREE from 'three';
 import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier, PALETTE } from './constants.js';
 import { getOrbitalPosition, createLabel } from './utils.js';
 
-// --- FIX: Increased scale to make planets and orbits visible ---
-const POSITION_SCALE = 0.1; // Larger orbits
-const SIZE_SCALE = 0.005;     // Larger planets
+// --- FIX: Dramatically reduced position scale to tighten orbits ---
+const POSITION_SCALE = 0.02; // Much smaller orbits
+const SIZE_SCALE = 0.005;     // Planet size
 
 export function createOrrery() {
   const group = new THREE.Group();
   group.name = 'MiniOrrery';
 
-  // Add a base to the orrery model
   const baseGeom = new THREE.CylinderGeometry(0.8, 1, 0.1, 32);
   const baseMat = new THREE.MeshStandardMaterial({color: 0x333333, metalness: 0.8, roughness: 0.5});
   const base = new THREE.Mesh(baseGeom, baseMat);
@@ -24,7 +23,6 @@ export function createOrrery() {
   const objects = [];
 
   bodies.forEach(data => {
-    // Sun is a special case, make it larger and emissive
     const isSun = data.name === 'Sun';
     const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER * (isSun ? 0.001 : SIZE_SCALE);
     const geometry = new THREE.SphereGeometry(Math.max(radius, 0.005), 16, 16);
@@ -35,7 +33,7 @@ export function createOrrery() {
       toneMapped: false
     });
     const mesh = new THREE.Mesh(geometry, material);
-    if(isSun) mesh.scale.setScalar(2.0); // Make sun extra visible
+    if(isSun) mesh.scale.setScalar(2.0);
 
     const objGroup = new THREE.Group();
     objGroup.name = data.name;
@@ -79,7 +77,6 @@ export function updateOrrery(orrery, elapsedSec) {
   });
 }
 
-// --- FIX: New marker is a labeled red dot ---
 export function createPlayerMarker() {
   const markerGroup = new THREE.Group();
   const geometry = new THREE.SphereGeometry(0.02, 16, 16);
@@ -93,7 +90,6 @@ export function createPlayerMarker() {
   markerGroup.add(marker);
   markerGroup.add(label);
 
-  // Make label always face the camera/player
   markerGroup.onBeforeRender = (renderer) => {
     const camera = renderer.xr.getCamera();
     label.quaternion.copy(camera.quaternion);
