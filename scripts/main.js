@@ -1,4 +1,5 @@
-// This file removes the old orrery pillar.
+// This file integrates all redesigned components and features a
+// dramatically smaller orrery for better usability.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -41,10 +42,10 @@ async function main() {
 
   const audio = await initAudio(camera, cockpit.group);
 
-  // --- FIX: Removed the separate orrery pillar ---
   const orrery = createOrrery();
-  orrery.group.scale.setScalar(0.4);
-  orrery.group.position.set(0, 1.3, -2); // Floats holographically behind player
+  // --- FIX: Dramatically reduced orrery scale ---
+  orrery.group.scale.setScalar(0.1);
+  orrery.group.position.set(0, 1.3, -2);
   scene.add(orrery.group);
   const playerMarker = createPlayerMarker();
   orrery.group.add(playerMarker);
