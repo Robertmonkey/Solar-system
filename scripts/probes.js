@@ -44,10 +44,12 @@ export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
       }
         
       for (const obj of solarBodies) {
-        const bodyPos = obj.group.getWorldPosition(new THREE.Vector3());
-        const probePos = probe.mesh.getWorldPosition(new THREE.Vector3());
-        const distance = probePos.distanceTo(bodyPos);
-        const threshold = obj.group.userData.radius * COLLISION_RADIUS_FACTOR;
+        // Use world positions for accurate distance calculation
+        const bodyWorldPos = obj.group.getWorldPosition(new THREE.Vector3());
+        const probeWorldPos = probe.mesh.getWorldPosition(new THREE.Vector3());
+        const distance = probeWorldPos.distanceTo(bodyWorldPos);
+        
+        const threshold = (obj.group.userData.radius || 0) * COLLISION_RADIUS_FACTOR;
 
         if (distance < threshold) {
           toRemove.push(index);
