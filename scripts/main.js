@@ -31,7 +31,7 @@ async function main() {
   // Request hand-tracking support and the dom-overlay feature so our
   // HTML overlay can appear in VR. The "layers" feature caused session
   // creation to fail on some browsers, so it has been removed to improve
-  // compatibility with the Quest 3.
+  // compatibility with the Quest 3.
   renderer.xr.setSessionInit({
     requiredFeatures: ['local-floor'],
     optionalFeatures: ['bounded-floor', 'hand-tracking', 'dom-overlay'],
@@ -129,7 +129,12 @@ async function main() {
     body.group.getWorldPosition(bodyWorldPos);
     const scaledRadius = body.group.userData.radius || 1;
     const safeDistance = scaledRadius * 4;
-    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(renderer.xr.getCamera().quaternion);
+    
+    // --- FIX: Get the camera's forward direction from the main 'camera' object. ---
+    // The renderer updates this camera's pose to match the HMD in an XR session.
+    // `renderer.xr.getCamera()` returns an ArrayCamera which does not have a single quaternion.
+    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    
     const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
     const shift = desiredPlayerPos.negate();
     solarGroup.position.copy(shift);
