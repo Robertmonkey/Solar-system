@@ -8,18 +8,19 @@
 import * as THREE from 'three';
 import { COLORS, FONT_FAMILY } from './constants.js';
 
-// Helper to create text labels
+// Helper to create text labels for the controls
 function createLabel(text) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   canvas.width = 256;
   canvas.height = 128;
-  ctx.fillStyle = COLORS.uiHighlight;
+  ctx.fillStyle = 'rgba(10, 20, 30, 0.8)'; // Background color
   ctx.fillRect(0, 0, 256, 128);
-  ctx.fillStyle = 'rgba(0,0,0,0.7)';
-  ctx.fillRect(2, 2, 252, 124);
+  ctx.strokeStyle = COLORS.uiHighlight;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(0, 0, 256, 128);
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = `bold 40px ${FONT_FAMILY}`;
+  ctx.font = `bold 32px ${FONT_FAMILY}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 128, 64);
@@ -30,9 +31,30 @@ function createLabel(text) {
 
 export function createLecternCockpit() {
   const cockpitGroup = new THREE.Group();
-  // ... (materials and floor setup remain the same) ...
+  cockpitGroup.name = 'LecternCockpit';
 
-  const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x222228, metalness: 0.9, roughness: 0.4 });
+  const loader = new THREE.TextureLoader();
+  const detailTexture = loader.load('./textures/ui.png');
+  detailTexture.wrapS = THREE.RepeatWrapping; detailTexture.wrapT = THREE.RepeatWrapping;
+  detailTexture.repeat.set(8, 8);
+
+  const darkMetalMat = new THREE.MeshStandardMaterial({
+    color: 0x222228, metalness: 0.9, roughness: 0.4,
+    roughnessMap: detailTexture, metalnessMap: detailTexture
+  });
+
+  // --- Holographic Floor ---
+  const floorGeom = new THREE.PlaneGeometry(4, 4);
+  const floorMat = new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 }, color: { value: new THREE.Color(COLORS.uiHighlight) } },
+    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform float time; uniform vec3 color; varying vec2 vUv; float hex_grid(vec2 uv, float s, float t) { uv *= s; vec2 a = mod(uv, vec2(1.,1.732)); vec2 b = mod(uv-vec2(.5,.866), vec2(1.,1.732)); float d = min(abs(a.y-.866),min(abs(a.x*1.732-a.y),abs(a.x*1.732+a.y-1.732))); d=min(d,min(abs(b.y-.866),min(abs(b.x*1.732-b.y),abs(b.x*1.732+b.y-1.732)))); return smoothstep(t,t+.02,d); } void main() { float p = (sin(time*2.)*.25+.75); float g = hex_grid(vUv-.5,12.,.05); float r = 1.-smoothstep(.45,.5,length(vUv-.5)); float a = g*r*p; gl_FragColor=vec4(color,a); }`,
+    transparent: true, side: THREE.DoubleSide,
+  });
+  const floor = new THREE.Mesh(floorGeom, floorMat);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = 0.01; cockpitGroup.add(floor);
+  const clock = new THREE.Clock();
+  floor.onBeforeRender = () => { floorMat.uniforms.time.value = clock.getElapsedTime(); };
 
   // --- Probe Cannon ---
   const launcherGeom = new THREE.CylinderGeometry(0.2, 0.25, 20, 16);
@@ -43,11 +65,16 @@ export function createLecternCockpit() {
   const launcherMuzzle = new THREE.Object3D();
   launcherMuzzle.position.set(0, 0, 10); // Tip of the barrel
   launcherBarrel.add(launcherMuzzle);
-  
-  // ... (Enlarged Lectern Desk and Support remain the same) ...
+
+  // --- Enlarged Lectern Desk ---
   const desk = new THREE.Mesh( new THREE.CylinderGeometry(1.2, 1.2, 0.08, 64, 1, false, Math.PI / 2.5, Math.PI * 2 - (Math.PI / 2.5) * 2), darkMetalMat);
   desk.position.set(0, 1.0, -0.2);
   cockpitGroup.add(desk);
+
+  // --- Desk Support ---
+  const support = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 1.0, 16), darkMetalMat);
+  support.position.set(0, 0.5, 0.24);
+  cockpitGroup.add(support);
 
   // --- Orrery Mount ---
   const orreryMount = new THREE.Object3D();
@@ -82,6 +109,7 @@ export function createLecternCockpit() {
   stick.position.y = 0.1;
   const stickTop = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), new THREE.MeshStandardMaterial({color: COLORS.controlBase}));
   stickTop.position.y = 0.2; stick.add(stickTop);
+  stick.name = 'stick_visual';
   joystickGroup.add(stick);
   joystickGroup.name = 'Joystick';
   joystickGroup.position.set(0.7, 1.04, -0.5);
