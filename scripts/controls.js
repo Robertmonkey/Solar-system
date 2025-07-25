@@ -44,8 +44,9 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
     state.hand.add(state.fingerTip);
 
     state.controller.addEventListener('connected', (event) => {
-        state.grip.visible = !event.data.profiles.includes('hand-tracking');
-        state.hand.visible = event.data.profiles.includes('hand-tracking');
+        const hasHandTracking = event.data.profiles.includes('hand-tracking');
+        state.grip.visible = !hasHandTracking;
+        state.hand.visible = hasHandTracking;
     });
     state.controller.addEventListener('disconnected', () => {
         state.grip.visible = false;
@@ -59,15 +60,17 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
 
     handStates.forEach((state) => {
       let rayOrigin;
+      // Determine the interaction point: either the tracked finger or the controller's position
       if (state.hand.visible && state.hand.joints['index-finger-tip']) {
         state.fingerTip.position.copy(state.hand.joints['index-finger-tip'].position);
         rayOrigin = state.fingerTip.getWorldPosition(new THREE.Vector3());
       } else if (state.grip.visible) {
         rayOrigin = state.grip.getWorldPosition(new THREE.Vector3());
       } else {
-        return;
+        return; // Nothing to do if neither hand nor controller is visible
       }
       
+      // Use a small box around the interaction point to check for "touch" collisions
       const tipBox = new THREE.Box3().setFromCenterAndSize(rayOrigin, new THREE.Vector3(0.04, 0.04, 0.04));
       let currentTouch = null;
       let closestDist = Infinity;
@@ -80,9 +83,9 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
         }
       });
       
-      // Handle state changes and UI feedback
+      // Handle state changes (touch start, touch end) and UI feedback
       if (currentTouch) {
-        if (state.touching?.name !== currentTouch.name && currentTouch.name === 'fireButton') { fireButton.scale.set(1, 0.5, 1); fireCallback(); }
+        if (state.touching?.name !== currentTouch.name && currentTouch.name === 'fireButton') { cockpit.fireButton.scale.set(1, 0.5, 1); fireCallback(); }
         state.touching = currentTouch;
         state.touchPos.copy(rayOrigin);
         ui.setHover(currentTouch.name, currentTouch.mesh.worldToLocal(rayOrigin.clone()));
@@ -94,18 +97,18 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
         state.touching = null; ui.setHover(null);
       }
       
-      // Update control logic
+      // Update control logic based on the currently touched object
       if (state.touching) {
         const localPos = state.touching.mesh.worldToLocal(rayOrigin.clone());
         switch (state.touching.name) {
           case 'throttle':
-            const tVal = THREE.MathUtils.mapLinear(localPos.z, 0.1, -0.1, 0, 1);
+            const tVal = THREE.MathUtils.mapLinear(localPos.z, 0.15, -0.15, 0, 1);
             throttleValue = THREE.MathUtils.clamp(tVal, 0, 1);
             cockpit.updateControlVisuals('throttle', localPos);
             break;
           case 'joystick':
             joystickX = THREE.MathUtils.clamp(localPos.x / 0.1, -1, 1);
-            joystickY = THREE.MathUtils.clamp(localPos.z / 0.1, -1, 1);
+            joystickY = THREE.MathUtils.clamp(localPos.y / 0.1, -1, 1);
             cockpit.updateControlVisuals('joystick', localPos);
             break;
           case 'probe': case 'facts':
@@ -115,9 +118,11 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
       }
     });
 
+    // Reset controls to neutral if they are not being actively touched
     if (!handStates.some(s => s.touching?.name === 'joystick')) { joystickX = 0; joystickY = 0; cockpit.updateControlVisuals('joystick', new THREE.Vector3(0,0,0)); }
     if (!handStates.some(s => s.touching?.name === 'throttle')) { throttleValue = 0; cockpit.updateControlVisuals('throttle', new THREE.Vector3(0,0,0)); }
     
+    // Calculate flight movement based on control states
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
