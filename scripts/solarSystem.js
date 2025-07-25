@@ -6,7 +6,7 @@ import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition } from './utils.js';
 
-// --- Atmospheric Glow Shader for Earth ---
+// Atmospheric Glow Shader for Earth
 const atmosphereVertexShader = `
   varying vec3 vNormal;
   void main() {
@@ -52,7 +52,7 @@ export async function createSolarSystem() {
     group.name = data.name;
     group.add(mesh);
 
-    // --- Special Enhancements ---
+    // Special Enhancements
     if (isSun) {
       const sunLight = new THREE.PointLight(0xffffff, 2.5, 0, 1.5);
       group.add(sunLight);
@@ -107,21 +107,30 @@ export async function createSolarSystem() {
 // Update orbital positions and rotations based on elapsed time.
 export function updateSolarSystem(solarGroup, elapsedSec) {
   const bodies = solarGroup.userData.bodies || [];
-  const deltaDays = elapsedSec * SEC_TO_DAYS * getTimeMultiplier();
+  // Ensure we get a valid time multiplier
+  const timeMult = getTimeMultiplier() || 0;
+  const deltaDays = elapsedSec * SEC_TO_DAYS * timeMult;
+
+  if (deltaDays === 0) return; // Don't do calculations if time is paused
 
   bodies.forEach(obj => {
     const group = obj.group;
     const ud = group.userData;
-    // Update orbital position
+    
+    // --- FIX: Restored and simplified orbital motion logic ---
     if (ud.orbitalPeriodDays > 0 && ud.semiMajorAxisAU > 0) {
-      ud.elapsedDays += deltaDays;
+      ud.elapsedDays = (ud.elapsedDays || 0) + deltaDays;
       const pos = getOrbitalPosition(ud, ud.elapsedDays);
       group.position.copy(pos);
     }
+
     // Update axial rotation
     if (ud.rotationPeriodHours) {
       const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24);
-      group.children[0].rotation.y += rotationAmount; // Rotate the planet mesh itself
+      // Rotate the planet mesh itself, which is the first child.
+      if(group.children[0]) {
+        group.children[0].rotation.y += rotationAmount;
+      }
     }
   });
 }
