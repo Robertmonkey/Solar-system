@@ -1,5 +1,5 @@
-// This file has been restructured to fix a race condition that caused
-// a black screen on VR entry and a persistent background on desktop.
+// This file has been restructured to defer control setup until after the
+// VR session starts, fixing the black screen and loading issues.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -18,17 +18,14 @@ async function main() {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
-  scene.add(new THREE.AmbientLight(0x666666));
+  scene.add(new THREE.AmbientLight(0x888888));
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 50000);
   camera.position.set(0, 1.6, 0.5);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
-  // --- FIX: Add the renderer's canvas to the page immediately ---
   document.body.appendChild(renderer.domElement);
-
-  // Now that the canvas exists, hide the loading background image
   document.body.style.backgroundImage = 'none';
   
   const { solarGroup, bodies } = await createSolarSystem();
@@ -79,14 +76,23 @@ async function main() {
   ui.probeMesh.rotation.y = -Math.PI / 6;
   cockpit.group.add(ui.probeMesh);
 
-  const controls = setupControls(renderer, scene, cockpit, ui, () => {
-    const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-    const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
-    const launchPos = muzzlePos.clone().sub(solarOrigin);
-    const launchDir = new THREE.Vector3();
-    cockpit.launcherMuzzle.getWorldDirection(launchDir);
-    launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
-    audio.playBeep();
+  let controls = { update: () => null }; // Dummy controls before VR starts
+
+  // --- FIX: Defer control setup until the VR session actually starts ---
+  renderer.xr.addEventListener('sessionstart', () => {
+    controls = setupControls(renderer, scene, cockpit, ui, () => {
+      const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
+      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+      const launchPos = muzzlePos.clone().sub(solarOrigin);
+      const launchDir = new THREE.Vector3();
+      cockpit.launcherMuzzle.getWorldDirection(launchDir);
+      launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
+      audio.playBeep();
+    });
+  });
+
+  renderer.xr.addEventListener('sessionend', () => {
+    controls = { update: () => null }; // Reset to dummy controls when VR ends
   });
 
   function handleWarpSelect(body) {
@@ -107,7 +113,7 @@ async function main() {
 
   renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
-    const movement = controls.update(delta);
+    const movement = controls.update(delta); // Will use dummy controls until VR starts
     if (movement) solarGroup.position.sub(movement);
     updateSolarSystem(solarGroup, delta);
     updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
@@ -118,7 +124,6 @@ async function main() {
     renderer.render(scene, camera);
   });
   
-  // --- FIX: Set up VR button and hide overlay last, after scene is ready ---
   document.body.appendChild(VRButton.createButton(renderer));
   if (navigator.xr) {
     navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
