@@ -37,11 +37,11 @@ export function createLecternCockpit() {
   floor.onBeforeRender = () => { floorMat.uniforms.time.value = clock.getElapsedTime(); };
 
   // --- Enlarged Lectern Desk ---
-  const deskRadius = 1.2; // Increased radius for more space
+  const deskRadius = 1.2;
   const deskHeight = 0.08;
   const deskGeom = new THREE.CylinderGeometry(deskRadius, deskRadius, deskHeight, 64, 1, false, Math.PI / 2.5, Math.PI * 2 - (Math.PI / 2.5) * 2);
   const desk = new THREE.Mesh(deskGeom, darkMetalMat);
-  desk.position.set(0, 1.0, -0.2); // Positioned for standing user
+  desk.position.set(0, 1.0, -0.2);
   desk.material.side = THREE.DoubleSide;
   cockpitGroup.add(desk);
 
@@ -61,26 +61,26 @@ export function createLecternCockpit() {
   cockpitGroup.add(launcherBarrel);
   // Add a muzzle object to easily get the launch position
   const launcherMuzzle = new THREE.Object3D();
-  launcherMuzzle.position.set(0, 0, 1.3); // Tip of the barrel
+  launcherMuzzle.position.set(0, 0, 1.3);
   launcherBarrel.add(launcherMuzzle);
 
 
   // --- Orrery Mount (Resized and Repositioned) ---
   const orreryMount = new THREE.Object3D();
-  const standGeom = new THREE.CylinderGeometry(0.1, 0.12, 0.04, 24); // Shorter podium
+  const standGeom = new THREE.CylinderGeometry(0.1, 0.12, 0.04, 24);
   const stand = new THREE.Mesh(standGeom, darkMetalMat);
   orreryMount.add(stand);
-  orreryMount.position.set(0, 1.04, -0.2); // On top of the desk
+  orreryMount.position.set(0, 1.04, -0.2);
   cockpitGroup.add(orreryMount);
 
   // --- Controls (Repositioned) ---
-  const controlY = 1.04; // Y position for top of desk
+  const controlY = 1.04;
   const throttleGroup = new THREE.Group();
   const throttleLever = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.25, 8), new THREE.MeshStandardMaterial({color: COLORS.uiHighlight}));
   throttleLever.position.y = 0.125;
   throttleGroup.add(throttleLever);
   throttleGroup.name = 'Throttle';
-  throttleGroup.position.set(-0.7, controlY, -0.5); // On top of the desk
+  throttleGroup.position.set(-0.7, controlY, -0.5);
   cockpitGroup.add(throttleGroup);
 
   const joystickGroup = new THREE.Group();
@@ -90,14 +90,14 @@ export function createLecternCockpit() {
   stickTop.position.y = 0.2; stick.add(stickTop);
   joystickGroup.add(stick);
   joystickGroup.name = 'Joystick';
-  joystickGroup.position.set(0.7, controlY, -0.5); // On top of the desk
+  joystickGroup.position.set(0.7, controlY, -0.5);
   cockpitGroup.add(joystickGroup);
 
   const fireButtonGeom = new THREE.CylinderGeometry(0.05, 0.05, 0.03, 32);
   const fireButtonMat = new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0x550000 });
   const fireButton = new THREE.Mesh(fireButtonGeom, fireButtonMat);
   fireButton.name = 'FireButton';
-  fireButton.position.set(0, controlY, -0.8); // On top of the desk
+  fireButton.position.set(0, controlY, -0.8);
   cockpitGroup.add(fireButton);
 
   function updateControlVisuals(controlName, localPos) {
@@ -113,7 +113,9 @@ export function createLecternCockpit() {
 
   return {
     group: cockpitGroup, throttle: throttleGroup, joystick: joystickGroup, fireButton, orreryMount,
-    launcherMuzzle, updateControlVisuals,
+    launcherMuzzle, 
+    launcherBarrel, // --- FIX --- Added the missing launcherBarrel to the return object.
+    updateControlVisuals,
   };
 }
 
