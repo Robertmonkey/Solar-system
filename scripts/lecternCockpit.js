@@ -1,13 +1,12 @@
 /*
  * lecternCockpit.js
  *
- * This version features a corrected desk color, a more compact control layout
- * with desk-mounted labels, and removes the orrery mount.
+ * This version corrects the probe cannon's orientation to face forward.
  */
 
 import * as THREE from 'three';
 import { COLORS } from './constants.js';
-import { createLabel } from './utils.js'; // Import the shared label utility
+import { createLabel } from './utils.js';
 
 export function createLecternCockpit() {
   const cockpitGroup = new THREE.Group();
@@ -18,7 +17,6 @@ export function createLecternCockpit() {
   detailTexture.wrapS = THREE.RepeatWrapping; detailTexture.wrapT = THREE.RepeatWrapping;
   detailTexture.repeat.set(8, 8);
 
-  // --- FIX: Restored stylish color from constants.js ---
   const darkMetalMat = new THREE.MeshStandardMaterial({
     color: COLORS.cockpitBase, metalness: 0.9, roughness: 0.4,
     roughnessMap: detailTexture, metalnessMap: detailTexture
@@ -27,7 +25,6 @@ export function createLecternCockpit() {
   const controlMaterial = new THREE.MeshStandardMaterial({ color: COLORS.controlBase });
   const highlightMaterial = new THREE.MeshStandardMaterial({ color: COLORS.uiHighlight });
 
-  // --- Holographic Floor ---
   const floorGeom = new THREE.PlaneGeometry(4, 4);
   const floorMat = new THREE.ShaderMaterial({
     uniforms: { time: { value: 0 }, color: { value: new THREE.Color(COLORS.uiHighlight) } },
@@ -44,10 +41,11 @@ export function createLecternCockpit() {
   const launcherGeom = new THREE.CylinderGeometry(0.2, 0.25, 20, 16);
   const launcherBarrel = new THREE.Mesh(launcherGeom, darkMetalMat);
   launcherBarrel.rotation.x = Math.PI / 2;
-  launcherBarrel.position.set(0, -0.2, 9); // Under the floor, extending forward
+  launcherBarrel.rotation.y = Math.PI; // Face forward
+  launcherBarrel.position.set(0, -0.2, -9); // Under floor, extending from front
   cockpitGroup.add(launcherBarrel);
   const launcherMuzzle = new THREE.Object3D();
-  launcherMuzzle.position.set(0, 0, 10); // Tip of the barrel
+  launcherMuzzle.position.set(0, 0, 10);
   launcherBarrel.add(launcherMuzzle);
 
   // --- Enlarged Lectern Desk & Support ---
@@ -70,7 +68,7 @@ export function createLecternCockpit() {
   throttleLever.add(leverArm);
   throttleGroup.add(throttleBase, throttleLever);
   throttleGroup.name = 'Throttle';
-  throttleGroup.position.set(-0.4, 1.04, -0.7); // Closer together and forward
+  throttleGroup.position.set(-0.4, 1.04, -0.7);
   cockpitGroup.add(throttleGroup);
 
   // --- Labeled Joystick ---
@@ -84,7 +82,7 @@ export function createLecternCockpit() {
   stick.name = 'stick_visual';
   joystickGroup.add(stick);
   joystickGroup.name = 'Joystick';
-  joystickGroup.position.set(0.4, 1.04, -0.7); // Closer together and forward
+  joystickGroup.position.set(0.4, 1.04, -0.7);
   cockpitGroup.add(joystickGroup);
 
   // --- Fire Button ---
@@ -94,7 +92,7 @@ export function createLecternCockpit() {
   cockpitGroup.add(fireButton);
 
   // --- Labels positioned on the desk ---
-  const labelY = 1.085; // Slightly above desk surface
+  const labelY = 1.085;
   const throttleLabel = createLabel('THROTTLE');
   throttleLabel.position.set(-0.4, labelY, -0.5);
   throttleLabel.rotation.x = -Math.PI / 2;
@@ -111,11 +109,13 @@ export function createLecternCockpit() {
   cockpitGroup.add(fireLabel);
   
   function updateControlVisuals(controlName, localPos) {
+    const stick = joystickGroup.children.find(c => c.name === 'stick_visual');
     if (controlName === 'throttle') {
-        throttleLever.position.z = THREE.MathUtils.clamp(localPos.z, -0.15, 0.15);
-    } else if (controlName === 'joystick') {
+        const throttleLever = throttleGroup.children.find(c => c.type === 'Group');
+        if (throttleLever) throttleLever.position.z = THREE.MathUtils.clamp(localPos.z, -0.15, 0.15);
+    } else if (controlName === 'joystick' && stick) {
         const maxAngle = Math.PI / 6;
-        stick.rotation.x = THREE.MathUtils.clamp(localPos.y / 0.1, -maxAngle, maxAngle);
+        stick.rotation.x = THREE.MathUtils.clamp(localPos.z / 0.1, -maxAngle, maxAngle);
         stick.rotation.z = -THREE.MathUtils.clamp(localPos.x / 0.1, -maxAngle, maxAngle);
     }
   }
