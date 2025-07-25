@@ -1,5 +1,6 @@
 // A robust, rewritten control system for hand-tracking and controllers.
-// This version includes a manual update loop to ensure hand models animate correctly.
+// This version removes the conflicting manual update loop and relies on the
+// standard Three.js XRHandModelFactory process for stable, animated hands.
 
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
@@ -14,8 +15,8 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
   let throttleValue = 0, joystickX = 0, joystickY = 0;
 
   const handStates = [
-    { controller: null, grip: null, hand: null, handModel: null, controllerModel: null, fingerTip: null, touching: null, touchPos: new THREE.Vector3() },
-    { controller: null, grip: null, hand: null, handModel: null, controllerModel: null, fingerTip: null, touching: null, touchPos: new THREE.Vector3() }
+    { controller: null, grip: null, hand: null, fingerTip: null, touching: null, touchPos: new THREE.Vector3() },
+    { controller: null, grip: null, hand: null, fingerTip: null, touching: null, touchPos: new THREE.Vector3() }
   ];
   
   const interactables = [
@@ -30,18 +31,17 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
     scene.add(state.controller);
 
     state.grip = renderer.xr.getControllerGrip(i);
-    state.controllerModel = controllerModelFactory.createControllerModel(state.grip);
-    state.grip.add(state.controllerModel);
+    state.grip.add(controllerModelFactory.createControllerModel(state.grip));
     scene.add(state.grip);
     
     state.hand = renderer.xr.getHand(i);
-    state.handModel = handModelFactory.createHandModel(state.hand, 'mesh');
-    state.hand.add(state.handModel);
+    state.hand.add(handModelFactory.createHandModel(state.hand, 'mesh'));
     scene.add(state.hand);
 
     state.fingerTip = new THREE.Mesh( new THREE.SphereGeometry(0.015), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }));
     state.hand.add(state.fingerTip);
 
+    // This robust event listener determines whether to show hands or controllers.
     state.controller.addEventListener('connected', (event) => {
         const hasHandTracking = event.data.profiles.includes('hand-tracking');
         state.grip.visible = !hasHandTracking;
@@ -58,23 +58,10 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
     const camera = renderer.xr.getCamera();
 
     handStates.forEach((state) => {
-      // --- FIX: Manually update hand model bones to ensure animation ---
-      if (state.hand.visible && state.handModel) {
-        const handData = state.hand.joints;
-        const modelBones = state.handModel.bones;
-        if (handData && modelBones && modelBones.length > 0) {
-            for (let i = 0; i < modelBones.length; i++) {
-                const bone = modelBones[i];
-                const joint = handData[bone.name];
-                if (joint) {
-                    bone.position.copy(joint.position);
-                    bone.quaternion.copy(joint.quaternion);
-                }
-            }
-        }
-      }
-
       let rayOrigin;
+
+      // The XR manager automatically updates the hand model's bones.
+      // We just need to get the position of the fingertip for interaction.
       if (state.hand.visible && state.hand.joints['index-finger-tip']) {
         state.fingerTip.position.copy(state.hand.joints['index-finger-tip'].position);
         rayOrigin = state.fingerTip.getWorldPosition(new THREE.Vector3());
