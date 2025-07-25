@@ -1,5 +1,5 @@
 // A robust, rewritten control system for hand-tracking and controllers.
-// This version fixes the joystick logic to allow for full 2-axis movement.
+// This version includes a manual update loop to ensure hand models animate correctly.
 
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
@@ -58,6 +58,22 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
     const camera = renderer.xr.getCamera();
 
     handStates.forEach((state) => {
+      // --- FIX: Manually update hand model bones to ensure animation ---
+      if (state.hand.visible && state.handModel) {
+        const handData = state.hand.joints;
+        const modelBones = state.handModel.bones;
+        if (handData && modelBones && modelBones.length > 0) {
+            for (let i = 0; i < modelBones.length; i++) {
+                const bone = modelBones[i];
+                const joint = handData[bone.name];
+                if (joint) {
+                    bone.position.copy(joint.position);
+                    bone.quaternion.copy(joint.quaternion);
+                }
+            }
+        }
+      }
+
       let rayOrigin;
       if (state.hand.visible && state.hand.joints['index-finger-tip']) {
         state.fingerTip.position.copy(state.hand.joints['index-finger-tip'].position);
@@ -103,7 +119,6 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
             break;
           case 'joystick':
             joystickX = THREE.MathUtils.clamp(localPos.x / 0.1, -1, 1);
-            // --- FIX: Joystick now reads from the Z-axis (forward/back) instead of Y (up/down) ---
             joystickY = THREE.MathUtils.clamp(localPos.z / 0.1, -1, 1);
             cockpit.updateControlVisuals('joystick', localPos);
             break;
