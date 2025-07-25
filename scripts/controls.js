@@ -1,103 +1,102 @@
-// Hand-tracking controls implementing a direct "touch" interaction model.
-// This version removes the incorrect model path, allowing the VR session
-// to initialize correctly with default web-based hand models.
+// A robust, rewritten control system for hand-tracking and controllers.
+// This version ensures hands are always visible and provides a fallback
+// to controller models if hand tracking isn't available.
 
 import * as THREE from 'three';
+import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
 import { MAX_FLIGHT_SPEED } from './constants.js';
 
 export function createControls(renderer, scene, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
-  // --- FIX --- Reverted to the original factory initialization.
-  // This allows default hand models to be loaded from the web CDN.
+  const controllerModelFactory = new XRControllerModelFactory();
   const handModelFactory = new XRHandModelFactory();
 
-  let throttleValue = 0;
-  let joystickX = 0;
-  let joystickY = 0;
+  let throttleValue = 0, joystickX = 0, joystickY = 0;
 
   const handStates = [
-    { fingerTip: null, touching: null, touchPos: new THREE.Vector3() }, // Left hand
-    { fingerTip: null, touching: null, touchPos: new THREE.Vector3() }  // Right hand
+    { controller: null, grip: null, hand: null, handModel: null, controllerModel: null, fingerTip: null, touching: null, touchPos: new THREE.Vector3() },
+    { controller: null, grip: null, hand: null, handModel: null, controllerModel: null, fingerTip: null, touching: null, touchPos: new THREE.Vector3() }
   ];
   
   const interactables = [
-    { mesh: cockpit.throttle, name: 'throttle' },
-    { mesh: cockpit.joystick, name: 'joystick' },
-    { mesh: cockpit.fireButton, name: 'fireButton' },
-    { mesh: ui.warpMesh, name: 'warp' },
-    { mesh: ui.probeMesh, name: 'probe' },
-    { mesh: ui.factsMesh, name: 'facts' }
+    { mesh: cockpit.throttle, name: 'throttle' }, { mesh: cockpit.joystick, name: 'joystick' },
+    { mesh: cockpit.fireButton, name: 'fireButton' }, { mesh: ui.warpMesh, name: 'warp' },
+    { mesh: ui.probeMesh, name: 'probe' }, { mesh: ui.factsMesh, name: 'facts' }
   ];
 
   for (let i = 0; i < 2; i++) {
-    const controller = renderer.xr.getController(i);
-    scene.add(controller);
+    const state = handStates[i];
+    state.controller = renderer.xr.getController(i);
+    scene.add(state.controller);
 
-    const hand = renderer.xr.getHand(i);
-    hand.add(handModelFactory.createHandModel(hand, 'mesh'));
-    scene.add(hand);
+    state.grip = renderer.xr.getControllerGrip(i);
+    state.controllerModel = controllerModelFactory.createControllerModel(state.grip);
+    state.grip.add(state.controllerModel);
+    scene.add(state.grip);
+    
+    state.hand = renderer.xr.getHand(i);
+    state.handModel = handModelFactory.createHandModel(state.hand, 'mesh');
+    state.hand.add(state.handModel);
+    scene.add(state.hand);
 
-    const fingerTip = new THREE.Mesh(
-      new THREE.SphereGeometry(0.015),
-      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
-    );
-    fingerTip.name = 'FingerTipCollider';
-    hand.add(fingerTip);
-    handStates[i].fingerTip = fingerTip;
+    state.fingerTip = new THREE.Mesh( new THREE.SphereGeometry(0.015), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }));
+    state.hand.add(state.fingerTip);
+
+    state.controller.addEventListener('connected', (event) => {
+        state.grip.visible = !event.data.profiles.includes('hand-tracking');
+        state.hand.visible = event.data.profiles.includes('hand-tracking');
+    });
+    state.controller.addEventListener('disconnected', () => {
+        state.grip.visible = false;
+        state.hand.visible = false;
+    });
   }
 
   function update(deltaTime) {
     let totalMovement = null;
     const camera = renderer.xr.getCamera();
 
-    handStates.forEach((state, i) => {
-      const hand = renderer.xr.getHand(i);
-      // The 'index-finger-tip' joint is essential for our control scheme
-      const indexTipJoint = hand.joints['index-finger-tip'];
-      if (!indexTipJoint) return;
+    handStates.forEach((state) => {
+      let rayOrigin;
+      if (state.hand.visible && state.hand.joints['index-finger-tip']) {
+        state.fingerTip.position.copy(state.hand.joints['index-finger-tip'].position);
+        rayOrigin = state.fingerTip.getWorldPosition(new THREE.Vector3());
+      } else if (state.grip.visible) {
+        rayOrigin = state.grip.getWorldPosition(new THREE.Vector3());
+      } else {
+        return;
+      }
       
-      state.fingerTip.position.copy(indexTipJoint.position);
-      const tipWorldPos = state.fingerTip.getWorldPosition(new THREE.Vector3());
-      const tipBox = new THREE.Box3().setFromObject(state.fingerTip);
+      const tipBox = new THREE.Box3().setFromCenterAndSize(rayOrigin, new THREE.Vector3(0.04, 0.04, 0.04));
       let currentTouch = null;
       let closestDist = Infinity;
 
-      for (const item of interactables) {
+      interactables.forEach(item => {
         const itemBox = new THREE.Box3().setFromObject(item.mesh);
         if (tipBox.intersectsBox(itemBox)) {
-          const dist = tipWorldPos.distanceTo(item.mesh.getWorldPosition(new THREE.Vector3()));
-          if (dist < closestDist) {
-            closestDist = dist;
-            currentTouch = item;
-          }
+          const dist = rayOrigin.distanceTo(item.mesh.getWorldPosition(new THREE.Vector3()));
+          if (dist < closestDist) { closestDist = dist; currentTouch = item; }
         }
-      }
-
+      });
+      
+      // Handle state changes and UI feedback
       if (currentTouch) {
-        if (state.touching?.name !== currentTouch.name) {
-          if (currentTouch.name === 'fireButton') {
-            cockpit.fireButton.scale.set(1, 0.5, 1);
-            fireCallback();
-          }
-        }
+        if (state.touching?.name !== currentTouch.name && currentTouch.name === 'fireButton') { fireButton.scale.set(1, 0.5, 1); fireCallback(); }
         state.touching = currentTouch;
-        state.touchPos.copy(tipWorldPos);
-        ui.setHover(currentTouch.name, currentTouch.mesh.worldToLocal(tipWorldPos.clone()));
+        state.touchPos.copy(rayOrigin);
+        ui.setHover(currentTouch.name, currentTouch.mesh.worldToLocal(rayOrigin.clone()));
       } else {
         if (state.touching) {
-          if (state.touching.name === 'fireButton') {
-            cockpit.fireButton.scale.set(1, 1, 1);
-          } else if (state.touching.name === 'warp') {
-            ui.handleTap(state.touching.name, state.touching.mesh.worldToLocal(state.touchPos.clone()));
-          }
+            if (state.touching.name === 'fireButton') cockpit.fireButton.scale.set(1, 1, 1);
+            else if (state.touching.name === 'warp') ui.handleTap(state.touching.name, state.touching.mesh.worldToLocal(state.touchPos.clone()));
         }
-        state.touching = null;
-        ui.setHover(null);
+        state.touching = null; ui.setHover(null);
       }
       
+      // Update control logic
       if (state.touching) {
-        const localPos = state.touching.mesh.worldToLocal(tipWorldPos.clone());
+        const localPos = state.touching.mesh.worldToLocal(rayOrigin.clone());
         switch (state.touching.name) {
           case 'throttle':
             const tVal = THREE.MathUtils.mapLinear(localPos.z, 0.1, -0.1, 0, 1);
@@ -109,22 +108,15 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
             joystickY = THREE.MathUtils.clamp(localPos.z / 0.1, -1, 1);
             cockpit.updateControlVisuals('joystick', localPos);
             break;
-          case 'probe':
-          case 'facts':
+          case 'probe': case 'facts':
             ui.handleTap(state.touching.name, localPos);
             break;
         }
       }
     });
 
-    if (!handStates.some(s => s.touching?.name === 'joystick')) {
-      joystickX = 0; joystickY = 0;
-      cockpit.joystick.children[0].rotation.set(0, 0, 0);
-    }
-    if (!handStates.some(s => s.touching?.name === 'throttle')) {
-      throttleValue = 0;
-      cockpit.throttle.children[0].rotation.set(0, 0, 0);
-    }
+    if (!handStates.some(s => s.touching?.name === 'joystick')) { joystickX = 0; joystickY = 0; cockpit.updateControlVisuals('joystick', new THREE.Vector3(0,0,0)); }
+    if (!handStates.some(s => s.touching?.name === 'throttle')) { throttleValue = 0; cockpit.updateControlVisuals('throttle', new THREE.Vector3(0,0,0)); }
     
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
