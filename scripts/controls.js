@@ -1,13 +1,12 @@
 // Hand-tracking controls implementing a direct "touch" interaction model.
-// This system uses simple sphere colliders on the index fingertips to detect
-// intersection with UI and cockpit controls, providing an intuitive,
-// touchscreen-like experience.
+// This version fixes the hand visibility bug and ensures hands are correctly
+// parented to the scene for proper tracking.
 
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
 import { MAX_FLIGHT_SPEED } from './constants.js';
 
-export function createControls(renderer, cockpit, ui, fireCallback) {
+export function createControls(renderer, scene, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
   const handModelFactory = new XRHandModelFactory();
 
@@ -30,12 +29,15 @@ export function createControls(renderer, cockpit, ui, fireCallback) {
   ];
 
   for (let i = 0; i < 2; i++) {
+    const controller = renderer.xr.getController(i);
+    scene.add(controller); // Controllers should be added to the scene root
+
     const hand = renderer.xr.getHand(i);
     hand.add(handModelFactory.createHandModel(hand, 'mesh'));
-    cockpit.group.add(hand); // Attach hands to the cockpit/player rig
+    scene.add(hand); // CRITICAL FIX: Add hand to the scene, not the cockpit model.
 
     const fingerTip = new THREE.Mesh(
-      new THREE.SphereGeometry(0.015), // Small invisible sphere collider
+      new THREE.SphereGeometry(0.015),
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
     );
     fingerTip.name = 'FingerTipCollider';
@@ -45,22 +47,19 @@ export function createControls(renderer, cockpit, ui, fireCallback) {
 
   function update(deltaTime) {
     let totalMovement = null;
+    const camera = renderer.xr.getCamera();
 
     handStates.forEach((state, i) => {
       const hand = renderer.xr.getHand(i);
       const indexTipJoint = hand.joints['index-finger-tip'];
       if (!indexTipJoint) return;
-
-      // Position the collider at the fingertip
-      state.fingerTip.position.copy(indexTipJoint.position);
       
+      state.fingerTip.position.copy(indexTipJoint.position);
       const tipWorldPos = state.fingerTip.getWorldPosition(new THREE.Vector3());
       const tipBox = new THREE.Box3().setFromObject(state.fingerTip);
-
       let currentTouch = null;
       let closestDist = Infinity;
 
-      // Find the closest object the finger is touching
       for (const item of interactables) {
         const itemBox = new THREE.Box3().setFromObject(item.mesh);
         if (tipBox.intersectsBox(itemBox)) {
@@ -72,9 +71,8 @@ export function createControls(renderer, cockpit, ui, fireCallback) {
         }
       }
 
-      // Handle touch state changes
       if (currentTouch) {
-        if (state.touching?.name !== currentTouch.name) { // New touch started
+        if (state.touching?.name !== currentTouch.name) {
           if (currentTouch.name === 'fireButton') {
             cockpit.fireButton.scale.set(1, 0.5, 1);
             fireCallback();
@@ -84,7 +82,7 @@ export function createControls(renderer, cockpit, ui, fireCallback) {
         state.touchPos.copy(tipWorldPos);
         ui.setHover(currentTouch.name, currentTouch.mesh.worldToLocal(tipWorldPos.clone()));
       } else {
-        if (state.touching) { // Touch ended
+        if (state.touching) {
           if (state.touching.name === 'fireButton') {
             cockpit.fireButton.scale.set(1, 1, 1);
           } else if (state.touching.name === 'warp') {
@@ -95,7 +93,6 @@ export function createControls(renderer, cockpit, ui, fireCallback) {
         ui.setHover(null);
       }
       
-      // Update controls based on active touch
       if (state.touching) {
         const localPos = state.touching.mesh.worldToLocal(tipWorldPos.clone());
         switch (state.touching.name) {
@@ -117,38 +114,23 @@ export function createControls(renderer, cockpit, ui, fireCallback) {
       }
     });
 
-    // Reset controls if not being touched
     if (!handStates.some(s => s.touching?.name === 'joystick')) {
-      joystickX = 0;
-      joystickY = 0;
-      cockpit.joystick.children[1].rotation.set(0, 0, 0);
+      joystickX = 0; joystickY = 0; cockpit.joystick.children[1].rotation.set(0, 0, 0);
     }
     if (!handStates.some(s => s.touching?.name === 'throttle')) {
-      throttleValue = 0;
-      cockpit.throttle.children[1].rotation.set(0, 0, 0);
+      throttleValue = 0; cockpit.throttle.children[1].rotation.set(0, 0, 0);
     }
     
-    // Calculate flight movement
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
-      const moveVec = new THREE.Vector3(joystickX, joystickY, 0);
-      if (moveVec.lengthSq() > 1) moveVec.normalize();
-      
-      const camQuat = renderer.xr.getCamera().quaternion;
-      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat);
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camQuat);
-      
-      const dir = new THREE.Vector3();
-      dir.addScaledVector(right, moveVec.x);
-      dir.addScaledVector(forward, -throttleValue); // Always move forward based on throttle
-      dir.normalize();
-      
-      totalMovement = dir.multiplyScalar(speed * deltaTime);
+        const moveVec = new THREE.Vector3(joystickX, 0, -joystickY);
+        if (moveVec.lengthSq() > 1) moveVec.normalize();
+        moveVec.applyQuaternion(camera.quaternion);
+        totalMovement = moveVec.multiplyScalar(speed * deltaTime);
     }
 
     return totalMovement;
   }
-
   return { update };
 }
