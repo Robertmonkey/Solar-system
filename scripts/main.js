@@ -1,6 +1,5 @@
-// Entry point for the Solar System simulator with lectern cockpit redesign.
-// This version integrates the new cockpit layout, placing all interactive
-// elements on top of the larger console and firing probes from the new barrel.
+// This file integrates all redesigned components, including the new cockpit,
+// robust controls, and corrected panel/orrery layout and scale.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -28,8 +27,10 @@ async function main() {
   
   // Hide the overlay once VR is supported, the button will handle the rest.
   if (navigator.xr) {
+    const overlay = document.getElementById('overlay');
     navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-      if(supported) document.getElementById('overlay').classList.add('hidden');
+      if(supported) overlay.classList.add('hidden');
+      else overlay.querySelector('#xr-message').textContent = 'VR NOT SUPPORTED';
     });
   }
 
@@ -42,10 +43,11 @@ async function main() {
 
   const audio = await initAudio(camera, cockpit.group);
 
+  // --- Orrery (Resized and positioned) ---
   const orrery = createOrrery();
-  orrery.group.scale.setScalar(0.2); // Resized orrery
+  orrery.group.scale.setScalar(0.2); // "Beach ball" size
   cockpit.orreryMount.add(orrery.group);
-  orrery.group.position.set(0, 0.02, 0); // On top of podium
+  orrery.group.position.set(0, 0.1, 0); // On top of podium
   const playerMarker = createPlayerMarker();
   orrery.group.add(playerMarker);
 
@@ -60,20 +62,20 @@ async function main() {
     onNarrate: text => audio.speak(text)
   });
 
-  // --- New UI Panel Layout & Scale ---
-  const panelY = 1.08; // Y-position for panels to sit on the desk
+  // --- Corrected UI Panel Layout & Scale ---
+  const panelY = 1.085; // Y-position for panels to sit ON the desk
   // Center panel
   ui.factsMesh.position.set(0, panelY, -0.9);
-  ui.factsMesh.scale.setScalar(0.8); // Resized panel
+  ui.factsMesh.scale.setScalar(0.7);
   cockpit.group.add(ui.factsMesh);
   // Left angled panel
-  ui.warpMesh.position.set(-0.8, panelY, -0.6);
-  ui.warpMesh.scale.setScalar(0.5); // Resized panel
+  ui.warpMesh.position.set(-0.8, panelY, -0.65);
+  ui.warpMesh.scale.setScalar(0.45);
   ui.warpMesh.rotation.y = Math.PI / 5;
   cockpit.group.add(ui.warpMesh);
   // Right angled panel
-  ui.probeMesh.position.set(0.8, panelY, -0.6);
-  ui.probeMesh.scale.setScalar(0.7); // Resized panel
+  ui.probeMesh.position.set(0.8, panelY, -0.65);
+  ui.probeMesh.scale.setScalar(0.6);
   ui.probeMesh.rotation.y = -Math.PI / 5;
   cockpit.group.add(ui.probeMesh);
 
