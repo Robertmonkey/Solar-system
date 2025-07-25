@@ -1,4 +1,5 @@
-// This file has been updated to correctly hide the loading overlay on all platforms.
+// This file has been restructured to defer control setup until after the
+// VR session starts, fixing the missing VR button and loading issues.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -13,7 +14,6 @@ import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS } from './constants.js';
 
 async function main() {
   const overlay = document.getElementById('overlay');
-  const xrMessage = document.getElementById('xr-message');
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
@@ -75,14 +75,25 @@ async function main() {
   ui.probeMesh.rotation.y = -Math.PI / 6;
   cockpit.group.add(ui.probeMesh);
 
-  const controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
-    const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-    const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
-    const launchPos = muzzlePos.clone().sub(solarOrigin);
-    const launchDir = new THREE.Vector3();
-    cockpit.launcherMuzzle.getWorldDirection(launchDir);
-    launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
-    audio.playBeep();
+  // Start with dummy controls that do nothing.
+  let controls = { update: () => null };
+
+  // --- FIX: Defer the real control setup until the VR session starts ---
+  renderer.xr.addEventListener('sessionstart', () => {
+    controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
+      const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
+      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+      const launchPos = muzzlePos.clone().sub(solarOrigin);
+      const launchDir = new THREE.Vector3();
+      cockpit.launcherMuzzle.getWorldDirection(launchDir);
+      launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
+      audio.playBeep();
+    });
+  });
+
+  // When the session ends, revert to the dummy controls.
+  renderer.xr.addEventListener('sessionend', () => {
+    controls = { update: () => null };
   });
 
   function handleWarpSelect(body) {
@@ -103,32 +114,25 @@ async function main() {
 
   renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
-    const movement = controls.update(delta, renderer.xr.getCamera());
+    // The `controls` object will be the real one inside a VR session,
+    // and the dummy one outside of it.
+    const movement = controls.update(delta, renderer.xr.getCamera()); 
     if (movement) solarGroup.position.sub(movement);
+
     updateSolarSystem(solarGroup, delta);
     updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
+    
     const playerPosInOrrery = solarGroup.position.clone().negate();
     playerMarker.position.copy(playerPosInOrrery).multiplyScalar(orrery.group.scale.x);
+    
     ui.update();
     renderer.render(scene, camera);
   });
   
+  // Create the VR button and hide the overlay now that the scene is ready.
   document.body.appendChild(VRButton.createButton(renderer));
-  
-  // --- FIX: This logic now correctly hides the overlay on desktop as well ---
-  if (navigator.xr) {
-    navigator.xr.isSessionSupported('immersive-vr').then(() => {
-        xrMessage.textContent = 'Enter VR';
-    }).catch(() => {
-       xrMessage.textContent = 'VR NOT SUPPORTED';
-    });
-    // Hide overlay after a short delay to allow the scene to render first
-    setTimeout(() => overlay.classList.add('hidden'), 1000);
-  } else {
-    xrMessage.textContent = 'WEBXR NOT AVAILABLE';
-    setTimeout(() => overlay.classList.add('hidden'), 1000);
-  }
+  overlay.classList.add('hidden');
 }
 
 main();
