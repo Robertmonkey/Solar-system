@@ -112,8 +112,12 @@ export function createLecternCockpit() {
   }
 
   return {
-    group: cockpitGroup, throttle: throttleGroup, joystick: joystickGroup, fireButton, orreryMount,
-    launcherMuzzle, 
+    group: cockpitGroup,
+    throttle: throttleGroup,
+    joystick: joystickGroup,
+    fireButton,
+    orreryMount,
+    launcherMuzzle,
     launcherBarrel, // --- FIX --- Added the missing launcherBarrel to the return object.
     updateControlVisuals,
   };
