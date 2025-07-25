@@ -1,14 +1,13 @@
-// This version of the orrery has dramatically smaller orbits for a more
-// compact and usable navigational display.
+// This version of the orrery fixes a material error that was preventing
+// the VR session from loading.
 
 import * as THREE from 'three';
 import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier, PALETTE } from './constants.js';
 import { getOrbitalPosition, createLabel } from './utils.js';
 
-// --- FIX: Dramatically reduced position scale to tighten orbits ---
-const POSITION_SCALE = 0.02; // Much smaller orbits
-const SIZE_SCALE = 0.005;     // Planet size
+const POSITION_SCALE = 0.02;
+const SIZE_SCALE = 0.005;
 
 export function createOrrery() {
   const group = new THREE.Group();
@@ -27,11 +26,13 @@ export function createOrrery() {
     const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER * (isSun ? 0.001 : SIZE_SCALE);
     const geometry = new THREE.SphereGeometry(Math.max(radius, 0.005), 16, 16);
     const color = PALETTE[data.name] || 0xffffff;
+    
+    // --- FIX: Removed the invalid 'emissive' property from MeshBasicMaterial ---
     const material = new THREE.MeshBasicMaterial({
       color,
-      emissive: isSun ? color : 0x000000,
       toneMapped: false
     });
+
     const mesh = new THREE.Mesh(geometry, material);
     if(isSun) mesh.scale.setScalar(2.0);
 
