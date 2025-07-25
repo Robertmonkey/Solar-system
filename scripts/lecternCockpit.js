@@ -1,7 +1,8 @@
 /*
  * lecternCockpit.js
  *
- * This version corrects the probe cannon's orientation to face forward.
+ * This version includes a small performance and reliability improvement for
+ * updating the control visuals.
  */
 
 import * as THREE from 'three';
@@ -37,18 +38,16 @@ export function createLecternCockpit() {
   const clock = new THREE.Clock();
   floor.onBeforeRender = () => { floorMat.uniforms.time.value = clock.getElapsedTime(); };
 
-  // --- Probe Cannon ---
   const launcherGeom = new THREE.CylinderGeometry(0.2, 0.25, 20, 16);
   const launcherBarrel = new THREE.Mesh(launcherGeom, darkMetalMat);
   launcherBarrel.rotation.x = Math.PI / 2;
-  launcherBarrel.rotation.y = Math.PI; // Face forward
-  launcherBarrel.position.set(0, -0.2, -9); // Under floor, extending from front
+  launcherBarrel.rotation.y = Math.PI;
+  launcherBarrel.position.set(0, -0.2, -9);
   cockpitGroup.add(launcherBarrel);
   const launcherMuzzle = new THREE.Object3D();
   launcherMuzzle.position.set(0, 0, 10);
   launcherBarrel.add(launcherMuzzle);
 
-  // --- Enlarged Lectern Desk & Support ---
   const desk = new THREE.Mesh( new THREE.CylinderGeometry(1.2, 1.2, 0.08, 64, 1, false, Math.PI / 2.5, Math.PI * 2 - (Math.PI / 2.5) * 2), darkMetalMat);
   desk.position.set(0, 1.0, -0.2);
   cockpitGroup.add(desk);
@@ -56,7 +55,6 @@ export function createLecternCockpit() {
   support.position.set(0, 0.5, 0.24);
   cockpitGroup.add(support);
 
-  // --- Redesigned Throttle ---
   const throttleGroup = new THREE.Group();
   const throttleBase = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.4), darkMetalMat);
   const throttleLever = new THREE.Group();
@@ -71,7 +69,6 @@ export function createLecternCockpit() {
   throttleGroup.position.set(-0.4, 1.04, -0.7);
   cockpitGroup.add(throttleGroup);
 
-  // --- Labeled Joystick ---
   const joystickGroup = new THREE.Group();
   const stickBase = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.04, 32), darkMetalMat);
   joystickGroup.add(stickBase);
@@ -85,13 +82,11 @@ export function createLecternCockpit() {
   joystickGroup.position.set(0.4, 1.04, -0.7);
   cockpitGroup.add(joystickGroup);
 
-  // --- Fire Button ---
   const fireButton = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 32), new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0x550000 }));
   fireButton.name = 'FireButton';
   fireButton.position.set(0, 1.04, -0.7);
   cockpitGroup.add(fireButton);
 
-  // --- Labels positioned on the desk ---
   const labelY = 1.085;
   const throttleLabel = createLabel('THROTTLE');
   throttleLabel.position.set(-0.4, labelY, -0.5);
@@ -108,15 +103,17 @@ export function createLecternCockpit() {
   fireLabel.rotation.x = -Math.PI / 2;
   cockpitGroup.add(fireLabel);
   
+  // --- FIX: Store direct references to the moving parts for efficiency ---
+  const stickVisual = stick;
+  const throttleLeverVisual = throttleLever;
+
   function updateControlVisuals(controlName, localPos) {
-    const stick = joystickGroup.children.find(c => c.name === 'stick_visual');
     if (controlName === 'throttle') {
-        const throttleLever = throttleGroup.children.find(c => c.type === 'Group');
-        if (throttleLever) throttleLever.position.z = THREE.MathUtils.clamp(localPos.z, -0.15, 0.15);
-    } else if (controlName === 'joystick' && stick) {
+        throttleLeverVisual.position.z = THREE.MathUtils.clamp(localPos.z, -0.15, 0.15);
+    } else if (controlName === 'joystick') {
         const maxAngle = Math.PI / 6;
-        stick.rotation.x = THREE.MathUtils.clamp(localPos.z / 0.1, -maxAngle, maxAngle);
-        stick.rotation.z = -THREE.MathUtils.clamp(localPos.x / 0.1, -maxAngle, maxAngle);
+        stickVisual.rotation.x = THREE.MathUtils.clamp(localPos.z / 0.1, -maxAngle, maxAngle);
+        stickVisual.rotation.z = -THREE.MathUtils.clamp(localPos.x / 0.1, -maxAngle, maxAngle);
     }
   }
 
