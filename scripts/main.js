@@ -1,5 +1,5 @@
-// This file integrates all redesigned components and features a
-// dramatically smaller orrery for better usability.
+// This file has been restructured to fix a race condition that caused
+// a black screen on VR entry and a persistent background on desktop.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -13,6 +13,9 @@ import { initAudio } from './audio.js';
 import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS } from './constants.js';
 
 async function main() {
+  const overlay = document.getElementById('overlay');
+  const xrMessage = document.getElementById('xr-message');
+
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
   scene.add(new THREE.AmbientLight(0x666666));
@@ -22,17 +25,12 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
+  // --- FIX: Add the renderer's canvas to the page immediately ---
   document.body.appendChild(renderer.domElement);
-  document.body.appendChild(VRButton.createButton(renderer));
-  
-  if (navigator.xr) {
-    const overlay = document.getElementById('overlay');
-    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-      if(supported) overlay.classList.add('hidden');
-      else overlay.querySelector('#xr-message').textContent = 'VR NOT SUPPORTED';
-    });
-  }
 
+  // Now that the canvas exists, hide the loading background image
+  document.body.style.backgroundImage = 'none';
+  
   const { solarGroup, bodies } = await createSolarSystem();
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
@@ -43,7 +41,6 @@ async function main() {
   const audio = await initAudio(camera, cockpit.group);
 
   const orrery = createOrrery();
-  // --- FIX: Dramatically reduced orrery scale ---
   orrery.group.scale.setScalar(0.1);
   orrery.group.position.set(0, 1.3, -2);
   scene.add(orrery.group);
@@ -120,6 +117,18 @@ async function main() {
     ui.update();
     renderer.render(scene, camera);
   });
+  
+  // --- FIX: Set up VR button and hide overlay last, after scene is ready ---
+  document.body.appendChild(VRButton.createButton(renderer));
+  if (navigator.xr) {
+    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+      overlay.classList.add('hidden');
+    }).catch(() => {
+       xrMessage.textContent = 'VR NOT SUPPORTED';
+    });
+  } else {
+    xrMessage.textContent = 'WEBXR NOT AVAILABLE';
+  }
 }
 
 main();
