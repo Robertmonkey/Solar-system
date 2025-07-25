@@ -8,7 +8,7 @@ import { MAX_FLIGHT_SPEED } from './constants.js';
 
 export function createControls(renderer, scene, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
-  const controllerModelFactory = new XRControllerModel_Factory();
+  const controllerModelFactory = new XRControllerModelFactory();
   const handModelFactory = new XRHandModelFactory();
 
   let throttleValue = 0, joystickX = 0, joystickY = 0;
