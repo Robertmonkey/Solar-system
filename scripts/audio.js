@@ -1,32 +1,37 @@
 /*
  * audio.js
  *
- * Provides audio feedback for the VR experience. Sound effects are
- * loaded and attached to a positional source so they emanate from the
- * cockpit dashboard. A simple text‑to‑speech helper is also exposed so
- * the UI can read fun facts aloud.
+ * Provides audio feedback for the VR experience. This version includes a
+ * more robust text-to-speech implementation to ensure narration works reliably.
  */
 
-// Use the same Three.js instance as the rest of the app via import map.
-// The previous hard-coded version pulled in a second copy of the library,
-// causing class mismatches when objects were shared across modules.
 import * as THREE from 'three';
 
+let voices = [];
+// Pre-load voices to avoid timing issues with the Speech Synthesis API
+function loadVoices() {
+    voices = window.speechSynthesis.getVoices();
+}
+
 export async function initAudio(camera, sourceObject) {
-  // Attach an audio listener so positional audio works in VR.
   const listener = new THREE.AudioListener();
   camera.add(listener);
 
+  // Initial load of voices
+  loadVoices();
+  // If voices are not immediately available, they will be loaded later.
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+
   const loader = new THREE.AudioLoader();
 
-  // Load all three sound effects in parallel.
   const [warpBuf, beepBuf, ambienceBuf] = await Promise.all([
     loader.loadAsync('./sounds/warp.mp3'),
     loader.loadAsync('./sounds/beep.mp3'),
     loader.loadAsync('./sounds/ambience.mp3')
   ]);
 
-  // Use positional audio so sounds originate from their source object.
   const warpSound = new THREE.PositionalAudio(listener);
   warpSound.setBuffer(warpBuf);
   warpSound.setRefDistance(2);
@@ -44,16 +49,22 @@ export async function initAudio(camera, sourceObject) {
   ambience.play();
 
   return {
-    playWarp() { warpSound.isPlaying && warpSound.stop(); warpSound.play(); },
-    playBeep() { beepSound.isPlaying && beepSound.stop(); beepSound.play(); },
+    playWarp() { if (warpSound.isPlaying) warpSound.stop(); warpSound.play(); },
+    playBeep() { if (beepSound.isPlaying) beepSound.stop(); beepSound.play(); },
     speak(text) {
       if ('speechSynthesis' in window) {
-        const utter = new SpeechSynthesisUtterance(text);
-        const voices = window.speechSynthesis.getVoices();
-        utter.voice = voices.find(v => /en/i.test(v.lang)) || voices[0] || null;
-        utter.pitch = 0.6; // Deeper voice for a cosmic feel
-        utter.rate = 0.85;
+        // Stop any currently speaking utterance
         window.speechSynthesis.cancel();
+        
+        const utter = new SpeechSynthesisUtterance(text);
+        // --- FIX: Use pre-loaded voices array ---
+        if (voices.length === 0) {
+            // Attempt to load voices again if they weren't ready initially
+            loadVoices();
+        }
+        utter.voice = voices.find(v => v.lang.startsWith('en')) || voices[0] || null;
+        utter.pitch = 0.6;
+        utter.rate = 0.85;
         window.speechSynthesis.speak(utter);
       }
     }
