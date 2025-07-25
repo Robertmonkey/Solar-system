@@ -18,9 +18,9 @@ export function createUI(bodies, callbacks = {}) {
   let needsRedraw = true;
 
   const panels = {
-    warp: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
-    probe: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
-    facts: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
+    warp: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null, width: 0.8, height: 1.6 },
+    probe: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null, width: 0.8, height: 0.8 },
+    facts: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null, width: 1.2, height: 0.6 },
   };
 
   function setupPanel(name, w, h, planeW, planeH) {
@@ -30,12 +30,12 @@ export function createUI(bodies, callbacks = {}) {
     p.ctx = p.canvas.getContext('2d');
     p.texture = new THREE.CanvasTexture(p.canvas);
     p.mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), new THREE.MeshBasicMaterial({ map: p.texture, transparent: true }));
-    p.mesh.name = name;
+    p.mesh.name = name; // Name is set in controls.js now, but this is good practice
   }
 
-  setupPanel('warp', 512, 1024, 0.8, 1.6);
-  setupPanel('probe', 512, 512, 0.8, 0.8);
-  setupPanel('facts', 1024, 512, 1.2, 0.6);
+  setupPanel('warp', 512, 1024, panels.warp.width, panels.warp.height);
+  setupPanel('probe', 512, 512, panels.probe.width, panels.probe.height);
+  setupPanel('facts', 1024, 512, panels.facts.width, panels.facts.height);
 
   function drawPanelBackground(ctx, title) {
     const { width, height } = ctx.canvas;
@@ -103,8 +103,7 @@ export function createUI(bodies, callbacks = {}) {
   function drawFacts() {
     const { ctx, canvas } = panels.facts;
     const body = bodies[selectedIndex].data;
-    drawPanelBackground(ctx, body.name);
-    // Draw fun fact text...
+    drawPanelBackground(ctx, body.name.toUpperCase());
     const fact = (body.facts || [])[0] || 'No data available.';
     ctx.font = `32px ${FONT_FAMILY}`;
     ctx.fillStyle = COLORS.textSecondary;
@@ -130,35 +129,58 @@ export function createUI(bodies, callbacks = {}) {
 
   function setHover(panel, localPos) {
     let newHover = { panel: null, item: null };
-    if (panel === 'warp' && localPos) {
-      const index = Math.floor((1 - localPos.y / 1.6 - 0.05) * bodies.length);
+    if (!panel || !localPos) {
+        // No hover
+    } else if (panel === 'warp') {
+      const p = panels.warp;
+      const normalizedY = (p.height / 2 - localPos.y) / p.height;
+      const index = Math.floor(normalizedY * bodies.length);
       if (index >= 0 && index < bodies.length) newHover = { panel: 'warp', item: index };
-    } else if (panel === 'probe' && localPos) {
-      if (localPos.x > -0.3 && localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
-      else if (localPos.x > 0 && localPos.x < 0.2) newHover = { panel: 'probe', item: 'velocity'};
-      else if (localPos.x > 0.3 && localPos.x < 0.5) newHover = { panel: 'probe', item: 'time'};
-    } else if (panel === 'facts' && localPos) {
-      if (localPos.x > 0.3 && localPos.y < -0.15) newHover = { panel: 'facts', item: 'narrate' };
+    } else if (panel === 'probe') {
+      const normalizedX = (localPos.x + panels.probe.width / 2) / panels.probe.width;
+      if (normalizedX > 0.1 && normalizedX < 0.35) newHover = { panel: 'probe', item: 'mass'};
+      else if (normalizedX > 0.4 && normalizedX < 0.65) newHover = { panel: 'probe', item: 'velocity'};
+      else if (normalizedX > 0.7 && normalizedX < 0.95) newHover = { panel: 'probe', item: 'time'};
+    } else if (panel === 'facts') {
+      const p = panels.facts;
+      const normalizedX = (localPos.x + p.width / 2) / p.width;
+      const normalizedY = (p.height / 2 - localPos.y) / p.height;
+      if (normalizedX > 0.7 && normalizedY > 0.75) newHover = { panel: 'facts', item: 'narrate' };
     }
+    
     if (newHover.panel !== hoverState.panel || newHover.item !== hoverState.item) {
       hoverState = newHover;
       needsRedraw = true;
     }
   }
 
-  function handleTap(panel, localPos) {
+  // --- FIX: Reworked tap handling logic with corrected math and a new `isTap` parameter ---
+  // This ensures buttons are activated only once per tap, while sliders update continuously.
+  function handleTap(panel, localPos, isTap) {
+    setHover(panel, localPos); // Update hover state for visual feedback
+
     if (panel === 'warp') {
-      const index = Math.floor((1 - localPos.y / 1.6 - 0.05) * bodies.length);
-      if (index >= 0 && index < bodies.length) onWarp(index);
+      if (isTap && hoverState.item !== null) {
+        onWarp(hoverState.item);
+      }
     } else if (panel === 'facts') {
-      if (localPos.x > 0.3 && localPos.y < -0.15) onNarrate((bodies[selectedIndex].data.facts || [])[0]);
+      if (isTap && hoverState.item === 'narrate') {
+        onNarrate((bodies[selectedIndex].data.facts || [])[0]);
+      }
     } else if (panel === 'probe') {
-        const val = THREE.MathUtils.clamp(1 - (localPos.y + 0.35) / 0.7, 0, 1);
-        if (hoverState.item === 'mass') { probeMass = val; }
-        if (hoverState.item === 'velocity') { probeVelocity = val; }
+      // Sliders should update continuously, not just on a single tap event.
+      if (hoverState.item) {
+        const p = panels.probe;
+        const normalizedY = (p.height / 2 - localPos.y) / p.height;
+        const val = THREE.MathUtils.clamp(normalizedY, 0, 1);
+
+        if (hoverState.item === 'mass') probeMass = val;
+        if (hoverState.item === 'velocity') probeVelocity = val;
         if (hoverState.item === 'time') { timeValue = val; onTimeChange(val); }
+        
         onProbeChange({ mass: probeMass, velocity: probeVelocity });
         needsRedraw = true;
+      }
     }
   }
 
@@ -168,6 +190,6 @@ export function createUI(bodies, callbacks = {}) {
     warpMesh: panels.warp.mesh, probeMesh: panels.probe.mesh, factsMesh: panels.facts.mesh,
     update: () => { if(needsRedraw) { drawWarp(); drawProbe(); drawFacts(); needsRedraw = false; } },
     setSelectedIndex: (i) => { if (i !== selectedIndex) { selectedIndex = i; needsRedraw = true; }},
-    setHover, handleTap,
+    handleTap,
   };
 }
