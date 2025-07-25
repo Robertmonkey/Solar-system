@@ -118,7 +118,7 @@ export function createLecternCockpit() {
     fireButton,
     orreryMount,
     launcherMuzzle,
-    launcherBarrel, // --- FIX --- Added the missing launcherBarrel to the return object.
+    launcherBarrel, // --- Verifying the fix is present ---
     updateControlVisuals,
   };
 }
