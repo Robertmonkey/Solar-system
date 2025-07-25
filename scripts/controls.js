@@ -24,13 +24,20 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     cockpit.throttle, cockpit.joystick, cockpit.fireButton,
     ui.warpMesh, ui.probeMesh, ui.factsMesh
   ];
+  // --- FIX: Assign names to the UI panel meshes for easier identification. ---
+  ui.warpMesh.name = "WarpPanel";
+  ui.probeMesh.name = "ProbePanel";
+  ui.factsMesh.name = "FactsPanel";
+
   const interactableBoxes = interactableMeshes.map(() => new THREE.Box3());
 
   let throttleValue = 0;
   let joystickX = 0;
   let joystickY = 0;
 
-  const touchStates = [ { touching: null }, { touching: null } ];
+  // --- FIX: Reworked state tracking to detect a "tap" (first frame of touch). ---
+  // This prevents buttons from firing on every single frame.
+  const prevTouchState = [ { name: null }, { name: null } ];
 
   function update(deltaTime, xrCamera) {
     interactableMeshes.forEach((mesh, i) => interactableBoxes[i].setFromObject(mesh));
@@ -55,10 +62,12 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
           }
         }
       });
+      
+      const state = prevTouchState[handIndex];
+      const justTapped = currentTouch && (currentTouch.name !== state.name);
 
-      const state = touchStates[handIndex];
       if (currentTouch) {
-        state.touching = currentTouch.name;
+        state.name = currentTouch.name;
         const localPos = currentTouch.mesh.worldToLocal(tipPos.clone());
 
         switch (currentTouch.name) {
@@ -75,26 +84,32 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
             break;
           }
           case 'FireButton': {
-            fireCallback();
+            if (justTapped) {
+              fireCallback();
+            }
             break;
           }
           case 'WarpPanel':
           case 'ProbePanel':
           case 'FactsPanel': {
-            ui.handleTap(currentTouch.name.replace('Panel', '').toLowerCase(), localPos);
+            ui.handleTap(currentTouch.name.replace('Panel', '').toLowerCase(), localPos, justTapped);
             break;
           }
         }
       } else {
-        state.touching = null;
+        state.name = null;
       }
     });
+    
+    // Check if any hand is touching the controls.
+    const isTouchingThrottle = prevTouchState.some(s => s.name === 'Throttle');
+    const isTouchingJoystick = prevTouchState.some(s => s.name === 'Joystick');
 
-    if (!touchStates.some(s => s.touching === 'Throttle')) {
+    if (!isTouchingThrottle) {
       throttleValue = 0;
-      cockpit.updateControlVisuals('throttle', new THREE.Vector3(0, 0, 0));
+      cockpit.updateControlVisuals('throttle', new THREE.Vector3(0, 0, 0.15)); // Reset to 0 position
     }
-    if (!touchStates.some(s => s.touching === 'Joystick')) {
+    if (!isTouchingJoystick) {
       joystickX = 0;
       joystickY = 0;
       cockpit.updateControlVisuals('joystick', new THREE.Vector3(0, 0, 0));
