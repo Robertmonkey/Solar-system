@@ -24,6 +24,12 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
+  // Ensure correct colour space on modern browsers
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Request hand-tracking support if available
+  renderer.xr.setSessionInit({
+    optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
+  });
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
   
