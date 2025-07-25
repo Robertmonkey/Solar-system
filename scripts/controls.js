@@ -1,6 +1,6 @@
 // Hand-tracking controls implementing a direct "touch" interaction model.
-// This version fixes a crash caused by an incorrect index when resetting
-// control rotations.
+// This version removes the incorrect model path, allowing the VR session
+// to initialize correctly with default web-based hand models.
 
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
@@ -8,6 +8,8 @@ import { MAX_FLIGHT_SPEED } from './constants.js';
 
 export function createControls(renderer, scene, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
+  // --- FIX --- Reverted to the original factory initialization.
+  // This allows default hand models to be loaded from the web CDN.
   const handModelFactory = new XRHandModelFactory();
 
   let throttleValue = 0;
@@ -51,6 +53,7 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
 
     handStates.forEach((state, i) => {
       const hand = renderer.xr.getHand(i);
+      // The 'index-finger-tip' joint is essential for our control scheme
       const indexTipJoint = hand.joints['index-finger-tip'];
       if (!indexTipJoint) return;
       
@@ -114,19 +117,15 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
       }
     });
 
-    // Reset controls if not being touched
     if (!handStates.some(s => s.touching?.name === 'joystick')) {
       joystickX = 0; joystickY = 0;
-      // --- FIX --- Corrected index from [1] to [0]
       cockpit.joystick.children[0].rotation.set(0, 0, 0);
     }
     if (!handStates.some(s => s.touching?.name === 'throttle')) {
       throttleValue = 0;
-      // --- FIX --- Corrected index from [1] to [0]
       cockpit.throttle.children[0].rotation.set(0, 0, 0);
     }
     
-    // Calculate flight movement
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
