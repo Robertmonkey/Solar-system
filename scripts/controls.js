@@ -1,6 +1,6 @@
 // Hand-tracking controls implementing a direct "touch" interaction model.
-// This version fixes the hand visibility bug and ensures hands are correctly
-// parented to the scene for proper tracking.
+// This version fixes a crash caused by an incorrect index when resetting
+// control rotations.
 
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
@@ -30,11 +30,11 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
 
   for (let i = 0; i < 2; i++) {
     const controller = renderer.xr.getController(i);
-    scene.add(controller); // Controllers should be added to the scene root
+    scene.add(controller);
 
     const hand = renderer.xr.getHand(i);
     hand.add(handModelFactory.createHandModel(hand, 'mesh'));
-    scene.add(hand); // CRITICAL FIX: Add hand to the scene, not the cockpit model.
+    scene.add(hand);
 
     const fingerTip = new THREE.Mesh(
       new THREE.SphereGeometry(0.015),
@@ -114,13 +114,19 @@ export function createControls(renderer, scene, cockpit, ui, fireCallback) {
       }
     });
 
+    // Reset controls if not being touched
     if (!handStates.some(s => s.touching?.name === 'joystick')) {
-      joystickX = 0; joystickY = 0; cockpit.joystick.children[1].rotation.set(0, 0, 0);
+      joystickX = 0; joystickY = 0;
+      // --- FIX --- Corrected index from [1] to [0]
+      cockpit.joystick.children[0].rotation.set(0, 0, 0);
     }
     if (!handStates.some(s => s.touching?.name === 'throttle')) {
-      throttleValue = 0; cockpit.throttle.children[1].rotation.set(0, 0, 0);
+      throttleValue = 0;
+      // --- FIX --- Corrected index from [1] to [0]
+      cockpit.throttle.children[0].rotation.set(0, 0, 0);
     }
     
+    // Calculate flight movement
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
