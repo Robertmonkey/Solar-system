@@ -25,6 +25,13 @@ async function main() {
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(VRButton.createButton(renderer));
+  
+  // Hide the overlay once VR is supported, the button will handle the rest.
+  if (navigator.xr) {
+    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+      if(supported) document.getElementById('overlay').classList.add('hidden');
+    });
+  }
 
   const { solarGroup, bodies } = await createSolarSystem();
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
@@ -82,8 +89,23 @@ async function main() {
     audio.playBeep();
   });
 
-  function handleWarpSelect(body) { /* ... same as before ... */ }
-  const renderLoop = () => {
+  function handleWarpSelect(body) {
+    if (!body) return;
+    const bodyWorldPos = new THREE.Vector3();
+    body.group.getWorldPosition(bodyWorldPos);
+    const scaledRadius = body.group.userData.radius || 1;
+    const safeDistance = scaledRadius * 4;
+    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(renderer.xr.getCamera().quaternion);
+    const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
+    const shift = desiredPlayerPos.negate();
+    solarGroup.position.copy(shift);
+    audio.playWarp();
+    ui.setSelectedIndex(bodies.findIndex(b => b.data.name === body.data.name));
+    const fact = (body.data.facts || [])[0];
+    if (fact) audio.speak(fact);
+  }
+
+  renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
     const movement = controls.update(delta);
     if (movement) solarGroup.position.sub(movement);
@@ -94,7 +116,7 @@ async function main() {
     playerMarker.position.copy(playerPosInOrrery).multiplyScalar(orrery.group.scale.x);
     ui.update();
     renderer.render(scene, camera);
-  };
-  renderer.setAnimationLoop(renderLoop);
+  });
 }
+
 main();
