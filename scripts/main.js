@@ -26,17 +26,6 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
-  // Ensure correct colour space on modern browsers
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  // Request hand-tracking support and the dom-overlay feature so our
-  // HTML overlay can appear in VR. The "layers" feature caused session
-  // creation to fail on some browsers, so it has been removed to improve
-  // compatibility with the Quest 3.
-  renderer.xr.setSessionInit({
-    requiredFeatures: ['local-floor'],
-    optionalFeatures: ['bounded-floor', 'hand-tracking', 'dom-overlay'],
-    domOverlay: { root: document.body }
-  });
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
 
@@ -47,10 +36,6 @@ async function main() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // Create a clock for frame timing.  We do not attach it to the renderer
-  // because WebGLRenderer does not define a `clock` property.  Instead,
-  // we manage our own clock here.  Using THREE.Clock ensures consistent
-  // delta values independent of display refresh rate.
   const clock = new THREE.Clock();
 
   const { solarGroup, bodies } = await createSolarSystem();
@@ -70,7 +55,6 @@ async function main() {
   orrery.group.add(playerMarker);
 
   const probes = createProbes();
-  // Attach probes to the solar system so they travel with it when warping
   solarGroup.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
 
@@ -102,14 +86,11 @@ async function main() {
   ui.probeMesh.rotation.y = -Math.PI / 6;
   cockpit.group.add(ui.probeMesh);
 
-  // Start with dummy controls that do nothing.
   let controls = { update: () => null };
 
-  // --- Defer the real control setup until the VR session starts ---
   renderer.xr.addEventListener('sessionstart', () => {
     controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-      // Convert to solar system local coordinates so probes spawn at the muzzle
       const launchPos = solarGroup.worldToLocal(muzzlePos.clone());
       const launchDir = new THREE.Vector3();
       cockpit.launcherMuzzle.getWorldDirection(launchDir);
@@ -118,7 +99,6 @@ async function main() {
     });
   });
 
-  // When the session ends, revert to the dummy controls.
   renderer.xr.addEventListener('sessionend', () => {
     controls = { update: () => null };
   });
@@ -130,9 +110,6 @@ async function main() {
     const scaledRadius = body.group.userData.radius || 1;
     const safeDistance = scaledRadius * 4;
     
-    // --- FIX: Get the camera's forward direction from the main 'camera' object. ---
-    // The renderer updates this camera's pose to match the HMD in an XR session.
-    // `renderer.xr.getCamera()` returns an ArrayCamera which does not have a single quaternion.
     const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     
     const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
@@ -145,10 +122,7 @@ async function main() {
   }
 
   renderer.setAnimationLoop(() => {
-    // Advance our local clock to compute the time since the last frame.
     const delta = clock.getDelta();
-    // The `controls` object will be the real one inside a VR session,
-    // and the dummy one outside of it.
     const movement = controls.update(delta, renderer.xr.getCamera());
     if (movement) solarGroup.position.sub(movement);
 
