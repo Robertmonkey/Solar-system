@@ -28,12 +28,13 @@ async function main() {
   renderer.xr.enabled = true;
   // Ensure correct colour space on modern browsers
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  // Request hand-tracking support and other optional features.  The dom-overlay
-  // feature allows DOM elements (like the overlay) to appear in VR, while
-  // layers can improve performance on supported devices such as the Quest 3.
+  // Request hand-tracking support and the dom-overlay feature so our
+  // HTML overlay can appear in VR. The "layers" feature caused session
+  // creation to fail on some browsers, so it has been removed to improve
+  // compatibility with the Quest 3.
   renderer.xr.setSessionInit({
     requiredFeatures: ['local-floor'],
-    optionalFeatures: ['bounded-floor', 'hand-tracking', 'layers', 'dom-overlay'],
+    optionalFeatures: ['bounded-floor', 'hand-tracking', 'dom-overlay'],
     domOverlay: { root: document.body }
   });
   document.body.appendChild(renderer.domElement);
