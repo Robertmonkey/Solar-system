@@ -22,7 +22,7 @@ export const KM_TO_WORLD_UNITS = 1 / KM_PER_WORLD_UNIT;
 export const SIZE_MULTIPLIER = 1_000;
 
 // Speed of light in kilometres per second.  Used to map the throttle slider to a
-// physically meaningful maximum.  Travelling at c takes ~8 minutes to reach
+// physically meaningful maximum.  Travelling at c takes ~8 minutes to reach
 // Earth from the Sun at this world scale.
 export const C_KMPS = 299_792.458;
 
@@ -32,7 +32,7 @@ export const C_KMPS = 299_792.458;
 export const MAX_FLIGHT_SPEED = C_KMPS * KM_TO_WORLD_UNITS;
 
 // Conversion from miles per hour to kilometres per second.  The throttle slider
-// uses an exponential mapping between 1 mph and c.
+// uses an exponential mapping between 1 mph and c.
 export const MPH_TO_KMPS = 1.60934 / 3600;
 
 // Time conversion helpers
