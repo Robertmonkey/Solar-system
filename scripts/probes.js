@@ -29,7 +29,10 @@ export function launchProbe(probes, origin, direction, massValue = 0.5, velocity
 // Update all probes. deltaTime is in seconds.
 export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
   const toRemove = [];
-  const launcherBox = new THREE.Box3().setFromObject(launcherMesh);
+
+  // --- FIX --- Create the launcher's bounding box only if the launcher mesh exists.
+  // This prevents the crash if launcherMesh is undefined for any reason.
+  const launcherBox = launcherMesh ? new THREE.Box3().setFromObject(launcherMesh) : null;
 
   probes.list.forEach((probe, index) => {
     probe.age += deltaTime;
@@ -37,10 +40,13 @@ export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
 
     // After a brief moment, start checking for collisions
     if (probe.age > 0.1) {
-       // Skip collision check if probe is still inside the launcher barrel
-      const probeBox = new THREE.Box3().setFromObject(probe.mesh);
-      if (probeBox.intersectsBox(launcherBox)) {
-        return;
+       // Skip collision check if probe is still inside the launcher barrel,
+       // but only if the launcherBox was successfully created.
+      if (launcherBox) {
+        const probeBox = new THREE.Box3().setFromObject(probe.mesh);
+        if (probeBox.intersectsBox(launcherBox)) {
+          return; // Don't check for collisions if inside the barrel
+        }
       }
         
       for (const obj of solarBodies) {
