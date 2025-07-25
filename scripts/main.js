@@ -1,5 +1,7 @@
-// This file has been restructured to defer control setup until after the
-// VR session starts, fixing the missing VR button and loading issues.
+// Main entry point for the Solar System VR experience.
+// This file has been updated to request additional WebXR features (layers and
+// dom-overlay) and to add a resize handler.  It also defers control setup
+// until a VR session begins, as before.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -24,17 +26,32 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
-  // Initialize the clock before the animation loop starts
-  renderer.clock = new THREE.Clock();
   // Ensure correct colour space on modern browsers
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  // Request hand-tracking support if available
+  // Request hand-tracking support and other optional features.  The dom-overlay
+  // feature allows DOM elements (like the overlay) to appear in VR, while
+  // layers can improve performance on supported devices such as the Quest 3.
   renderer.xr.setSessionInit({
-    optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']
+    requiredFeatures: ['local-floor'],
+    optionalFeatures: ['bounded-floor', 'hand-tracking', 'layers', 'dom-overlay'],
+    domOverlay: { root: document.body }
   });
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
-  
+
+  // Update camera and renderer on window resize to avoid stretched views.
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // Create a clock for frame timing.  We do not attach it to the renderer
+  // because WebGLRenderer does not define a `clock` property.  Instead,
+  // we manage our own clock here.  Using THREE.Clock ensures consistent
+  // delta values independent of display refresh rate.
+  const clock = new THREE.Clock();
+
   const { solarGroup, bodies } = await createSolarSystem();
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
@@ -50,7 +67,7 @@ async function main() {
   scene.add(orrery.group);
   const playerMarker = createPlayerMarker();
   orrery.group.add(playerMarker);
-  
+
   const probes = createProbes();
   scene.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
@@ -64,7 +81,7 @@ async function main() {
 
   const deskSurfaceY = 1.04;
   const panelScale = { warp: 0.35, facts: 0.6, probe: 0.5 };
-  
+
   ui.warpMesh.scale.setScalar(panelScale.warp);
   ui.factsMesh.scale.setScalar(panelScale.facts);
   ui.probeMesh.scale.setScalar(panelScale.probe);
@@ -86,7 +103,7 @@ async function main() {
   // Start with dummy controls that do nothing.
   let controls = { update: () => null };
 
-  // --- FIX: Defer the real control setup until the VR session starts ---
+  // --- Defer the real control setup until the VR session starts ---
   renderer.xr.addEventListener('sessionstart', () => {
     controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
@@ -121,23 +138,24 @@ async function main() {
   }
 
   renderer.setAnimationLoop(() => {
-    const delta = renderer.clock.getDelta();
+    // Advance our local clock to compute the time since the last frame.
+    const delta = clock.getDelta();
     // The `controls` object will be the real one inside a VR session,
     // and the dummy one outside of it.
-    const movement = controls.update(delta, renderer.xr.getCamera()); 
+    const movement = controls.update(delta, renderer.xr.getCamera());
     if (movement) solarGroup.position.sub(movement);
 
     updateSolarSystem(solarGroup, delta);
     updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
-    
+
     const playerPosInOrrery = solarGroup.position.clone().negate();
     playerMarker.position.copy(playerPosInOrrery).multiplyScalar(orrery.group.scale.x);
-    
+
     ui.update();
     renderer.render(scene, camera);
   });
-  
+
   // Create the VR button and hide the overlay now that the scene is ready.
   document.body.appendChild(VRButton.createButton(renderer));
   overlay.classList.add('hidden');
