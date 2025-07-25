@@ -4,12 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Solar System VR</title>
-  <!-- Preconnect to font providers to improve loading times -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 
-  <!-- Import map so Three.js modules resolve correctly -->
   <script type="importmap">
   {
     "imports": {
@@ -25,19 +23,19 @@
       margin: 0;
       overflow: hidden;
       /* Set a solid dark background colour.  We avoid referencing a
-         non‑existent texture file (textures/ui.png) here, as that
-         texture is not included in this repository.  A simple colour
-         ensures the page loads correctly even if external assets are
-         unavailable. */
+          non‑existent texture file (textures/ui.png) here, as that
+          texture is not included in this repository.  A simple colour
+          ensures the page loads correctly even if external assets are
+          unavailable. */
       background: #000;
       color: #e0f0ff;
       font-family: 'Orbitron', sans-serif;
     }
 
     /* Overlay for XR status messages. Hidden by default so it does not
-       obstruct the user's view once the app is running in VR. The
-       `.hidden` class toggles `display: none`.  Pointer events are disabled
-       so it never captures input in VR. */
+        obstruct the user's view once the app is running in VR. The
+        `.hidden` class toggles `display: none`.  Pointer events are disabled
+        so it never captures input in VR. */
     #overlay {
       position: absolute;
       top: 50%;
@@ -65,7 +63,6 @@
     <span id="xr-message">Initialising WebXR…</span><br>
     <small>Tap panels with your index finger to interact. Close your hand to grab controls.</small>
   </div>
-  <!-- Load the main script as a module. All Three.js code lives inside main.js -->
   <script type="module" src="./scripts/main.js"></script>
 </body>
 </html>
