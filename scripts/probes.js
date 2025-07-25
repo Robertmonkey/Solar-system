@@ -41,7 +41,7 @@ export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
           return;
         }
       }
-        
+      
       for (const obj of solarBodies) {
         const bodyWorldPos = obj.group.getWorldPosition(new THREE.Vector3());
         const probeWorldPos = probe.mesh.getWorldPosition(new THREE.Vector3());
