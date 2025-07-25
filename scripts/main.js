@@ -1,5 +1,4 @@
-// This file integrates the standalone orrery and correctly positions
-// the smaller UI panels on the redesigned cockpit desk.
+// This file removes the old orrery pillar.
 
 import * as THREE from 'three';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -42,16 +41,10 @@ async function main() {
 
   const audio = await initAudio(camera, cockpit.group);
 
-  // --- FIX: Standalone Orrery on a pillar behind the player ---
-  const orreryPillar = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.2, 1.2, 32),
-    new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.5 })
-  );
-  orreryPillar.position.set(0, 0.6, -2); // Approx 6ft behind player
-  scene.add(orreryPillar);
+  // --- FIX: Removed the separate orrery pillar ---
   const orrery = createOrrery();
-  orrery.group.scale.setScalar(0.4); // Beach ball size
-  orrery.group.position.set(0, 1.3, -2);
+  orrery.group.scale.setScalar(0.4);
+  orrery.group.position.set(0, 1.3, -2); // Floats holographically behind player
   scene.add(orrery.group);
   const playerMarker = createPlayerMarker();
   orrery.group.add(playerMarker);
@@ -67,7 +60,6 @@ async function main() {
     onNarrate: text => audio.speak(text)
   });
 
-  // --- FIX: Corrected UI Panel Layout, Scale, and Y-Position ---
   const deskSurfaceY = 1.04;
   const panelScale = { warp: 0.35, facts: 0.6, probe: 0.5 };
   
@@ -75,7 +67,6 @@ async function main() {
   ui.factsMesh.scale.setScalar(panelScale.facts);
   ui.probeMesh.scale.setScalar(panelScale.probe);
 
-  // Position panels so their bottom edge rests on the desk
   const warpHeight = 1.6 * panelScale.warp;
   ui.warpMesh.position.set(-0.9, deskSurfaceY + warpHeight / 2, -0.6);
   ui.warpMesh.rotation.y = Math.PI / 6;
@@ -91,11 +82,9 @@ async function main() {
   cockpit.group.add(ui.probeMesh);
 
   const controls = setupControls(renderer, scene, cockpit, ui, () => {
-    // Get launch position from the new muzzle object
     const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
     const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
     const launchPos = muzzlePos.clone().sub(solarOrigin);
-    // Launch direction is straight out from the muzzle
     const launchDir = new THREE.Vector3();
     cockpit.launcherMuzzle.getWorldDirection(launchDir);
     launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
