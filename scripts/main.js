@@ -24,6 +24,8 @@ async function main() {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
+  // Initialize the clock before the animation loop starts
+  renderer.clock = new THREE.Clock();
   // Ensure correct colour space on modern browsers
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   // Request hand-tracking support if available
