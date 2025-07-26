@@ -83,7 +83,8 @@ export function createSolarSystem(textures) {
     }
     
     group.rotation.z = degToRad(data.axialTiltDeg || 0);
-    group.userData = { ...data, radius, meanAnomaly0: Math.random() * 360, elapsedDays: 0 };
+    // --- FIX: Initialise mean anomaly in radians for correct calculations ---
+    group.userData = { ...data, radius, meanAnomaly0: Math.random() * 2 * Math.PI, elapsedDays: 0 };
     byName[data.name] = group;
     solarBodies.push({ data, group });
   });
