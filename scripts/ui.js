@@ -13,7 +13,8 @@ export function createUI(bodies, callbacks = {}) {
   const { onWarp = () => {}, onProbeChange = () => {}, onTimeChange = () => {}, onNarrate = () => {} } = callbacks;
 
   let selectedIndex = 0;
-  let probeMass = 0.5, probeVelocity = 0.5, timeValue = 0.2;
+  // --- FIX: Set a higher initial time value to prevent overwriting the timeMultiplier to a low value on startup ---
+  let probeMass = 0.5, probeVelocity = 0.5, timeValue = 0.5;
   let hoverState = { panel: null, item: null };
   let needsRedraw = true;
 
@@ -83,8 +84,6 @@ export function createUI(bodies, callbacks = {}) {
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = COLORS.uiHighlight;
     const knobH = 15;
-    // In canvas coordinates, Y=0 is the top. Higher Y is lower.
-    // So a high `value` (1.0) should result in a low knobY.
     const knobY = y + (1 - value) * (h - knobH);
     ctx.fillRect(x - 5, knobY, w + 10, knobH);
     ctx.fillStyle = COLORS.textPrimary;
@@ -108,13 +107,11 @@ export function createUI(bodies, callbacks = {}) {
     const { ctx, canvas } = panels.facts;
     const body = bodies[selectedIndex].data;
     drawPanelBackground(ctx, body.name);
-    // Draw fun fact text...
     const fact = (body.facts || [])[0] || 'No data available.';
     ctx.font = `32px ${FONT_FAMILY}`;
     ctx.fillStyle = COLORS.textSecondary;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    // word wrap
     const words = fact.split(' '); let line = ''; let y = 100;
     for (const word of words) {
         const testLine = line + word + ' ';
@@ -123,7 +120,6 @@ export function createUI(bodies, callbacks = {}) {
         } else { line = testLine; }
     }
     ctx.fillText(line, 20, y);
-    // Draw narrate button
     const btnX = canvas.width - 270, btnY = canvas.height - 100, btnW = 250, btnH = 80;
     ctx.fillStyle = (hoverState.panel === 'facts' && hoverState.item === 'narrate') ? COLORS.uiRowHighlight : COLORS.uiHighlight;
     ctx.fillRect(btnX, btnY, btnW, btnH);
@@ -143,17 +139,13 @@ export function createUI(bodies, callbacks = {}) {
             if (index >= 0 && index < bodies.length) newHover = { panel: 'warp', item: index };
             break;
         case 'probe':
-            if (localPos.x > -0.3 && localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
-            else if (localPos.x >= 0.1 && localPos.x < 0.3) newHover = { panel: 'probe', item: 'velocity'};
-            else if (localPos.x >= 0.4 && localPos.x < 0.6) newHover = { panel: 'probe', item: 'time'};
+            // --- FIX: Corrected and expanded hover zones for all three sliders ---
+            if (localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
+            else if (localPos.x >= -0.1 && localPos.x < 0.25) newHover = { panel: 'probe', item: 'velocity'};
+            else if (localPos.x >= 0.25) newHover = { panel: 'probe', item: 'time'};
             break;
         case 'facts':
-            const pFacts = panels.facts;
-            // From drawFacts: btnX = 1024-270=754, btnY = 512-100=412. btnW=250, btnH=80.
-            // Canvas (1024,512) to local (-0.6,0.6), (-0.3,0.3)
-            const btnLocalXMin = (754 / 1024 - 0.5) * 1.2;
-            const btnLocalYMax = -(412 / 512 - 0.5) * 0.6;
-            if (localPos.x > btnLocalXMin && localPos.y < btnLocalYMax) {
+            if (localPos.x > 0.3 && localPos.y < -0.15) {
                 newHover = { panel: 'facts', item: 'narrate' };
             }
             break;
@@ -168,14 +160,12 @@ export function createUI(bodies, callbacks = {}) {
 
   function handleTap(panel, localPos) {
     if (panel === 'warp') {
-      // hoverState is updated just before tap, so its item is reliable
       if(hoverState.item !== null) onWarp(hoverState.item);
     } else if (panel === 'facts') {
       if (hoverState.item === 'narrate') onNarrate((bodies[selectedIndex].data.facts || [])[0]);
     } else if (panel === 'probe') {
         const p = panels.probe;
         const panelHalfHeight = p.height / 2;
-        // --- FIX: Invert slider logic for intuitive controls ---
         const val = THREE.MathUtils.clamp((localPos.y + panelHalfHeight) / p.height, 0, 1);
         
         if (hoverState.item === 'mass') { probeMass = val; }
@@ -186,7 +176,7 @@ export function createUI(bodies, callbacks = {}) {
     }
   }
 
-  onTimeChange(timeValue); // Set initial time
+  onTimeChange(timeValue);
   
   return {
     warpMesh: panels.warp.mesh, probeMesh: panels.probe.mesh, factsMesh: panels.facts.mesh,
