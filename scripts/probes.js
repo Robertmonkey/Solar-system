@@ -1,14 +1,17 @@
-// Manages probes launched by the user. This version uses a basic material
-// to ensure probes are always visible regardless of scene lighting.
+// scripts/probes.js
 
 import * as THREE from 'three';
-import { G, KM_PER_WORLD_UNIT, KM_TO_WORLD_UNITS } from './constants.js';
+import { G, KM_TO_WORLD_UNITS } from './constants.js';
 
-const PROBE_INITIAL_SPEED = 15;
-const COLLISION_RADIUS_FACTOR = 1.1;
-const TRAIL_LENGTH = 200;
-// --- FIX: Increased gravity multiplier for more dramatic orbital effects ---
-const GRAVITY_MULTIPLIER = 1e9;
+const PROBE_INITIAL_SPEED = 15000; // MODIFIED: Increased initial speed for the new scale
+const COLLISION_RADIUS_FACTOR = 1.0; // MODIFIED: More precise collision
+const TRAIL_LENGTH = 400;
+
+// MODIFIED: Because our distances are now astronomically large, the 1/r^2 falloff
+// of gravity is immense. We need a massive multiplier to make gravitational
+// effects visible within the simulation's timeframe. This is purely for
+// visual effect, not physical accuracy of the force magnitude.
+const GRAVITY_MULTIPLIER = 1e16; 
 
 export function createProbes() {
   const group = new THREE.Group();
@@ -18,7 +21,8 @@ export function createProbes() {
 }
 
 export function launchProbe(probes, origin, direction, massValue = 0.5, velocityValue = 0.5) {
-  const radius = 0.05 + 0.1 * massValue;
+  // MODIFIED: Probe radius is now in meters.
+  const radius = 50 + 200 * massValue; 
   const geometry = new THREE.SphereGeometry(radius, 8, 8);
   const material = new THREE.MeshBasicMaterial({ color: 0xffffaa, toneMapped: false });
   const mesh = new THREE.Mesh(geometry, material);
@@ -60,21 +64,20 @@ export function updateProbes(probes, deltaTime, solarGroup, solarBodies, launche
         const deltaVecWorld = new THREE.Vector3().subVectors(bodyWorldPos, probeWorldPos);
         const distanceWorldSq = deltaVecWorld.lengthSq();
 
-        const singularity_threshold_sq = 0.01;
+        const singularity_threshold_sq = Math.pow(body.group.userData.radius, 2);
         if (distanceWorldSq < singularity_threshold_sq) return;
 
-        const distanceKm = Math.sqrt(distanceWorldSq) * KM_PER_WORLD_UNIT;
-        const forceMagnitude = (G * body.data.massKg * probe_mass_kg) / (distanceKm * distanceKm) * GRAVITY_MULTIPLIER;
+        // MODIFIED: Gravity calculation now uses world units (meters) directly.
+        // We use the standard G constant and apply our artistic multiplier.
+        const forceMagnitude = (G * body.data.massKg * probe_mass_kg) / distanceWorldSq * GRAVITY_MULTIPLIER;
         
-        const forceVecKm = deltaVecWorld.normalize().multiplyScalar(forceMagnitude);
-        totalForce.add(forceVecKm);
+        const forceVec = deltaVecWorld.normalize().multiplyScalar(forceMagnitude);
+        totalForce.add(forceVec);
     });
 
-    const accelerationKm = totalForce.divideScalar(probe_mass_kg);
-    const accelerationWorld = accelerationKm.multiplyScalar(KM_TO_WORLD_UNITS);
+    // MODIFIED: This is now acceleration in m/s^2 (world units/s^2)
+    const accelerationWorld = totalForce.divideScalar(probe_mass_kg);
 
-    // Since probe velocity is in the local space of its parent (solarGroup),
-    // we must transform the world-space acceleration into that same local space.
     const invProbeParentRotation = probe.mesh.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
     const localAcceleration = accelerationWorld.clone().applyQuaternion(invProbeParentRotation);
     probe.velocity.addScaledVector(localAcceleration, deltaTime);
@@ -97,6 +100,7 @@ export function updateProbes(probes, deltaTime, solarGroup, solarBodies, launche
       for (const obj of solarBodies) {
         const bodyWorldPos = obj.group.getWorldPosition(new THREE.Vector3());
         const distance = probe.mesh.getWorldPosition(new THREE.Vector3()).distanceTo(bodyWorldPos);
+        // MODIFIED: Collision threshold uses the body's true radius.
         const threshold = (obj.group.userData.radius || 0) * COLLISION_RADIUS_FACTOR;
         if (distance < threshold) {
           toRemove.push(index);
