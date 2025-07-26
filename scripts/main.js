@@ -23,19 +23,18 @@ function startExperience(assets) {
   document.body.style.backgroundImage = 'none';
   renderer.clock = new THREE.Clock();
   
-  // --- FIX: Create a 'player' group to handle ship orientation ---
+  // --- FIX: Rely on WebXR's 'local-floor' reference space for player height ---
+  // This prevents double-counting the user's height.
   const player = new THREE.Group();
-  player.position.set(0, 1.6, 0); // Set player eye-level height
   scene.add(player);
-  player.add(camera); // Add camera to the player group
+  player.add(camera);
 
   const { solarGroup, bodies } = createSolarSystem(assets.textures);
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
 
   const cockpit = createCockpit();
-  cockpit.group.position.y = -1.6; // Position cockpit at the player's feet
-  player.add(cockpit.group);
+  player.add(cockpit.group); // Add cockpit relative to the player at floor level
 
   let audio = { playWarp: () => {}, playBeep: () => {}, speak: () => {} };
   try {
@@ -49,17 +48,18 @@ function startExperience(assets) {
     cockpit.deskMaterial
   );
   orreryPillar.position.set(0, 0.6, -2);
-  cockpit.group.add(orreryPillar); // Add to cockpit so it rotates with the ship
+  cockpit.group.add(orreryPillar);
 
   const orrery = createOrrery();
   orrery.group.scale.setScalar(0.1);
   orrery.group.position.set(0, 1.3, -2);
-  cockpit.group.add(orrery.group); // Add to cockpit
+  cockpit.group.add(orrery.group);
   const playerMarker = createPlayerMarker();
   orrery.group.add(playerMarker);
   
   const probes = createProbes();
-  scene.add(probes.group);
+  // --- FIX: Add probes to the solarGroup to resolve coordinate issues ---
+  solarGroup.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
 
   const ui = createUI(bodies, {
@@ -88,12 +88,16 @@ function startExperience(assets) {
 
   let controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) };
   renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
-       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
-      const launchPos = muzzlePos.clone().sub(solarOrigin);
+      // --- FIX: Calculate probe launch parameters relative to the solarGroup ---
+      const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
+      const launchPos = solarGroup.worldToLocal(muzzlePos); // Convert world pos to local
+
       const launchDir = new THREE.Vector3();
       cockpit.launcherMuzzle.getWorldDirection(launchDir);
-      launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
+      const inverseSolarRotation = solarGroup.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const launchDirLocal = launchDir.clone().applyQuaternion(inverseSolarRotation);
+
+      launchProbe(probes, launchPos, launchDirLocal, probeSettings.mass, probeSettings.velocity);
       audio.playBeep();
   }); });
   renderer.xr.addEventListener('sessionend', () => { controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) }; });
@@ -105,7 +109,6 @@ function startExperience(assets) {
     const scaledRadius = body.group.userData.radius || 1;
     const safeDistance = scaledRadius * 2.5;
     
-    // Get forward direction from the entire player/ship, not just the head
     const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
     const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
     const shift = desiredPlayerPos.negate();
@@ -121,14 +124,11 @@ function startExperience(assets) {
     const delta = renderer.clock.getDelta();
     const xrCamera = renderer.xr.getCamera();
     
-    // --- FIX: Update controls to handle ship rotation and movement ---
     const { rotationDelta, throttle } = controls.update(delta);
     
-    // Apply ship rotation from joystick
     shipQuaternion.premultiply(rotationDelta);
     player.quaternion.copy(shipQuaternion);
     
-    // Apply movement from throttle
     const power = Math.pow(throttle, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0) {
@@ -142,7 +142,6 @@ function startExperience(assets) {
     updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
 
-    // Calculate player position for the orrery marker
     const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
     const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
     const playerPosInSolarSystem = playerWorldPos.clone().sub(solarOrigin);
