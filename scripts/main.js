@@ -23,8 +23,6 @@ function startExperience(assets) {
   document.body.style.backgroundImage = 'none';
   renderer.clock = new THREE.Clock();
   
-  // --- FIX: Rely on WebXR's 'local-floor' reference space for player height ---
-  // This prevents double-counting the user's height.
   const player = new THREE.Group();
   scene.add(player);
   player.add(camera);
@@ -33,8 +31,9 @@ function startExperience(assets) {
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
 
+  // --- FIX: Decouple cockpit from player rotation to stabilize hand controls ---
   const cockpit = createCockpit();
-  player.add(cockpit.group); // Add cockpit relative to the player at floor level
+  scene.add(cockpit.group);
 
   let audio = { playWarp: () => {}, playBeep: () => {}, speak: () => {} };
   try {
@@ -58,8 +57,8 @@ function startExperience(assets) {
   orrery.group.add(playerMarker);
   
   const probes = createProbes();
-  // --- FIX: Add probes to the solarGroup to resolve coordinate issues ---
-  solarGroup.add(probes.group);
+  // --- FIX: Add probes to the scene root and manage position manually ---
+  scene.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
 
   const ui = createUI(bodies, {
@@ -88,16 +87,15 @@ function startExperience(assets) {
 
   let controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) };
   renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
-      // --- FIX: Calculate probe launch parameters relative to the solarGroup ---
+      // --- FIX: Restore original probe launch coordinate calculation ---
       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-      const launchPos = solarGroup.worldToLocal(muzzlePos); // Convert world pos to local
+      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+      const launchPos = muzzlePos.clone().sub(solarOrigin);
 
       const launchDir = new THREE.Vector3();
       cockpit.launcherMuzzle.getWorldDirection(launchDir);
-      const inverseSolarRotation = solarGroup.getWorldQuaternion(new THREE.Quaternion()).invert();
-      const launchDirLocal = launchDir.clone().applyQuaternion(inverseSolarRotation);
 
-      launchProbe(probes, launchPos, launchDirLocal, probeSettings.mass, probeSettings.velocity);
+      launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
       audio.playBeep();
   }); });
   renderer.xr.addEventListener('sessionend', () => { controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) }; });
@@ -139,7 +137,7 @@ function startExperience(assets) {
     }
     
     updateSolarSystem(solarGroup, delta, xrCamera);
-    updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
+    updateProbes(probes, delta, solarGroup, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
 
     const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
