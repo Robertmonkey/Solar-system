@@ -1,3 +1,6 @@
+// A stable, professional control system based on the official Three.js
+// XRHandModelFactory and a direct-touch interaction model.
+
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
 import { MAX_FLIGHT_SPEED } from './constants.js';
@@ -32,8 +35,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
   function update(deltaTime, xrCamera) {
     interactables.forEach((item, i) => interactableBoxes[i].setFromObject(item.mesh));
 
-    // --- FIX: Use the XR camera for movement calculations ---
-    const activeCamera = renderer.xr.isPresenting ? xrCamera : camera;
+    let activeCamera = xrCamera.cameras.length > 0 ? xrCamera : camera;
 
     hands.forEach((hand, i) => {
       const state = touchStates[i];
@@ -55,15 +57,14 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         }
       });
 
-      // Pass hover/touch state to the UI for visual feedback and actions
       if (currentTouch) {
         if (state.touching !== currentTouch.name && currentTouch.name === 'FireButton') {
           fireCallback();
         }
         state.touching = currentTouch.name;
+        
         const localPos = currentTouch.mesh.worldToLocal(tipPos.clone());
-        ui.handleTouch(currentTouch.name.replace('Panel','').toLowerCase(), localPos);
-
+        
         switch (currentTouch.name) {
           case 'Throttle':
             throttleValue = THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(localPos.z, 0.15, -0.15, 0, 1), 0, 1);
@@ -74,11 +75,11 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
             joystickY = THREE.MathUtils.clamp(localPos.z / 0.1, -1, 1);
             cockpit.updateControlVisuals('joystick', localPos);
             break;
+          case 'WarpPanel': case 'ProbePanel': case 'FactsPanel':
+            ui.handleTap(currentTouch.name.replace('Panel','').toLowerCase(), localPos);
+            break;
         }
       } else {
-        if (state.touching) {
-            ui.handleTouchEnd(state.touching.replace('Panel','').toLowerCase());
-        }
         state.touching = null;
       }
     });
