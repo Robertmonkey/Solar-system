@@ -22,8 +22,6 @@ function startExperience(assets) {
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
-
-  // --- FIX: Create the clock for the renderer ---
   renderer.clock = new THREE.Clock();
 
   const { solarGroup, bodies } = createSolarSystem(assets.textures);
@@ -124,7 +122,11 @@ function startExperience(assets) {
     renderer.render(scene, camera);
   });
   
-  document.body.appendChild(VRButton.createButton(renderer));
+  // --- FIX: Request the 'hand-tracking' optional feature ---
+  const vrButtonOptions = {
+    optionalFeatures: ['hand-tracking']
+  };
+  document.body.appendChild(VRButton.createButton(renderer, vrButtonOptions));
   overlay.classList.add('hidden');
 }
 
