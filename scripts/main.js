@@ -17,14 +17,8 @@ function startExperience(assets) {
   scene.background = new THREE.Color(0x000005);
   scene.add(new THREE.AmbientLight(0x888888));
   
-  // MODIFIED: The camera's near and far clipping planes must be adjusted for the new
-  // 1:1 scale. The far plane needs to be incredibly large to contain the outer
-  // planets, whose orbits are billions of kilometers (and thus trillions of meters) away.
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1e16);
 
-  // MODIFIED: To handle the massive depth range of a 1:1 solar system, we
-  // MUST enable the logarithmicDepthBuffer. This prevents "z-fighting" artifacts
-  // where near and far objects flicker or render incorrectly.
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     logarithmicDepthBuffer: true
@@ -40,7 +34,8 @@ function startExperience(assets) {
   player.add(camera);
 
   // NEW: Add a celestial sphere for a realistic star background.
-  const starTexture = new THREE.TextureLoader().load('./textures/stars_milky_way.jpg');
+  // If you prefer a black background, you can comment out or delete the next 5 lines.
+  const starTexture = assets.textures.stars;
   const starSphere = new THREE.Mesh(
       new THREE.SphereGeometry(camera.far * 0.9, 64, 64),
       new THREE.MeshBasicMaterial({ map: starTexture, side: THREE.BackSide })
@@ -48,7 +43,6 @@ function startExperience(assets) {
   scene.add(starSphere);
 
   const { solarGroup, bodies } = createSolarSystem(assets.textures);
-  // MODIFIED: The initial offset now correctly uses the new KM_TO_WORLD_UNITS.
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
 
@@ -121,20 +115,45 @@ function startExperience(assets) {
       audio.playBeep();
   }); });
   renderer.xr.addEventListener('sessionend', () => { controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) }; });
+
+  // NEW: Helper function to get a body's position relative to the solar group origin (the Sun)
+  // This avoids using matrixWorld and the associated floating point precision issues.
+  function getSolarSystemRelativePosition(bodyObject, solarGroup) {
+      const position = new THREE.Vector3();
+      let current = bodyObject.group;
+      // Traverse up the scene graph from the body to the solar system group, summing positions.
+      while (current && current !== solarGroup) {
+          position.add(current.position);
+          current = current.parent;
+      }
+      return position;
+  }
   
+  // MODIFIED: Complete rewrite of the warp logic to be robust at 1:1 scale.
   function handleWarpSelect(body) {
     if (!body) return;
-    const bodyWorldPos = new THREE.Vector3();
-    body.group.getWorldPosition(bodyWorldPos);
-    // MODIFIED: The safe distance is now calculated from the true radius in meters.
-    // We add a large fixed value to avoid warping inside a giant planet.
+
+    // 1. Get body position relative to the Solar System's origin (the Sun).
+    // This avoids using huge world coordinates, preserving floating point precision.
+    const bodySolarSystemPos = getSolarSystemRelativePosition(body, solarGroup);
+
+    // 2. Determine a safe arrival distance from the planet's surface.
     const scaledRadius = body.group.userData.radius || 1;
-    const safeDistance = scaledRadius * 1.5 + 10000; // 1.5x radius + 10km
+    const safeDistance = scaledRadius * 2.5 + 50000; // 2.5x radius + 50km for safety
+
+    // 3. Create an offset vector. We'll arrive "above" the planet's orbital plane.
+    const offset = new THREE.Vector3(0, scaledRadius * 0.2, safeDistance);
     
-    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
-    const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
-    const shift = desiredPlayerPos.negate();
-    solarGroup.position.copy(shift);
+    // 4. The desired final position of the player is the body's position plus the offset.
+    const desiredPlayerPos = bodySolarSystemPos.clone().add(offset);
+    
+    // 5. To move the player, we move the entire solar system by the inverse of that position.
+    solarGroup.position.copy(desiredPlayerPos).negate();
+    
+    // 6. Instantly rotate the player to look at the destination body.
+    player.lookAt(bodySolarSystemPos); // Look at the body's position in the solar system frame
+    shipQuaternion.copy(player.quaternion); // This syncs the internal rotation state
+    
     audio.playWarp();
     ui.setSelectedIndex(bodies.findIndex(b => b.data.name === body.data.name));
     const fact = (body.data.facts || [])[0];
@@ -151,7 +170,7 @@ function startExperience(assets) {
     shipQuaternion.premultiply(rotationDelta);
     player.quaternion.copy(shipQuaternion);
     
-    const power = Math.pow(throttle, 3); // NEW: Use cubic power for finer low-speed control
+    const power = Math.pow(throttle, 3);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0) {
         const moveDirection = new THREE.Vector3(0, 0, -1);
@@ -164,10 +183,10 @@ function startExperience(assets) {
     updateProbes(probes, delta, solarGroup, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
 
-    const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
-    const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
-    const playerPosInSolarSystem = playerWorldPos.clone().sub(solarOrigin);
-    playerMarker.position.copy(playerPosInSolarSystem).multiplyScalar(orrery.group.scale.x);
+    // The player marker on the orrery must now account for the solarGroup's huge position.
+    const playerWorldPos = player.getWorldPosition(new THREE.Vector3()); // This is always near (0,0,0)
+    const playerPosInSolarSystem = playerWorldPos.clone().sub(solarGroup.position); // Player pos = -solarGroup.pos
+    playerMarker.position.copy(playerPosInSolarSystem).multiplyScalar(orrery.group.scale.x * orrery.objects[0].group.parent.scale.x);
     
     ui.update();
     renderer.render(scene, camera);
@@ -180,7 +199,6 @@ function startExperience(assets) {
   overlay.classList.add('hidden');
 }
 
-// ... (init function remains the same)
 function init() {
     const loadingManager = new THREE.LoadingManager();
     const xrMessage = document.getElementById('xr-message');
@@ -209,7 +227,6 @@ function init() {
         earth: 'textures/earth_daymap.jpg', mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
         saturn: 'textures/saturn.jpg', saturnRing: 'textures/saturn_ring_alpha.png',
         uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg',
-        // NEW: Load the star texture
         stars: 'textures/stars_milky_way.jpg'
     };
     const soundsToLoad = {
