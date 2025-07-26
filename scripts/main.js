@@ -23,6 +23,7 @@ function startExperience(assets) {
   document.body.style.backgroundImage = 'none';
   renderer.clock = new THREE.Clock();
   
+  // --- FIX: Re-parent cockpit to player to restore visual rotation feedback ---
   const player = new THREE.Group();
   scene.add(player);
   player.add(camera);
@@ -31,9 +32,8 @@ function startExperience(assets) {
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
 
-  // --- FIX: Decouple cockpit from player rotation to stabilize hand controls ---
   const cockpit = createCockpit();
-  scene.add(cockpit.group);
+  player.add(cockpit.group);
 
   let audio = { playWarp: () => {}, playBeep: () => {}, speak: () => {} };
   try {
@@ -57,8 +57,7 @@ function startExperience(assets) {
   orrery.group.add(playerMarker);
   
   const probes = createProbes();
-  // --- FIX: Add probes to the scene root and manage position manually ---
-  scene.add(probes.group);
+  solarGroup.add(probes.group);
   let probeSettings = { mass: 0.5, velocity: 0.5 };
 
   const ui = createUI(bodies, {
@@ -85,17 +84,22 @@ function startExperience(assets) {
   ui.probeMesh.rotation.y = -Math.PI / 6;
   cockpit.group.add(ui.probeMesh);
 
+  // --- FIX: Pass player object to controls for new stable interaction model ---
   let controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) };
-  renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
-      // --- FIX: Restore original probe launch coordinate calculation ---
+  renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, player, cockpit, ui, () => {
+      // --- FIX: Ensure matrices are updated and use robust coordinate transformation ---
+      player.updateWorldMatrix(true, false);
+      solarGroup.updateWorldMatrix(true, false);
+
       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
-      const launchPos = muzzlePos.clone().sub(solarOrigin);
+      const launchPos = solarGroup.worldToLocal(muzzlePos);
 
       const launchDir = new THREE.Vector3();
       cockpit.launcherMuzzle.getWorldDirection(launchDir);
+      const inverseSolarRotation = solarGroup.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const launchDirLocal = launchDir.clone().applyQuaternion(inverseSolarRotation);
 
-      launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
+      launchProbe(probes, launchPos, launchDirLocal, probeSettings.mass, probeSettings.velocity);
       audio.playBeep();
   }); });
   renderer.xr.addEventListener('sessionend', () => { controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) }; });
