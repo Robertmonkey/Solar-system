@@ -13,7 +13,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
   );
 
   const hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
-  const touchStates = [ { touching: null }, { touching: null }];
+  const touchStates = [ { touching: null, wasTouching: null }, { touching: null, wasTouching: null }];
   
   hands.forEach(hand => {
     hand.add(handModelFactory.createHandModel(hand));
@@ -39,6 +39,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
 
     hands.forEach((hand, i) => {
       const state = touchStates[i];
+      state.wasTouching = state.touching; // --- FIX: Track previous touch state
       const indexTip = hand.joints['index-finger-tip'];
 
       if (!indexTip) {
@@ -56,13 +57,11 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
           currentTouch = item;
         }
       });
+      
+      state.touching = currentTouch ? currentTouch.name : null;
+      const isNewTouch = state.touching && state.touching !== state.wasTouching;
 
       if (currentTouch) {
-        if (state.touching !== currentTouch.name && currentTouch.name === 'FireButton') {
-          fireCallback();
-        }
-        state.touching = currentTouch.name;
-        
         const localPos = currentTouch.mesh.worldToLocal(tipPos.clone());
         
         switch (currentTouch.name) {
@@ -75,12 +74,21 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
             joystickY = THREE.MathUtils.clamp(localPos.z / 0.1, -1, 1);
             cockpit.updateControlVisuals('joystick', localPos);
             break;
-          case 'WarpPanel': case 'ProbePanel': case 'FactsPanel':
+          case 'FireButton':
+            if (isNewTouch) fireCallback();
+            break;
+          case 'WarpPanel':
+          case 'FactsPanel':
+            // --- FIX: Handle discrete taps for buttons ---
+            if (isNewTouch) {
+              ui.handleTap(currentTouch.name.replace('Panel','').toLowerCase(), localPos);
+            }
+            break;
+          case 'ProbePanel':
+            // This panel has sliders, so it needs continuous updates.
             ui.handleTap(currentTouch.name.replace('Panel','').toLowerCase(), localPos);
             break;
         }
-      } else {
-        state.touching = null;
       }
     });
 
@@ -90,7 +98,8 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
-        const moveVec = new THREE.Vector3(joystickX, 0, -joystickY);
+        // --- FIX: Corrected joystick Z-axis for intuitive forward movement ---
+        const moveVec = new THREE.Vector3(joystickX, 0, joystickY);
         if (moveVec.lengthSq() > 1) moveVec.normalize();
         moveVec.applyQuaternion(activeCamera.quaternion);
         return moveVec.multiplyScalar(speed * deltaTime);
