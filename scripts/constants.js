@@ -40,7 +40,8 @@ export const TIME_BASE_SECONDS_PER_DAY = 86_400;
 export const SEC_TO_DAYS = 1 / TIME_BASE_SECONDS_PER_DAY;
 
 // Simulation time multiplier (modifiable)
-let timeMultiplier = 50;
+// --- FIX: Increased initial time multiplier for visible planet motion ---
+let timeMultiplier = 500000;
 export function getTimeMultiplier() {
   return timeMultiplier;
 }
