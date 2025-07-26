@@ -3,35 +3,80 @@ import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
-const atmosphereVertexShader = `
+// --- SHADER DEFINITIONS ---
+
+// A simple shader for standard planets. It calculates a "lit" and "dark" side
+// based on a direction vector to the sun, without needing any Scene lights.
+const planetVertexShader = `
+  varying vec2 vUv;
   varying vec3 vNormal;
   void main() {
+    vUv = uv;
     vNormal = normalize(normalMatrix * normal);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
-const atmosphereFragmentShader = `
+
+const planetFragmentShader = `
+  uniform sampler2D map;
+  uniform vec3 sunDirection;
+  varying vec2 vUv;
   varying vec3 vNormal;
   void main() {
-    float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
-    gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity;
+    vec4 texColor = texture2D(map, vUv);
+    float light = dot(vNormal, sunDirection);
+    // Use smoothstep for a softer terminator line
+    float lighting = smoothstep(-0.1, 0.1, light);
+    // Add an ambient term to ensure the dark side is not pure black
+    lighting = max(lighting, 0.1); 
+    gl_FragColor = vec4(texColor.rgb * lighting, texColor.a);
+  }
+`;
+
+// An advanced shader for Earth, blending day, night, and cloud textures.
+const earthFragmentShader = `
+  uniform sampler2D dayTexture;
+  uniform sampler2D nightTexture;
+  uniform sampler2D cloudTexture;
+  uniform vec3 sunDirection;
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  
+  void main() {
+    // Sample textures
+    vec3 dayColor = texture2D(dayTexture, vUv).rgb;
+    vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+    vec4 cloudColor = texture2D(cloudTexture, vUv);
+    
+    // Calculate lighting
+    float light = dot(vNormal, sunDirection);
+    float dayNightMix = smoothstep(-0.05, 0.05, light);
+    
+    // Mix day and night textures
+    vec3 surfaceColor = mix(nightColor, dayColor, dayNightMix);
+    
+    // Add clouds, lit by the sun
+    surfaceColor += cloudColor.rgb * dayNightMix * 0.7;
+
+    // Atmospheric Haze (Fresnel effect)
+    float hazeFactor = 1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0));
+    hazeFactor = pow(hazeFactor, 2.0);
+    vec3 hazeColor = vec3(0.3, 0.6, 1.0) * hazeFactor * dayNightMix;
+    
+    gl_FragColor = vec4(surfaceColor + hazeColor, 1.0);
   }
 `;
 
 function createDotTexture() {
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 64; canvas.height = 64;
     const ctx = canvas.getContext('2d');
-    ctx.beginPath();
-    ctx.arc(32, 32, 28, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(32, 32, 28, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.fill();
     return new THREE.CanvasTexture(canvas);
 }
 const dotTexture = createDotTexture();
 const spriteMaterial = new THREE.SpriteMaterial({ map: dotTexture, blending: THREE.AdditiveBlending, depthTest: false, toneMapped: false });
-
 
 export function createSolarSystem(textures) {
   const solarGroup = new THREE.Group();
@@ -41,12 +86,13 @@ export function createSolarSystem(textures) {
 
   const textureMap = {
       Sun: textures.sun, Mercury: textures.mercury, Venus: textures.venus,
-      Earth: textures.earthDay, // Earth now uses the 'earthDay' texture key
-      Mars: textures.mars, Jupiter: textures.jupiter,
+      Earth: textures.earthDay, Mars: textures.mars, Jupiter: textures.jupiter,
       Saturn: textures.saturn, Uranus: textures.uranus, Neptune: textures.neptune,
       Moon: textures.moon
   };
   
+  const sunPosition = new THREE.Vector3(0, 0, 0);
+
   bodies.forEach(data => {
     const isSun = data.name === 'Sun';
     const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER;
@@ -56,24 +102,29 @@ export function createSolarSystem(textures) {
     const geometry = new THREE.SphereGeometry(Math.max(radius, 0.01), 64, 64);
     let material;
     
-    // MODIFIED: Reverted to MeshStandardMaterial for planets to allow for lighting effects.
     if (isSun) {
-        material = new THREE.MeshBasicMaterial({ map: textures.sun, toneMapped: false });
+        material = new THREE.MeshBasicMaterial({ map: textures.sun });
     } else if (data.name === 'Earth') {
-        // Create a special, multi-layered material for Earth
-        material = new THREE.MeshStandardMaterial({
-            map: textures.earthDay,
-            // The emissive map shows city lights on the dark side of the planet.
-            emissiveMap: textures.earthNight,
-            emissive: new THREE.Color(0xffffff), // Make emissive parts white
-            specularMap: textures.earthAtmos, // Use atmos texture for water shininess
-            specular: new THREE.Color(0x333333),
-            shininess: 15,
+        material = new THREE.ShaderMaterial({
+            uniforms: {
+                dayTexture: { value: textures.earthDay },
+                nightTexture: { value: textures.earthNight },
+                cloudTexture: { value: textures.earthClouds },
+                sunDirection: { value: new THREE.Vector3(1, 0, 0) }
+            },
+            vertexShader: planetVertexShader,
+            fragmentShader: earthFragmentShader,
         });
     } else {
-        // All other planets use a standard material that receives light.
         const texture = textureMap[data.name];
-        material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9 });
+        material = new THREE.ShaderMaterial({
+            uniforms: {
+                map: { value: texture },
+                sunDirection: { value: new THREE.Vector3(1, 0, 0) }
+            },
+            vertexShader: planetVertexShader,
+            fragmentShader: planetFragmentShader,
+        });
     }
     
     const mesh = new THREE.Mesh(geometry, material);
@@ -87,24 +138,11 @@ export function createSolarSystem(textures) {
     sprite.scale.setScalar(isSun ? radius * 50 : radius * 500);
     group.add(sprite);
 
-    // Keep a reference to the main mesh for later rotation
     const bodyMesh = mesh;
     group.userData = { ...data, radius, meanAnomaly0: 0, elapsedDays: 0, label, bodyMesh, sprite };
-
-    // Add clouds to Earth as a separate, slightly larger sphere
+    
     if (data.name === 'Earth') {
-        const cloudGeometry = new THREE.SphereGeometry(radius * 1.01, 64, 64);
-        const cloudMaterial = new THREE.MeshStandardMaterial({
-            map: textures.earthClouds,
-            alphaMap: textures.earthClouds, // Use the texture itself as the alpha map
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            opacity: 0.6
-        });
-        const cloudMesh = new THREE.Mesh(cloudGeometry, cloudMaterial);
-        group.add(cloudMesh);
-        // Add clouds to userData to be rotated in the update loop
-        group.userData.cloudMesh = cloudMesh;
+      // The clouds are now part of the main Earth shader, so we don't need a separate mesh.
     }
 
     byName[data.name] = group;
@@ -129,19 +167,8 @@ export function createSolarSystem(textures) {
       parentGroup.add(line);
     }
     
-    // MODIFIED: Re-add the PointLight to the Sun.
-    // The intensity must be massive to illuminate planets at a 1:1 scale.
-    // Decay is set to 1 for linear falloff, which is less harsh than physically correct decay.
-    if (data.name === 'Sun') {
-        const sunLight = new THREE.PointLight(0xffffff, 5e6, 0, 1);
-        group.add(sunLight);
-    } else if (data.name === 'Earth') {
-        // The atmospheric glow effect
-        const atmMat = new THREE.ShaderMaterial({ vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader, blending: THREE.AdditiveBlending, side: THREE.BackSide });
-        group.add(new THREE.Mesh(new THREE.SphereGeometry(obj.group.userData.radius * 1.02, 64, 64), atmMat));
-    } else if (data.name === 'Saturn') {
-        // Saturn's rings now use MeshStandardMaterial to be lit correctly.
-        const ringMat = new THREE.MeshStandardMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9});
+    if (data.name === 'Saturn') {
+        const ringMat = new THREE.MeshBasicMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9});
         const ringMesh = new THREE.Mesh(new THREE.RingGeometry(obj.group.userData.radius * 1.2, obj.group.userData.radius * 2.2, 64), ringMat);
         ringMesh.rotation.x = Math.PI / 2 - degToRad(data.axialTiltDeg);
         group.add(ringMesh);
@@ -164,6 +191,7 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
   if (isNaN(deltaDays)) return;
 
   const cameraWorldPos = camera ? camera.getWorldPosition(new THREE.Vector3()) : null;
+  const sunWorldPos = new THREE.Vector3(); // Sun is at the origin of the solarGroup
 
   bodies.forEach(obj => {
     const group = obj.group;
@@ -174,14 +202,18 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       const pos = getOrbitalPosition(ud, ud.elapsedDays);
       group.position.copy(pos);
     }
+
+    // Update the sunDirection uniform for each planet's shader material
+    if (group.children[0].material.uniforms && group.children[0].material.uniforms.sunDirection) {
+        const planetWorldPos = group.getWorldPosition(new THREE.Vector3());
+        const sunDir = sunWorldPos.clone().sub(planetWorldPos).normalize();
+        group.children[0].material.uniforms.sunDirection.value.copy(sunDir);
+    }
+
     if (ud.rotationPeriodHours !== 0) {
       const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24);
       if(ud.bodyMesh) {
         ud.bodyMesh.rotation.y += rotationAmount;
-      }
-      // Also rotate the clouds, but at a slightly different speed for a parallax effect
-      if (ud.cloudMesh) {
-          ud.cloudMesh.rotation.y += rotationAmount * 1.25;
       }
     }
     if (ud.label && camera) {
@@ -197,7 +229,6 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       const isVisible = distance < visibilityThreshold;
       
       ud.bodyMesh.visible = isVisible;
-      if (ud.cloudMesh) ud.cloudMesh.visible = isVisible;
       ud.sprite.visible = !isVisible;
       ud.label.visible = isVisible;
     }
