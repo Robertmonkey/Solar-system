@@ -1,42 +1,41 @@
+// scripts/constants.js
+
 // Constants used throughout the solar system VR experience
-// Gravitational constant expressed in km^3/(kg·s²) to match the rest of the
-// code which performs physics calculations using kilometres.
-export const G = 6.67430e-20;
+
+// NEW: The primary challenge of a 1:1 scale is the massive range of distances,
+// which causes floating-point precision issues (z-fighting) in standard 3D
+// renderers. We solve this by using a logarithmic depth buffer (enabled in main.js)
+// and by carefully managing our units. We will use a true 1-to-1 scale where
+// 1 world unit = 1 meter.
+
+// MODIFIED: G is now the standard gravitational constant in meters, not kilometers.
+// The value is expressed in m^3 / (kg·s²).
+export const G = 6.67430e-11;
+
 // Astronomical unit in kilometres
 export const AU_KM = 149_597_870.7;
 
-// Base conversion for world units.  One world unit corresponds to this many kilometres.
-// Choosing one million kilometres per world unit allows the entire solar system to be
-// represented within a reasonable scale while preserving relative proportions.  At
-// this scale the Earth–Sun distance (~150 million km) is 150 world units and the
-// Earth’s radius (~6,371 km) becomes ~0.0063 world units.  The SIZE_MULTIPLIER
-// defined below enlarges bodies to make them visible at VR scale.
-// Conversion from kilometres to internal world units
-export const KM_PER_WORLD_UNIT = 1e6;
-export const KM_TO_WORLD_UNITS = 1 / KM_PER_WORLD_UNIT;
+// MODIFIED: Base conversion for world units. One world unit is now 1 meter.
+// To convert from the data's kilometers to our world's meters, we multiply by 1000.
+export const KM_PER_WORLD_UNIT = 0.001; // 1000 meters (world units) per 1 km
+export const KM_TO_WORLD_UNITS = 1000;
 
-// Body radii are multiplied by this factor when converted to world units so they
-// remain visible at the KM_PER_WORLD_UNIT scale.  Without a size multiplier the
-// planets would be tiny points and impossible to appreciate in VR.  Adjust this
-// value to trade realism for visibility.
-export const SIZE_MULTIPLIER = 1_000;
+// MODIFIED: For a true 1:1 scale, the SIZE_MULTIPLIER must be 1. Planets will
+// now have their actual size in meters. This will make them invisible from a
+// distance, which we will solve with helper sprites in solarSystem.js.
+export const SIZE_MULTIPLIER = 1;
 
-// Speed of light in kilometres per second.  Used to map the throttle slider to a
-// physically meaningful maximum.  Travelling at c takes ~8 minutes to reach
-// Earth from the Sun at this world scale.
+// Speed of light in kilometres per second.
 export const C_KMPS = 299_792.458;
 
-// Maximum ship speed in world units per second.  We use the speed of light
-// converted to the internal scaling so the throttle value maps directly to a
-// meaningful velocity.
-// --- FIX: Dramatically increased max flight speed for a better user experience ---
-// The original speed was 1c. We multiply by 100 to make travel between
-// planets much faster and more engaging in a VR setting.
-const FLIGHT_SPEED_MULTIPLIER = 100;
+// Maximum ship speed in world units per second.
+// MODIFIED: With a 1:1 scale, the solar system is enormous. We must increase the
+// flight speed multiplier exponentially to make travel between planets possible
+// in a reasonable amount of time. This is an artistic choice for gameplay.
+const FLIGHT_SPEED_MULTIPLIER = 5e7; // Was 100
 export const MAX_FLIGHT_SPEED = C_KMPS * KM_TO_WORLD_UNITS * FLIGHT_SPEED_MULTIPLIER;
 
-// Conversion from miles per hour to kilometres per second.  The throttle slider
-// uses an exponential mapping between 1 mph and c.
+// Conversion from miles per hour to kilometres per second.
 export const MPH_TO_KMPS = 1.60934 / 3600;
 
 // Time conversion helpers
