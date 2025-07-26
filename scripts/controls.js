@@ -1,5 +1,5 @@
-// A rewritten, simplified, and more stable control system.
-// This version focuses purely on hand-tracking to avoid initialization conflicts.
+// This version explicitly sets the path for the hand models to a stable
+// URL, ensuring they load correctly and making interaction possible.
 
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
@@ -7,18 +7,20 @@ import { MAX_FLIGHT_SPEED } from './constants.js';
 
 export function createControls(renderer, scene, camera, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
-  const handModelFactory = new XRHandModelFactory();
+  
+  // --- FIX: Point the factory to a reliable, direct URL for the hand models ---
+  const handModelFactory = new XRHandModelFactory().setPath(
+    "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/models/hands/"
+  );
 
-  // Setup for two hands
   const hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
   const touchStates = [ { touching: null }, { touching: null }];
   
   hands.forEach(hand => {
-    hand.add(handModelFactory.createHandModel(hand)); // The factory handles the animated model
+    hand.add(handModelFactory.createHandModel(hand));
     scene.add(hand);
   });
   
-  // A single list of all interactable objects in the cockpit
   const interactables = [
     { mesh: cockpit.throttle, name: 'Throttle' },
     { mesh: cockpit.joystick, name: 'Joystick' },
@@ -27,15 +29,11 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     { mesh: ui.probeMesh, name: 'ProbePanel' },
     { mesh: ui.factsMesh, name: 'FactsPanel' }
   ];
-  // We'll update the bounding boxes for these objects each frame
   const interactableBoxes = interactables.map(() => new THREE.Box3());
 
-  let throttleValue = 0;
-  let joystickX = 0;
-  let joystickY = 0;
+  let throttleValue = 0, joystickX = 0, joystickY = 0;
   
   function update(deltaTime, xrCamera) {
-    // Update the bounding box positions each frame
     interactables.forEach((item, i) => interactableBoxes[i].setFromObject(item.mesh));
 
     let activeCamera = xrCamera.cameras.length > 0 ? xrCamera : camera;
@@ -44,9 +42,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       const state = touchStates[i];
       const indexTip = hand.joints['index-finger-tip'];
 
-      // If hand-tracking isn't active or ready, do nothing for this hand
       if (!indexTip) {
-        // If this hand was touching something, reset its state
         if (state.touching) state.touching = null;
         return;
       }
@@ -56,7 +52,6 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       
       let currentTouch = null;
       
-      // Check if the fingertip is inside any of the interactable boxes
       interactables.forEach((item, j) => {
         if (interactableBoxes[j].containsPoint(tipPos)) {
           currentTouch = item;
@@ -64,7 +59,6 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       });
 
       if (currentTouch) {
-        // Fire once on the initial touch
         if (state.touching !== currentTouch.name && currentTouch.name === 'FireButton') {
           fireCallback();
         }
@@ -72,7 +66,6 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         
         const localPos = currentTouch.mesh.worldToLocal(tipPos.clone());
         
-        // Handle continuous interaction (like sliders and joysticks)
         switch (currentTouch.name) {
           case 'Throttle':
             throttleValue = THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(localPos.z, 0.15, -0.15, 0, 1), 0, 1);
@@ -92,11 +85,9 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       }
     });
 
-    // If neither hand is touching a control, reset it to zero
     if (!touchStates.some(s => s.touching === 'Throttle')) { throttleValue = 0; cockpit.updateControlVisuals('throttle', new THREE.Vector3(0,0,0)); }
     if (!touchStates.some(s => s.touching === 'Joystick')) { joystickX = 0; joystickY = 0; cockpit.updateControlVisuals('joystick', new THREE.Vector3(0,0,0)); }
 
-    // Calculate flight movement
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
