@@ -23,6 +23,9 @@ function startExperience(assets) {
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
 
+  // --- FIX: Create the clock for the renderer ---
+  renderer.clock = new THREE.Clock();
+
   const { solarGroup, bodies } = createSolarSystem(assets.textures);
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
