@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
 
-export function createControls(renderer, scene, camera, cockpit, ui, fireCallback) {
+export function createControls(renderer, player, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
 
   const handModelFactory = new XRHandModelFactory().setPath(
@@ -16,7 +16,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
 
   hands.forEach(hand => {
     hand.add(handModelFactory.createHandModel(hand));
-    scene.add(hand);
+    player.add(hand); // Attach hands to the rotating player group
   });
 
   const interactables = [
@@ -30,14 +30,14 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
   const interactableBoxes = interactables.map(() => new THREE.Box3());
 
   let throttleValue = 0, joystickX = 0, joystickY = 0;
+  // --- FIX: Implement a stable "anchor" model for joystick interaction ---
+  let joystickAnchor = null;
 
   function update(deltaTime) {
     interactables.forEach(item => item.mesh.updateWorldMatrix(true, false));
     interactables.forEach((item, i) => {
       interactableBoxes[i].setFromObject(item.mesh);
-      if (item.name === 'FireButton') {
-        interactableBoxes[i].expandByScalar(0.02);
-      } else if (item.name.endsWith('Panel')) {
+      if (item.name === 'FireButton' || item.name.endsWith('Panel')) {
         interactableBoxes[i].expandByScalar(0.02);
       } else {
         interactableBoxes[i].expandByScalar(0.01);
@@ -55,9 +55,8 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
         state.touching = null;
         return;
       }
-
-      const tipPos = new THREE.Vector3();
-      indexTip.getWorldPosition(tipPos);
+      
+      const tipPos = indexTip.getWorldPosition(new THREE.Vector3());
 
       let currentTouchItem = null;
       interactables.forEach((item, j) => {
@@ -68,8 +67,8 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
 
       state.touching = currentTouchItem ? currentTouchItem.name : null;
       const isNewTouch = state.touching && state.touching !== wasTouching;
-
-      if (currentTouchItem) {
+      
+      if (currentTouchItem && currentTouchItem.name !== 'Joystick') {
         const localPos = currentTouchItem.mesh.worldToLocal(tipPos.clone());
         const panelName = currentTouchItem.name.includes('Panel') ? currentTouchItem.name.replace('Panel','').toLowerCase() : null;
 
@@ -83,11 +82,6 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
             throttleValue = THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(localPos.z, 0.15, -0.15, 0, 1), 0, 1);
             cockpit.updateControlVisuals('throttle', localPos);
             break;
-          case 'Joystick':
-            joystickX = THREE.MathUtils.clamp(localPos.x / 0.1, -1, 1);
-            joystickY = THREE.MathUtils.clamp(localPos.z / 0.1, -1, 1);
-            cockpit.updateControlVisuals('joystick', localPos);
-            break;
           case 'FireButton':
             if (isNewTouch) {
               fireCallback();
@@ -100,44 +94,59 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
              break;
           case 'WarpPanel':
           case 'FactsPanel':
-             if (isNewTouch) {
-                ui.handleTap(panelName, localPos);
-             }
+             if (isNewTouch) { ui.handleTap(panelName, localPos); }
              break;
         }
       }
+      
+      // Handle joystick anchor logic separately
+      if (state.touching === 'Joystick' && isNewTouch && !joystickAnchor) {
+          joystickAnchor = { handIndex: i, startPos: tipPos };
+      }
     });
 
-    if (!isTouchingAnyPanel) {
-      ui.setHover(null, null);
+    if (joystickAnchor) {
+      if (touchStates[joystickAnchor.handIndex].touching === 'Joystick') {
+        const indexTip = hands[joystickAnchor.handIndex].joints['index-finger-tip'];
+        if (indexTip) {
+          const currentPos = indexTip.getWorldPosition(new THREE.Vector3());
+          const worldDelta = currentPos.clone().sub(joystickAnchor.startPos);
+          
+          const invPlayerQuat = player.getWorldQuaternion(new THREE.Quaternion()).invert();
+          const localDelta = worldDelta.applyQuaternion(invPlayerQuat);
+          
+          const SENSITIVITY = 0.1; // 10cm hand movement for full deflection
+          joystickX = THREE.MathUtils.clamp(localDelta.x / SENSITIVITY, -1, 1);
+          joystickY = THREE.MathUtils.clamp(localDelta.z / SENSITIVITY, -1, 1);
+        }
+      } else {
+        joystickAnchor = null;
+      }
     }
     
+    if (!joystickAnchor) {
+      joystickX = 0;
+      joystickY = 0;
+    }
+    // Drive the joystick visuals from the calculated input, not the other way around
+    cockpit.updateControlVisuals('joystick', new THREE.Vector3(joystickX * 0.1, 0, joystickY * 0.1));
+
+
+    if (!isTouchingAnyPanel) { ui.setHover(null, null); }
     if (!touchStates.some(s => s.touching === 'FireButton')) {
         cockpit.fireButton.position.y = 1.055;
         cockpit.fireButton.material.emissive.setHex(0x550000);
     }
 
-    if (!touchStates.some(s => s.touching === 'Joystick')) {
-      joystickX = 0;
-      joystickY = 0;
-      cockpit.updateControlVisuals('joystick', new THREE.Vector3(0,0,0));
-    }
-
-    // --- FIX: Joystick now controls ship rotation (pitch and yaw) ---
-    const yawRate = -joystickX * 0.8; // Radians per second
-    const pitchRate = -joystickY * 0.8; // Radians per second
-
-    const rotationDelta = new THREE.Quaternion();
-    if (Math.abs(yawRate) > 1e-3) {
-        const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawRate * deltaTime);
-        rotationDelta.multiply(yaw);
-    }
-    if (Math.abs(pitchRate) > 1e-3) {
-        const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitchRate * deltaTime);
-        rotationDelta.multiply(pitch);
-    }
+    // --- FIX: Map joystick input to ship rotation as requested ---
+    const yawRate = -joystickX * 0.8;    // Left/Right turns ship
+    const pitchRate = joystickY * 0.8;   // Forward/Back tilts ship
     
-    // Return rotation and throttle state to the main loop
+    const rotationDelta = new THREE.Quaternion();
+    const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawRate * deltaTime);
+    const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitchRate * deltaTime);
+    rotationDelta.multiply(yaw).multiply(pitch);
+    
     return { rotationDelta, throttle: throttleValue };
   }
   return { update };
