@@ -109,7 +109,12 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
             cockpit.updateControlVisuals('joystick', localPos);
             break;
           case 'FireButton':
-            if (isNewTouch) fireCallback();
+            if (isNewTouch) {
+              fireCallback();
+              // --- FIX: Add button press animation ---
+              cockpit.fireButton.position.y = 1.045;
+              cockpit.fireButton.material.emissive.setHex(0xff2222);
+            }
             break;
           case 'ProbePanel':
              ui.handleTap(panelName, localPos);
@@ -127,6 +132,12 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     if (!isTouchingAnyPanel) {
       ui.setHover(null, null);
     }
+    
+    // --- FIX: Reset fire button visuals when not touched ---
+    if (!touchStates.some(s => s.touching === 'FireButton')) {
+        cockpit.fireButton.position.y = 1.055; // Original Y position from lecternCockpit.js
+        cockpit.fireButton.material.emissive.setHex(0x550000); // Original emissive color
+    }
 
     // Only recenter the joystick when it is not being touched.  The throttle now retains
     // its last value instead of snapping back to zero each frame.  This makes it behave
@@ -137,7 +148,8 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       cockpit.updateControlVisuals('joystick', new THREE.Vector3(0,0,0));
     }
 
-    const power = Math.pow(throttleValue, 2);
+    // --- FIX: Changed throttle curve from exponential to linear for more responsive control ---
+    const power = throttleValue;
     const speed = power * MAX_FLIGHT_SPEED;
     // Build a movement vector based on joystick deflection.  If the joystick is
     // centred (zero length) but the throttle is engaged, we still want to move
