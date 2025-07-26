@@ -13,8 +13,9 @@ export function createProbes() {
   const group = new THREE.Group();
   group.name = 'Probes';
   const list = [];
-  const prevSolarPos = new THREE.Vector3(0, 0, 0);
-  return { group, list, prevSolarPos };
+  // This is no longer needed as probes are now children of the solar system
+  // const prevSolarPos = new THREE.Vector3(0, 0, 0);
+  return { group, list };
 }
 
 export function launchProbe(probes, origin, direction, massValue = 0.5, velocityValue = 0.5) {
@@ -49,27 +50,9 @@ export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
   const toRemove = [];
   const launcherBox = launcherMesh ? new THREE.Box3().setFromObject(launcherMesh) : null;
 
-  if (solarBodies && solarBodies.length > 0) {
-    let solarRoot = solarBodies[0].group;
-    while (solarRoot && !(solarRoot.userData && solarRoot.userData.bodies)) {
-      solarRoot = solarRoot.parent;
-    }
-    if (solarRoot) {
-      const currentSolarPos = new THREE.Vector3();
-      solarRoot.getWorldPosition(currentSolarPos);
-      const offset = new THREE.Vector3().subVectors(currentSolarPos, probes.prevSolarPos);
-      if (offset.lengthSq() > 1e-12) {
-        probes.list.forEach(probe => {
-          probe.mesh.position.sub(offset);
-          // Also shift the entire trail
-          probe.trail_points.forEach(p => p.sub(offset));
-        });
-        probes.prevSolarPos.copy(currentSolarPos);
-      } else if (probes.prevSolarPos.lengthSq() === 0 && currentSolarPos.lengthSq() > 0) {
-        probes.prevSolarPos.copy(currentSolarPos);
-      }
-    }
-  }
+  // --- FIX: Removed redundant position compensation logic. ---
+  // Probes are now children of the solarGroup, so their position is
+  // automatically handled relative to the solar system.
 
   probes.list.forEach((probe, index) => {
     probe.age += deltaTime;
@@ -85,7 +68,9 @@ export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
         const deltaVecWorld = new THREE.Vector3().subVectors(bodyWorldPos, probeWorldPos);
         const distanceWorldSq = deltaVecWorld.lengthSq();
 
-        if (distanceWorldSq < (body.group.userData.radius || 0.1)) return; // Avoid singularity
+        // Use the body's scaled radius for the singularity check
+        const bodyRadius = body.group.userData.radius || 0.1;
+        if (distanceWorldSq < bodyRadius * bodyRadius) return;
 
         const distanceKm = Math.sqrt(distanceWorldSq) * KM_PER_WORLD_UNIT;
         const forceMagnitude = (G * body.data.massKg * probe_mass_kg) / (distanceKm * distanceKm);
@@ -109,15 +94,14 @@ export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
         probe.trail.geometry.setFromPoints(probe.trail_points);
     }
 
-
-    if (probe.age > 0.2) { // Delay collision check slightly
+    if (probe.age > 0.2) {
       if (launcherBox && new THREE.Box3().setFromObject(probe.mesh).intersectsBox(launcherBox)) {
           return;
       }
       
       for (const obj of solarBodies) {
         const bodyWorldPos = obj.group.getWorldPosition(new THREE.Vector3());
-        const distance = probe.mesh.position.distanceTo(bodyWorldPos);
+        const distance = probe.mesh.getWorldPosition(new THREE.Vector3()).distanceTo(bodyWorldPos);
         const threshold = (obj.group.userData.radius || 0) * COLLISION_RADIUS_FACTOR;
         if (distance < threshold) {
           toRemove.push(index);
