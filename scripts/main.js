@@ -59,7 +59,8 @@ function startExperience(assets) {
   const ui = createUI(bodies, {
     onWarp: index => handleWarpSelect(bodies[index]),
     onProbeChange: (settings) => { probeSettings = settings; },
-    onTimeChange: value => { const m = Math.pow(10, 6 * value) - 1 + value * 10; setTimeMultiplier(m); },
+    // --- FIX: Use a better formula for a wider, more useful range of time speeds ---
+    onTimeChange: value => { const m = Math.pow(100, 5 * value); setTimeMultiplier(m); },
     onNarrate: text => audio.speak(text)
   });
 
@@ -97,7 +98,8 @@ function startExperience(assets) {
     const bodyWorldPos = new THREE.Vector3();
     body.group.getWorldPosition(bodyWorldPos);
     const scaledRadius = body.group.userData.radius || 1;
-    const safeDistance = scaledRadius * 4;
+    // --- FIX: Reduced safe distance multiplier to get closer to planets on warp ---
+    const safeDistance = scaledRadius * 2.5;
     const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(renderer.xr.getCamera().quaternion);
     const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
     const shift = desiredPlayerPos.negate();
