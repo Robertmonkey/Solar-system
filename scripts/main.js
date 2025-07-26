@@ -6,31 +6,31 @@ import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
 import { createCockpit } from './lecternCockpit.js';
 import { createUI } from './ui.js';
 import { createControls as setupControls } from './controls.js';
-import { createOrrery, updateOrrery, createPlayerMarker } from './orrery.js';
+// MODIFIED: Import the new logarithmic scaling constant from the orrery.
+import { createOrrery, updateOrrery, createPlayerMarker, LOG_POSITION_SCALE } from './orrery.js';
 import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
 import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS, MAX_FLIGHT_SPEED } from './constants.js';
 
-// NEW: This function creates a high-quality, procedural starfield using points.
+// MODIFIED: Starfield generation is now more performant.
 function createProceduralStarfield(radius) {
-    const starCount = 50000;
+    // MODIFIED: Reduced star count for better performance on standalone VR.
+    const starCount = 15000;
     const positions = [];
     const colors = [];
     const starColor = new THREE.Color();
 
     for (let i = 0; i < starCount; i++) {
-        // Generate a random point on the surface of a sphere
         const x = THREE.MathUtils.randFloatSpread(2);
         const y = THREE.MathUtils.randFloatSpread(2);
         const z = THREE.MathUtils.randFloatSpread(2);
         const d = 1 / Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2));
         positions.push(x * d * radius, y * d * radius, z * d * radius);
 
-        // Assign a color, with most stars being white/blue and a few being yellow/orange
         if (Math.random() > 0.97) {
-            starColor.setRGB(1.0, 0.9, 0.7); // Warm yellow
+            starColor.setRGB(1.0, 0.9, 0.7);
         } else {
-            starColor.setRGB(0.8, 0.9, 1.0); // Cool white/blue
+            starColor.setRGB(0.8, 0.9, 1.0);
         }
         colors.push(starColor.r, starColor.g, starColor.b);
     }
@@ -40,12 +40,15 @@ function createProceduralStarfield(radius) {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
     const material = new THREE.PointsMaterial({
-        size: radius / 2000, // Adjust size based on the sphere radius
+        // MODIFIED: This was the source of the white screen bug.
+        // The size is now a small, constant pixel value, not a calculation
+        // based on the scene's enormous radius.
+        size: 1.5,
         vertexColors: true,
         blending: THREE.AdditiveBlending,
-        depthWrite: false, // Prevents stars from blocking each other
+        depthWrite: false,
         transparent: true,
-        sizeAttenuation: false, // All stars appear the same size regardless of distance
+        sizeAttenuation: false,
     });
 
     const stars = new THREE.Points(geometry, material);
@@ -57,7 +60,6 @@ function startExperience(assets) {
   const overlay = document.getElementById('overlay');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
-  // MODIFIED: Removed AmbientLight as it is no longer needed.
   
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1e16);
 
@@ -75,7 +77,6 @@ function startExperience(assets) {
   scene.add(player);
   player.add(camera);
 
-  // MODIFIED: Removed the old textured star sphere and replaced it with the procedural one.
   const starfield = createProceduralStarfield(camera.far * 0.9);
   scene.add(starfield);
 
@@ -184,7 +185,6 @@ function startExperience(assets) {
     const delta = renderer.clock.getDelta();
     const xrCamera = renderer.xr.getCamera();
     
-    // MODIFIED: Rotate the starfield slowly for a dynamic effect.
     starfield.rotation.y += delta * 0.002;
 
     const { rotationDelta, throttle } = controls.update(delta);
@@ -207,8 +207,14 @@ function startExperience(assets) {
 
     const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
     const playerPosInSolarSystem = playerWorldPos.clone().sub(solarGroup.position);
-    // MODIFIED: Simplified the orrery player marker position calculation.
-    playerMarker.position.copy(playerPosInSolarSystem).multiplyScalar(orrery.group.scale.x);
+
+    // MODIFIED: The player marker on the orrery now uses the same logarithmic
+    // mapping as the planets to ensure it's positioned correctly on the new map.
+    const playerDist = playerPosInSolarSystem.length();
+    // Add 1 to avoid log(0) at the origin
+    const logPlayerDist = Math.log10(playerDist + 1);
+    const playerMarkerPos = playerPosInSolarSystem.normalize().multiplyScalar(logPlayerDist * LOG_POSITION_SCALE);
+    playerMarker.position.copy(playerMarkerPos).multiplyScalar(orrery.group.scale.x);
     
     ui.update();
     renderer.render(scene, camera);
@@ -221,7 +227,7 @@ function startExperience(assets) {
   overlay.classList.add('hidden');
 }
 
-// ... (init function remains the same, it correctly loads stars_milky_way.jpg which is now used by the procedural generator as a fallback if needed, but the main code doesn't use it anymore)
+// ... (init function is unchanged)
 function init() {
     const loadingManager = new THREE.LoadingManager();
     const xrMessage = document.getElementById('xr-message');
@@ -245,8 +251,6 @@ function init() {
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const audioLoader = new THREE.AudioLoader(loadingManager);
     
-    // Note: 'stars' texture is no longer used by the procedural generator,
-    // but we leave it here to avoid breaking the loader if other parts reference it.
     const texturesToLoad = {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
         earth: 'textures/earth_daymap.jpg', mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
