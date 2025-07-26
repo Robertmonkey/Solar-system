@@ -1,19 +1,17 @@
-// scripts/orrery.js
-
 import * as THREE from 'three';
 import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier, PALETTE, AU_KM } from './constants.js';
 import { getOrbitalPosition, createLabel } from './utils.js';
 
-// MODIFIED: To make the orrery usable, we now use a logarithmic scale for distance.
-// This compresses the vast distances of the outer planets so they fit on the map.
-const ORRERY_RADIUS = 0.8; // The visual radius of the orrery display table in world units.
+const ORRERY_RADIUS = 0.8;
 const NEPTUNE_ORBIT_METERS = 30 * AU_KM * KM_TO_WORLD_UNITS;
-// We calculate a scale factor that maps the log of Neptune's orbit to the orrery's edge.
-export const LOG_POSITION_SCALE = ORRERY_RADIUS / Math.log10(NEPTUNE_ORBIT_METERS + 1);
 
-// MODIFIED: This size scale for planets on the orrery is increased for better visibility.
-const SIZE_SCALE = 0.001;
+// Use natural log (Math.log) for more aggressive distance compression.
+// The scale factor is recalculated based on this to fit Neptune's orbit.
+export const LOG_POSITION_SCALE = ORRERY_RADIUS / Math.log(NEPTUNE_ORBIT_METERS + 1);
+
+// Planet size on the orrery is increased 20x for much better visibility.
+const SIZE_SCALE = 0.02;
 
 
 export function createOrrery() {
@@ -30,12 +28,13 @@ export function createOrrery() {
 
   bodies.forEach(data => {
     const isSun = data.name === 'Sun';
-    const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER * (isSun ? SIZE_SCALE * 20 : SIZE_SCALE);
-    const geometry = new THREE.SphereGeometry(Math.max(radius, 0.003), 16, 16);
+    // Radius calculation uses the new, larger SIZE_SCALE.
+    const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER * (isSun ? SIZE_SCALE * 10 : SIZE_SCALE);
+    const geometry = new THREE.SphereGeometry(Math.max(radius, 0.005), 16, 16);
     const color = PALETTE[data.name] || 0xffffff;
     const material = new THREE.MeshBasicMaterial({ color });
     const mesh = new THREE.Mesh(geometry, material);
-    if(isSun) mesh.scale.setScalar(2.0);
+    if(isSun) mesh.scale.setScalar(1.5);
 
     const objGroup = new THREE.Group();
     objGroup.name = data.name;
@@ -46,11 +45,11 @@ export function createOrrery() {
       for (let i = 0; i <= 360; i += 5) {
         const pos = getOrbitalPosition({ ...data, meanAnomaly0: (i * Math.PI / 180) }, 0);
         
-        // MODIFIED: Apply the logarithmic mapping to the orbit lines.
+        // Apply the logarithmic mapping to the orbit lines.
         const dist = pos.length();
         if (dist > 0) {
-            // Add 1 to distance to avoid log(0)
-            const logDist = Math.log10(dist + 1);
+            // Use natural log for more compression. Add 1 to distance to avoid log(0).
+            const logDist = Math.log(dist + 1);
             const displayPos = pos.normalize().multiplyScalar(logDist * LOG_POSITION_SCALE);
             points.push(displayPos);
         }
@@ -83,10 +82,11 @@ export function updateOrrery(orrery, elapsedSec) {
       obj.elapsedDays += deltaDays;
       const pos = getOrbitalPosition(obj.data, obj.elapsedDays);
 
-      // MODIFIED: Apply the logarithmic mapping to planet positions.
+      // Apply the logarithmic mapping to planet positions.
       const dist = pos.length();
       if (dist > 0) {
-        const logDist = Math.log10(dist + 1);
+        // Use natural log for more compression.
+        const logDist = Math.log(dist + 1);
         const displayPos = pos.normalize().multiplyScalar(logDist * LOG_POSITION_SCALE);
         obj.group.position.copy(displayPos);
       }
