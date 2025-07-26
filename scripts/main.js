@@ -1,3 +1,5 @@
+// scripts/main.js
+
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -14,21 +16,39 @@ function startExperience(assets) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
   scene.add(new THREE.AmbientLight(0x888888));
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 50000);
+  
+  // MODIFIED: The camera's near and far clipping planes must be adjusted for the new
+  // 1:1 scale. The far plane needs to be incredibly large to contain the outer
+  // planets, whose orbits are billions of kilometers (and thus trillions of meters) away.
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1e16);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  // MODIFIED: To handle the massive depth range of a 1:1 solar system, we
+  // MUST enable the logarithmicDepthBuffer. This prevents "z-fighting" artifacts
+  // where near and far objects flicker or render incorrectly.
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    logarithmicDepthBuffer: true
+  });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
   renderer.clock = new THREE.Clock();
   
-  // --- FIX: Re-parent cockpit to player to restore visual rotation feedback ---
   const player = new THREE.Group();
   scene.add(player);
   player.add(camera);
 
+  // NEW: Add a celestial sphere for a realistic star background.
+  const starTexture = new THREE.TextureLoader().load('./textures/stars_milky_way.jpg');
+  const starSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(camera.far * 0.9, 64, 64),
+      new THREE.MeshBasicMaterial({ map: starTexture, side: THREE.BackSide })
+  );
+  scene.add(starSphere);
+
   const { solarGroup, bodies } = createSolarSystem(assets.textures);
+  // MODIFIED: The initial offset now correctly uses the new KM_TO_WORLD_UNITS.
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
 
@@ -84,10 +104,8 @@ function startExperience(assets) {
   ui.probeMesh.rotation.y = -Math.PI / 6;
   cockpit.group.add(ui.probeMesh);
 
-  // --- FIX: Pass player object to controls for new stable interaction model ---
   let controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) };
   renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, player, cockpit, ui, () => {
-      // --- FIX: Ensure matrices are updated and use robust coordinate transformation ---
       player.updateWorldMatrix(true, false);
       solarGroup.updateWorldMatrix(true, false);
 
@@ -108,8 +126,10 @@ function startExperience(assets) {
     if (!body) return;
     const bodyWorldPos = new THREE.Vector3();
     body.group.getWorldPosition(bodyWorldPos);
+    // MODIFIED: The safe distance is now calculated from the true radius in meters.
+    // We add a large fixed value to avoid warping inside a giant planet.
     const scaledRadius = body.group.userData.radius || 1;
-    const safeDistance = scaledRadius * 2.5;
+    const safeDistance = scaledRadius * 1.5 + 10000; // 1.5x radius + 10km
     
     const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
     const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
@@ -131,7 +151,7 @@ function startExperience(assets) {
     shipQuaternion.premultiply(rotationDelta);
     player.quaternion.copy(shipQuaternion);
     
-    const power = Math.pow(throttle, 2);
+    const power = Math.pow(throttle, 3); // NEW: Use cubic power for finer low-speed control
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0) {
         const moveDirection = new THREE.Vector3(0, 0, -1);
@@ -160,6 +180,7 @@ function startExperience(assets) {
   overlay.classList.add('hidden');
 }
 
+// ... (init function remains the same)
 function init() {
     const loadingManager = new THREE.LoadingManager();
     const xrMessage = document.getElementById('xr-message');
@@ -187,7 +208,9 @@ function init() {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
         earth: 'textures/earth_daymap.jpg', mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
         saturn: 'textures/saturn.jpg', saturnRing: 'textures/saturn_ring_alpha.png',
-        uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg'
+        uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg',
+        // NEW: Load the star texture
+        stars: 'textures/stars_milky_way.jpg'
     };
     const soundsToLoad = {
         warp: './sounds/warp.mp3', beep: './sounds/beep.mp3', ambience: './sounds/ambience.mp3'
