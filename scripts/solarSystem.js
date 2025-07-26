@@ -1,11 +1,8 @@
-// scripts/solarSystem.js
-
 import * as THREE from 'three';
 import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
-// ... (shader code for atmosphere remains the same)
 const atmosphereVertexShader = `
   varying vec3 vNormal;
   void main() {
@@ -59,10 +56,9 @@ export function createSolarSystem(textures) {
     let material;
     const texture = textureMap[data.name];
     if (texture) {
-      // MODIFIED: All celestial bodies now use MeshBasicMaterial.
-      // This makes them immune to lighting, ensuring their textures are always
-      // fully bright and visible, which is better for this simulation.
-      material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: isSun ? false : true });
+      // Set toneMapped to false for all bodies. This is a safer default
+      // and helps prevent the "white sphere" issue.
+      material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
     } else {
       material = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
     }
@@ -100,12 +96,11 @@ export function createSolarSystem(textures) {
       parentGroup.add(line);
     }
     
-    // MODIFIED: Removed the PointLight from the sun, as it's no longer needed.
     if (data.name === 'Earth') {
         const atmMat = new THREE.ShaderMaterial({ vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader, blending: THREE.AdditiveBlending, side: THREE.BackSide });
         group.add(new THREE.Mesh(new THREE.SphereGeometry(obj.group.userData.radius * 1.02, 64, 64), atmMat));
     } else if (data.name === 'Saturn') {
-        const ringMat = new THREE.MeshBasicMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+        const ringMat = new THREE.MeshBasicMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9, toneMapped: false });
         const ringMesh = new THREE.Mesh(new THREE.RingGeometry(obj.group.userData.radius * 1.2, obj.group.userData.radius * 2.2, 64), ringMat);
         ringMesh.rotation.x = Math.PI / 2 - degToRad(data.axialTiltDeg);
         group.add(ringMesh);
@@ -120,7 +115,6 @@ export function createSolarSystem(textures) {
   return { solarGroup, bodies: solarBodies };
 }
 
-// ... (updateSolarSystem function remains the same)
 export function updateSolarSystem(solarGroup, elapsedSec, camera) {
   const bodies = solarGroup.userData.bodies || [];
   const timeMult = getTimeMultiplier();
