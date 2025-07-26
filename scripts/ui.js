@@ -134,18 +134,32 @@ export function createUI(bodies, callbacks = {}) {
 
   function setHover(panel, localPos) {
     let newHover = { panel: null, item: null };
-    if (panel === 'warp' && localPos) {
-      const p = panels.warp;
-      const yNormalized = (localPos.y + p.height / 2) / p.height;
-      const index = Math.floor((1 - yNormalized - 0.05 / p.height) * bodies.length);
-      if (index >= 0 && index < bodies.length) newHover = { panel: 'warp', item: index };
-    } else if (panel === 'probe' && localPos) {
-      if (localPos.x > -0.3 && localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
-      else if (localPos.x > 0 && localPos.x < 0.2) newHover = { panel: 'probe', item: 'velocity'};
-      else if (localPos.x > 0.3 && localPos.x < 0.5) newHover = { panel: 'probe', item: 'time'};
-    } else if (panel === 'facts' && localPos) {
-      if (localPos.x > 0.3 && localPos.y < -0.15) newHover = { panel: 'facts', item: 'narrate' };
+    if (panel && localPos) {
+      switch (panel) {
+        case 'warp':
+            const pWarp = panels.warp;
+            const yNormWarp = (localPos.y + pWarp.height / 2) / pWarp.height;
+            const index = Math.floor((1 - yNormWarp) * bodies.length);
+            if (index >= 0 && index < bodies.length) newHover = { panel: 'warp', item: index };
+            break;
+        case 'probe':
+            if (localPos.x > -0.3 && localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
+            else if (localPos.x >= 0.1 && localPos.x < 0.3) newHover = { panel: 'probe', item: 'velocity'};
+            else if (localPos.x >= 0.4 && localPos.x < 0.6) newHover = { panel: 'probe', item: 'time'};
+            break;
+        case 'facts':
+            const pFacts = panels.facts;
+            // From drawFacts: btnX = 1024-270=754, btnY = 512-100=412. btnW=250, btnH=80.
+            // Canvas (1024,512) to local (-0.6,0.6), (-0.3,0.3)
+            const btnLocalXMin = (754 / 1024 - 0.5) * 1.2;
+            const btnLocalYMax = -(412 / 512 - 0.5) * 0.6;
+            if (localPos.x > btnLocalXMin && localPos.y < btnLocalYMax) {
+                newHover = { panel: 'facts', item: 'narrate' };
+            }
+            break;
+      }
     }
+
     if (newHover.panel !== hoverState.panel || newHover.item !== hoverState.item) {
       hoverState = newHover;
       needsRedraw = true;
@@ -154,17 +168,14 @@ export function createUI(bodies, callbacks = {}) {
 
   function handleTap(panel, localPos) {
     if (panel === 'warp') {
-      const p = panels.warp;
-      const yNormalized = (localPos.y + p.height / 2) / p.height;
-      const index = Math.floor((1 - yNormalized - 0.05 / p.height) * bodies.length);
-      if (index >= 0 && index < bodies.length) onWarp(index);
+      // hoverState is updated just before tap, so its item is reliable
+      if(hoverState.item !== null) onWarp(hoverState.item);
     } else if (panel === 'facts') {
       if (hoverState.item === 'narrate') onNarrate((bodies[selectedIndex].data.facts || [])[0]);
     } else if (panel === 'probe') {
         const p = panels.probe;
         const panelHalfHeight = p.height / 2;
         // --- FIX: Invert slider logic for intuitive controls ---
-        // Map local Y position [-halfHeight, +halfHeight] to value [0, 1]
         const val = THREE.MathUtils.clamp((localPos.y + panelHalfHeight) / p.height, 0, 1);
         
         if (hoverState.item === 'mass') { probeMass = val; }
