@@ -143,10 +143,18 @@ export function createUI(bodies, callbacks = {}) {
             else if (localPos.x >= 0.25) newHover = { panel: 'probe', item: 'time'};
             break;
         case 'facts':
-            // --- FIX: Simplified hover detection for the narrate button ---
-            // The button is in the bottom-right quadrant of the panel.
-            // Panel local X is [-0.6, 0.6], Y is [-0.3, 0.3]
-            if (localPos.x > 0.25 && localPos.y < -0.1) {
+            // --- FIX: Broaden hover detection for the narrate button ---
+            // The narrate button resides in the lower portion of the facts
+            // panel.  Previously detection required touches to be in the
+            // bottom‑right quadrant, which made it difficult to activate.
+            // Instead, treat any touch in the lower 40% of the panel as
+            // hovering over the narrate button.  This allows users to
+            // reliably trigger narration without needing to aim precisely.
+            // localPos.y ranges from -panelHeight/2 (bottom) to +panelHeight/2 (top).
+            const panelHeight = panels.facts.height;
+            // Compute normalised vertical position: -0.5 (bottom) to +0.5 (top).
+            const normY = localPos.y / panelHeight;
+            if (normY < -0.1) {
                 newHover = { panel: 'facts', item: 'narrate' };
             }
             break;
