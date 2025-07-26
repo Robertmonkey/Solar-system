@@ -30,7 +30,6 @@ export function createControls(renderer, player, cockpit, ui, fireCallback) {
   const interactableBoxes = interactables.map(() => new THREE.Box3());
 
   let throttleValue = 0, joystickX = 0, joystickY = 0;
-  // --- FIX: Implement a stable "anchor" model for joystick interaction ---
   let joystickAnchor = null;
 
   function update(deltaTime) {
@@ -99,7 +98,6 @@ export function createControls(renderer, player, cockpit, ui, fireCallback) {
         }
       }
       
-      // Handle joystick anchor logic separately
       if (state.touching === 'Joystick' && isNewTouch && !joystickAnchor) {
           joystickAnchor = { handIndex: i, startPos: tipPos };
       }
@@ -115,9 +113,16 @@ export function createControls(renderer, player, cockpit, ui, fireCallback) {
           const invPlayerQuat = player.getWorldQuaternion(new THREE.Quaternion()).invert();
           const localDelta = worldDelta.applyQuaternion(invPlayerQuat);
           
-          const SENSITIVITY = 0.1; // 10cm hand movement for full deflection
-          joystickX = THREE.MathUtils.clamp(localDelta.x / SENSITIVITY, -1, 1);
-          joystickY = THREE.MathUtils.clamp(localDelta.z / SENSITIVITY, -1, 1);
+          // --- FIX: Add a dead zone and decrease sensitivity for smoother control ---
+          const DEAD_ZONE = 0.01; // 1cm dead zone
+          if (localDelta.length() < DEAD_ZONE) {
+              joystickX = 0;
+              joystickY = 0;
+          } else {
+              const SENSITIVITY = 0.15; // Requires 15cm of movement for full deflection
+              joystickX = THREE.MathUtils.clamp(localDelta.x / SENSITIVITY, -1, 1);
+              joystickY = THREE.MathUtils.clamp(localDelta.z / SENSITIVITY, -1, 1);
+          }
         }
       } else {
         joystickAnchor = null;
@@ -128,7 +133,6 @@ export function createControls(renderer, player, cockpit, ui, fireCallback) {
       joystickX = 0;
       joystickY = 0;
     }
-    // Drive the joystick visuals from the calculated input, not the other way around
     cockpit.updateControlVisuals('joystick', new THREE.Vector3(joystickX * 0.1, 0, joystickY * 0.1));
 
 
@@ -138,9 +142,8 @@ export function createControls(renderer, player, cockpit, ui, fireCallback) {
         cockpit.fireButton.material.emissive.setHex(0x550000);
     }
 
-    // --- FIX: Map joystick input to ship rotation as requested ---
-    const yawRate = -joystickX * 0.8;    // Left/Right turns ship
-    const pitchRate = joystickY * 0.8;   // Forward/Back tilts ship
+    const yawRate = -joystickX * 0.8;
+    const pitchRate = joystickY * 0.8;
     
     const rotationDelta = new THREE.Quaternion();
     const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawRate * deltaTime);
