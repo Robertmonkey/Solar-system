@@ -1,40 +1,17 @@
-// A professional, robust control system that includes local fallback models
-// to guarantee hand-tracking loads correctly, bypassing all network issues.
+// A professional, robust control system that loads hand models from a
+// stable, explicit URL to guarantee hand-tracking loads correctly.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
 import { MAX_FLIGHT_SPEED } from './constants.js';
 
-// --- Local GLB data for hand models as a reliable fallback ---
-const leftHandGLB = 'data:application/octet-stream;base64,Z2xURgIAA...'; // Truncated for brevity - full data will be in the actual file
-const rightHandGLB = 'data:application/octet-stream;base64,Z2xURgIAA...'; // Truncated for brevity - full data will be in the actual file
-
-class LocalHandModelFactory extends XRHandModelFactory {
-    constructor() {
-        super();
-        this.loader = new GLTFLoader();
-    }
-    createHandModel(controller, profile) {
-        const handModel = super.createHandModel(controller, profile);
-        const hand = controller.hand;
-        
-        // Attempt to load from local data URI if the default path fails
-        handModel.addEventListener('model-error', () => {
-            const glbData = hand.handedness === 'left' ? leftHandGLB : rightHandGLB;
-            this.loader.parse(glbData, '', (gltf) => {
-                const model = gltf.scene.children[0];
-                handModel.add(model);
-                handModel.motionController.onHandModelLoaded(handModel);
-            });
-        });
-        return handModel;
-    }
-}
-
 export function createControls(renderer, scene, camera, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
-  const handModelFactory = new LocalHandModelFactory();
+  
+  // Point the factory to a reliable, direct URL for the hand models
+  const handModelFactory = new XRHandModelFactory().setPath(
+    "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/models/hands/"
+  );
 
   const hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
   const touchStates = [ { touching: null }, { touching: null }];
@@ -58,11 +35,13 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
   
   function update(deltaTime, xrCamera) {
     interactables.forEach((item, i) => interactableBoxes[i].setFromObject(item.mesh));
+
     let activeCamera = xrCamera.cameras.length > 0 ? xrCamera : camera;
 
     hands.forEach((hand, i) => {
       const state = touchStates[i];
       const indexTip = hand.joints['index-finger-tip'];
+
       if (!indexTip) {
         if (state.touching) state.touching = null;
         return;
@@ -70,15 +49,21 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
 
       const tipPos = new THREE.Vector3();
       indexTip.getWorldPosition(tipPos);
+      
       let currentTouch = null;
       
       interactables.forEach((item, j) => {
-        if (interactableBoxes[j].containsPoint(tipPos)) currentTouch = item;
+        if (interactableBoxes[j].containsPoint(tipPos)) {
+          currentTouch = item;
+        }
       });
 
       if (currentTouch) {
-        if (state.touching !== currentTouch.name && currentTouch.name === 'FireButton') fireCallback();
+        if (state.touching !== currentTouch.name && currentTouch.name === 'FireButton') {
+          fireCallback();
+        }
         state.touching = currentTouch.name;
+        
         const localPos = currentTouch.mesh.worldToLocal(tipPos.clone());
         
         switch (currentTouch.name) {
