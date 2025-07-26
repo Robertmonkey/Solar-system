@@ -61,6 +61,14 @@ function startExperience(assets) {
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
+
+  // NEW: Enable and configure tone mapping. This is the crucial fix.
+  // It processes the high range of brightness from the powerful Sun light
+  // and maps it to the screen's display range, preventing the "white orb"
+  // effect and revealing the surface textures.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
   renderer.clock = new THREE.Clock();
@@ -246,13 +254,12 @@ function init() {
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const audioLoader = new THREE.AudioLoader(loadingManager);
     
-    // MODIFIED: Add all the textures needed for the realistic Earth model.
     const texturesToLoad = {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
         earthDay: 'textures/earth_daymap.jpg', 
         earthNight: 'textures/earth_nightmap.jpg',
         earthClouds: 'textures/earth_clouds.jpg',
-        earthAtmos: 'textures/earth_atmos.jpg', // Used for specular/atmosphere effects
+        earthAtmos: 'textures/earth_atmos.jpg',
         mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
         saturn: 'textures/saturn.jpg', saturnRing: 'textures/saturn_ring_alpha.png',
         uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg',
