@@ -45,8 +45,6 @@ export function createLecternCockpit() {
   desk.position.set(0, 1.0, -0.2);
   cockpitGroup.add(desk);
 
-  // --- FIX: Removed the desk support pillar ---
-  
   const throttleGroup = new THREE.Group();
   const throttleBase = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.4), darkMetalMat);
   const throttleLever = new THREE.Group();
@@ -109,8 +107,14 @@ export function createLecternCockpit() {
   }
 
   return {
-    group: cockpitGroup, throttle: throttleGroup, joystick: joystickGroup, fireButton,
-    launcherMuzzle, launcherBarrel, updateControlVisuals,
+    group: cockpitGroup,
+    throttle: throttleGroup,
+    joystick: joystickGroup,
+    fireButton,
+    launcherMuzzle,
+    launcherBarrel,
+    deskMaterial: darkMetalMat,
+    updateControlVisuals,
   };
 }
 
