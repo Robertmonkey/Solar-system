@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { bodies } from './data.js';
-import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier, ROTATION_DAMPENER } from './constants.js';
+import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
 const atmosphereVertexShader = `
@@ -59,42 +59,47 @@ export function createSolarSystem(textures) {
     label.scale.setScalar(5);
     group.add(label);
     group.userData.label = label;
-
-    if (data.orbitalPeriodDays > 0) {
-      const points = [];
-      for (let i = 0; i <= 360; i += 2) {
-        const pos = getOrbitalPosition({ ...data, meanAnomaly0: (i * Math.PI / 180) }, 0);
-        points.push(pos);
-      }
-      const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.4 });
-      const line = new THREE.Line(lineGeom, lineMat);
-      solarGroup.add(line);
-    }
     
-    if (isSun) {
-        group.add(new THREE.PointLight(0xffffff, 2.5, 0, 1.5));
-    } else if (data.name === 'Earth') {
-        const atmMat = new THREE.ShaderMaterial({ vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader, blending: THREE.AdditiveBlending, side: THREE.BackSide });
-        group.add(new THREE.Mesh(new THREE.SphereGeometry(radius * 1.05, 64, 64), atmMat));
-    } else if (data.name === 'Saturn') {
-        const ringMat = new THREE.MeshBasicMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
-        const ringMesh = new THREE.Mesh(new THREE.RingGeometry(radius * 1.5, radius * 2.5, 64), ringMat);
-        ringMesh.rotation.x = Math.PI / 2;
-        group.add(ringMesh);
-    }
-    
-    group.rotation.z = degToRad(data.axialTiltDeg || 0);
-    // --- FIX: Set meanAnomaly to 0 so planets start on their drawn orbit lines ---
+    // User data is set before orbit line creation
     group.userData = { ...data, radius, meanAnomaly0: 0, elapsedDays: 0 };
     byName[data.name] = group;
     solarBodies.push({ data, group });
   });
 
   solarBodies.forEach(obj => {
-    const parent = byName[obj.data.parent];
-    if (parent) parent.add(obj.group);
-    else solarGroup.add(obj.group);
+    const { data, group } = obj;
+    const parent = byName[data.parent];
+    const parentGroup = parent || solarGroup;
+    parentGroup.add(group);
+
+    // --- FIX: Create orbit lines within the correct parent's coordinate system ---
+    if (data.orbitalPeriodDays > 0) {
+      const points = [];
+      for (let i = 0; i <= 360; i += 2) {
+        // Use the same starting data as the planet itself for path calculation
+        const pos = getOrbitalPosition({ ...data, meanAnomaly0: (i * Math.PI / 180) }, 0);
+        points.push(pos);
+      }
+      const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.4 });
+      const line = new THREE.Line(lineGeom, lineMat);
+      parentGroup.add(line); // Add line to the same parent as the body
+    }
+    
+    // Special features like lights and rings are added after parenting
+    if (data.name === 'Sun') {
+        group.add(new THREE.PointLight(0xffffff, 2.5, 0, 1.5));
+    } else if (data.name === 'Earth') {
+        const atmMat = new THREE.ShaderMaterial({ vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader, blending: THREE.AdditiveBlending, side: THREE.BackSide });
+        group.add(new THREE.Mesh(new THREE.SphereGeometry(obj.group.userData.radius * 1.05, 64, 64), atmMat));
+    } else if (data.name === 'Saturn') {
+        const ringMat = new THREE.MeshBasicMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+        const ringMesh = new THREE.Mesh(new THREE.RingGeometry(obj.group.userData.radius * 1.5, obj.group.userData.radius * 2.5, 64), ringMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        group.add(ringMesh);
+    }
+    
+    group.rotation.z = degToRad(data.axialTiltDeg || 0);
   });
   
   updateSolarSystem(solarGroup, 0, null); // Calculate initial positions
@@ -120,8 +125,9 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       group.position.copy(pos);
     }
     if (ud.rotationPeriodHours !== 0) {
-      // --- FIX: Apply dampener to slow axial rotation to a pleasing rate ---
-      const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24) * ROTATION_DAMPENER;
+      // --- FIX: Removed dampener for scientifically accurate rotation speed. ---
+      // Note: This will be very fast at high time warp values.
+      const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24);
       if(group.children[0]) {
         group.children[0].rotation.y += rotationAmount;
       }
