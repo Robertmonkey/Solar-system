@@ -84,12 +84,10 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
             if (isNewTouch) fireCallback();
             break;
           case 'ProbePanel':
-             // Continuous input for sliders
              ui.handleTap(panelName, localPos);
              break;
           case 'WarpPanel':
           case 'FactsPanel':
-             // Single tap for buttons
              if (isNewTouch) {
                 ui.handleTap(panelName, localPos);
              }
@@ -108,7 +106,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
-        // Joystick only directs thrust; speed is controlled by the throttle.
+        // --- FIX: Corrected joystick Z-axis. Pushing stick forward (negative Z) should result in forward thrust (negative Z in camera space). ---
         const moveVec = new THREE.Vector3(joystickX, 0, joystickY);
         if (moveVec.lengthSq() > 1) moveVec.normalize();
         moveVec.applyQuaternion(activeCamera.quaternion);
