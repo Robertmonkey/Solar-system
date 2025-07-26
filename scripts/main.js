@@ -31,8 +31,12 @@ function startExperience(assets) {
   const cockpit = createCockpit();
   scene.add(cockpit.group);
 
-  // --- FIX: Pass the cockpit group as the source for positional audio ---
-  const audio = initAudio(camera, cockpit.group, assets.sounds);
+  let audio = { playWarp: () => {}, playBeep: () => {}, speak: () => {} };
+  try {
+    audio = initAudio(camera, assets.sounds);
+  } catch (error) {
+    console.error("Failed to initialize audio:", error);
+  }
 
   const orreryPillar = new THREE.Mesh(
     new THREE.CylinderGeometry(0.15, 0.2, 1.2, 32),
@@ -54,8 +58,9 @@ function startExperience(assets) {
 
   const ui = createUI(bodies, {
     onWarp: index => handleWarpSelect(bodies[index]),
-    onProbeChange: (settings) => { probeSettings = settings; audio.playBeep(); },
-    onTimeChange: value => { setTimeMultiplier(Math.pow(100, 5 * value)); audio.playBeep(); },
+    onProbeChange: (settings) => { probeSettings = settings; },
+    // --- FIX: Use a better formula for a wider, more useful range of time speeds ---
+    onTimeChange: value => { const m = Math.pow(100, 5 * value); setTimeMultiplier(m); },
     onNarrate: text => audio.speak(text)
   });
 
@@ -77,31 +82,29 @@ function startExperience(assets) {
   cockpit.group.add(ui.probeMesh);
 
   let controls = { update: () => null };
-  renderer.xr.addEventListener('sessionstart', () => {
-    audio.startAmbience(); // Start ambience sound as we enter VR
-    controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
-      const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
+  renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
+       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
       const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
       const launchPos = muzzlePos.clone().sub(solarOrigin);
       const launchDir = new THREE.Vector3();
       cockpit.launcherMuzzle.getWorldDirection(launchDir);
       launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
       audio.playBeep();
-    });
-  });
+  }); });
   renderer.xr.addEventListener('sessionend', () => { controls = { update: () => null }; });
   
   function handleWarpSelect(body) {
     if (!body) return;
-    audio.playWarp(); // Play warp sound on selection
     const bodyWorldPos = new THREE.Vector3();
     body.group.getWorldPosition(bodyWorldPos);
     const scaledRadius = body.group.userData.radius || 1;
+    // --- FIX: Reduced safe distance multiplier to get closer to planets on warp ---
     const safeDistance = scaledRadius * 2.5;
     const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(renderer.xr.getCamera().quaternion);
     const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
     const shift = desiredPlayerPos.negate();
     solarGroup.position.copy(shift);
+    audio.playWarp();
     ui.setSelectedIndex(bodies.findIndex(b => b.data.name === body.data.name));
     const fact = (body.data.facts || [])[0];
     if (fact) audio.speak(fact);
@@ -110,11 +113,8 @@ function startExperience(assets) {
   renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
     const xrCamera = renderer.xr.getCamera();
-    // --- FIX: The movement vector is now correctly applied to the solar system ---
     const movement = controls.update(delta, xrCamera);
-    if (movement) {
-      solarGroup.position.sub(movement);
-    }
+    if (movement) solarGroup.position.sub(movement);
     updateSolarSystem(solarGroup, delta, xrCamera);
     updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
@@ -124,14 +124,11 @@ function startExperience(assets) {
     renderer.render(scene, camera);
   });
   
-  const vrButton = VRButton.createButton(renderer, {
+  // --- FIX: Request the 'hand-tracking' optional feature ---
+  const vrButtonOptions = {
     optionalFeatures: ['hand-tracking']
-  });
-  // --- FIX: Hook into the VR button to start ambience on the first click ---
-  vrButton.addEventListener('click', () => {
-    audio.startAmbience();
-  });
-  document.body.appendChild(vrButton);
+  };
+  document.body.appendChild(VRButton.createButton(renderer, vrButtonOptions));
   overlay.classList.add('hidden');
 }
 
