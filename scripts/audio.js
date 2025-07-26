@@ -1,85 +1,83 @@
-/*
- * audio.js
- *
- * Provides immersive, positional audio feedback for the VR experience,
- * along with a robust text-to-speech implementation.
- */
+// This file has been simplified to use non-positional audio, which is more
+// stable and less likely to cause the application to hang on load.
+
 import * as THREE from 'three';
 
-// This holds the browser's available text-to-speech voices.
 let voices = [];
-function loadVoices() {
-  voices = window.speechSynthesis.getVoices();
-}
+function loadVoices() { voices = window.speechSynthesis.getVoices(); }
 
-export function initAudio(camera, sourceObject, sounds) {
+export function initAudio(camera, sounds) {
   const listener = new THREE.AudioListener();
   camera.add(listener);
 
-  // Load voices for narration when the page loads and when they change.
   loadVoices();
   if (window.speechSynthesis.onvoiceschanged !== undefined) {
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }
 
-  // --- POSITIONAL AUDIO SETUP ---
-  // Warp and Beep sounds are now PositionalAudio, making them 3D.
-  // They are attached to a source object (like the cockpit) to give them a location.
-
-  const warpSound = new THREE.PositionalAudio(listener);
+  // --- FIX: Using simpler, more stable non-positional audio ---
+  const warpSound = new THREE.Audio(listener);
   warpSound.setBuffer(sounds.warp);
-  warpSound.setRefDistance(10); // The distance at which the sound starts to fall off.
-  warpSound.setRolloffFactor(2); // How quickly the sound falls off.
-  sourceObject.add(warpSound);
 
-  const beepSound = new THREE.PositionalAudio(listener);
+  const beepSound = new THREE.Audio(listener);
   beepSound.setBuffer(sounds.beep);
-  beepSound.setRefDistance(5);
-  sourceObject.add(beepSound);
 
-  // Ambience remains non-positional as it's background sound.
   const ambience = new THREE.Audio(listener);
   ambience.setBuffer(sounds.ambience);
   ambience.setLoop(true);
-  ambience.setVolume(0.4);
+  ambience.setVolume(0.5);
 
-  // --- AUDIO CONTEXT MANAGEMENT ---
-  // This helper function is crucial. It ensures the browser's audio engine
-  // is running before we attempt to play any sound.
-  const resumeContext = () => {
-    const context = listener.context;
-    if (context.state === 'suspended') {
-      context.resume();
+  // A user gesture is often required to start audio. We will start it on the
+  // first beep.  Keep track so we do not restart the ambience each time.
+  let hasStartedAmbience = false;
+
+  // Helper to ensure the browser audio context has resumed.  Certain
+  // environments suspend the audio context until a user gesture is
+  // detected.  Invoking resume() just prior to playback guarantees
+  // sounds will be audible.  If resume() returns a promise we
+  // silently ignore any errors.
+  function resumeAudio() {
+    const context = listener.context || listener.gain?.context;
+    if (context && typeof context.resume === 'function') {
+      try {
+        context.resume();
+      } catch (e) {
+        // Ignore errors; the context may already be running or resume
+        // may fail silently in some browsers.
+      }
     }
-  };
+  }
 
   return {
-    // This function will be called once, after the first user gesture.
-    startAmbience: () => {
-      resumeContext();
-      if (!ambience.isPlaying) {
-        ambience.play();
-      }
-    },
     playWarp: () => {
-      resumeContext();
+      resumeAudio();
       if (warpSound.isPlaying) warpSound.stop();
       warpSound.play();
     },
     playBeep: () => {
-      resumeContext();
+      resumeAudio();
+      if (!hasStartedAmbience) {
+        try {
+          ambience.play();
+        } catch (e) {
+          // If ambience fails to start (e.g. because of user gesture
+          // restrictions) ignore and try again later when beep plays.
+        }
+        hasStartedAmbience = true;
+      }
       if (beepSound.isPlaying) beepSound.stop();
       beepSound.play();
     },
     speak: (text) => {
-      resumeContext();
+      resumeAudio();
       if ('speechSynthesis' in window) {
+        // Cancel any previous utterances so they do not overlap.
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(text);
-        if (voices.length === 0) loadVoices(); // Reload if empty
-        utter.voice = voices.find(v => v.lang.startsWith('en')) || voices[0] || null;
-        utter.pitch = 0.7;
-        utter.rate = 0.9;
+        if (voices.length === 0) loadVoices();
+        utter.voice = voices.find(v => v.lang && v.lang.startsWith('en')) || voices[0] || null;
+        utter.pitch = 0.6;
+        utter.rate = 0.85;
         window.speechSynthesis.speak(utter);
       }
     }
