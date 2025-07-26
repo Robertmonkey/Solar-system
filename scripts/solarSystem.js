@@ -33,10 +33,13 @@ export function createSolarSystem(textures) {
       Saturn: textures.saturn, Uranus: textures.uranus, Neptune: textures.neptune,
       Moon: textures.moon
   };
+  
+  // --- FIX: Define a separate multiplier for the sun to fix relative scaling ---
+  const sunMultiplier = 150;
 
   bodies.forEach(data => {
     const isSun = data.name === 'Sun';
-    const radius = data.radiusKm * KM_TO_WORLD_UNITS * (isSun ? 1 : SIZE_MULTIPLIER);
+    const radius = data.radiusKm * KM_TO_WORLD_UNITS * (isSun ? sunMultiplier : SIZE_MULTIPLIER);
     const group = new THREE.Group();
     group.name = data.name;
     
@@ -83,7 +86,6 @@ export function createSolarSystem(textures) {
     }
     
     group.rotation.z = degToRad(data.axialTiltDeg || 0);
-    // --- FIX: Initialise mean anomaly in radians for correct calculations ---
     group.userData = { ...data, radius, meanAnomaly0: Math.random() * 2 * Math.PI, elapsedDays: 0 };
     byName[data.name] = group;
     solarBodies.push({ data, group });
