@@ -7,7 +7,8 @@ import { G, KM_PER_WORLD_UNIT, KM_TO_WORLD_UNITS } from './constants.js';
 const PROBE_INITIAL_SPEED = 15;
 const COLLISION_RADIUS_FACTOR = 1.1;
 const TRAIL_LENGTH = 200;
-const GRAVITY_MULTIPLIER = 1e8;
+// --- FIX: Increased gravity multiplier for more dramatic orbital effects ---
+const GRAVITY_MULTIPLIER = 1e9;
 
 export function createProbes() {
   const group = new THREE.Group();
@@ -46,8 +47,6 @@ export function updateProbes(probes, deltaTime, solarGroup, solarBodies, launche
   const toRemove = [];
   const launcherBox = launcherMesh ? new THREE.Box3().setFromObject(launcherMesh) : null;
 
-  // --- FIX: All probe position logic is now handled by parenting; no manual offset needed. ---
-
   probes.list.forEach((probe, index) => {
     probe.age += deltaTime;
 
@@ -74,7 +73,8 @@ export function updateProbes(probes, deltaTime, solarGroup, solarBodies, launche
     const accelerationKm = totalForce.divideScalar(probe_mass_kg);
     const accelerationWorld = accelerationKm.multiplyScalar(KM_TO_WORLD_UNITS);
 
-    // Transform world-space acceleration to probe's local space before applying
+    // Since probe velocity is in the local space of its parent (solarGroup),
+    // we must transform the world-space acceleration into that same local space.
     const invProbeParentRotation = probe.mesh.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
     const localAcceleration = accelerationWorld.clone().applyQuaternion(invProbeParentRotation);
     probe.velocity.addScaledVector(localAcceleration, deltaTime);
