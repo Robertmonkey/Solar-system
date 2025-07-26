@@ -6,15 +6,33 @@ import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
-const atmosphereVertexShader = `...`; // Unchanged
-const atmosphereFragmentShader = `...`; // Unchanged
+const atmosphereVertexShader = `
+  varying vec3 vNormal;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const atmosphereFragmentShader = `
+  varying vec3 vNormal;
+  void main() {
+    float intensity = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+    gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity;
+  }
+`;
 
 export function createSolarSystem(textures) {
   const solarGroup = new THREE.Group();
   solarGroup.name = 'SolarSystemRoot';
   const byName = {};
   const solarBodies = [];
-  const textureMap = { /* ... */ };
+
+  const textureMap = {
+      Sun: textures.sun, Mercury: textures.mercury, Venus: textures.venus,
+      Earth: textures.earth, Mars: textures.mars, Jupiter: textures.jupiter,
+      Saturn: textures.saturn, Uranus: textures.uranus, Neptune: textures.neptune,
+      Moon: textures.moon
+  };
 
   bodies.forEach(data => {
     const isSun = data.name === 'Sun';
@@ -22,17 +40,24 @@ export function createSolarSystem(textures) {
     const group = new THREE.Group();
     group.name = data.name;
     
-    const mesh = new THREE.Mesh(/* ... */);
+    const geometry = new THREE.SphereGeometry(Math.max(radius, 0.01), 64, 64);
+    let material;
+    const texture = textureMap[data.name];
+    if (texture) {
+      if (isSun) material = new THREE.MeshBasicMaterial({ map: texture });
+      else material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.8 });
+    } else {
+      material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.8 });
+    }
+    const mesh = new THREE.Mesh(geometry, material);
     group.add(mesh);
 
-    // --- FIX: Add planet labels ---
     const label = createLabel(data.name);
     label.position.y = radius * 1.5 + 0.1;
     label.scale.setScalar(5);
     group.add(label);
     group.userData.label = label;
 
-    // --- FIX: Add orbit lines ---
     if (data.orbitalPeriodDays > 0) {
       const points = [];
       for (let i = 0; i <= 360; i += 2) {
@@ -40,13 +65,24 @@ export function createSolarSystem(textures) {
         points.push(pos);
       }
       const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x666666 });
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.4 });
       const line = new THREE.Line(lineGeom, lineMat);
-      solarGroup.add(line); // Add orbits to the main group
+      solarGroup.add(line);
     }
     
-    // ... special enhancements for Sun, Earth, Saturn ...
+    if (isSun) {
+        group.add(new THREE.PointLight(0xffffff, 2.5, 0, 1.5));
+    } else if (data.name === 'Earth') {
+        const atmMat = new THREE.ShaderMaterial({ vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader, blending: THREE.AdditiveBlending, side: THREE.BackSide });
+        group.add(new THREE.Mesh(new THREE.SphereGeometry(radius * 1.05, 64, 64), atmMat));
+    } else if (data.name === 'Saturn') {
+        const ringMat = new THREE.MeshBasicMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+        const ringMesh = new THREE.Mesh(new THREE.RingGeometry(radius * 1.5, radius * 2.5, 64), ringMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        group.add(ringMesh);
+    }
     
+    group.rotation.z = degToRad(data.axialTiltDeg || 0);
     group.userData = { ...data, radius, meanAnomaly0: Math.random() * 360, elapsedDays: 0 };
     byName[data.name] = group;
     solarBodies.push({ data, group });
@@ -58,8 +94,7 @@ export function createSolarSystem(textures) {
     else solarGroup.add(obj.group);
   });
   
-  // --- FIX: Calculate initial positions so planets are not in a line ---
-  updateSolarSystem(solarGroup, 0);
+  updateSolarSystem(solarGroup, 0, null); // Calculate initial positions
 
   solarGroup.userData.bodies = solarBodies;
   return { solarGroup, bodies: solarBodies };
@@ -81,10 +116,12 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       const pos = getOrbitalPosition(ud, ud.elapsedDays);
       group.position.copy(pos);
     }
-    if (ud.rotationPeriodHours) {
-      // ... axial rotation logic ...
+    if (ud.rotationPeriodHours !== 0) {
+      const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24);
+      if(group.children[0]) {
+        group.children[0].rotation.y += rotationAmount;
+      }
     }
-    // Make labels always face the camera
     if (ud.label && camera) {
       ud.label.quaternion.copy(camera.quaternion);
     }
