@@ -5,17 +5,15 @@ import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier, PALETTE, AU_KM } from './constants.js';
 import { getOrbitalPosition, createLabel } from './utils.js';
 
-// MODIFIED: The scaling factors for the orrery must be drastically reduced to handle
-// the new 1:1 world scale where positions are in the trillions of meters.
-// These new values are calculated to fit Neptune's orbit (~30 AU) within the orrery's base.
+// MODIFIED: To make the orrery usable, we now use a logarithmic scale for distance.
+// This compresses the vast distances of the outer planets so they fit on the map.
+const ORRERY_RADIUS = 0.8; // The visual radius of the orrery display table in world units.
 const NEPTUNE_ORBIT_METERS = 30 * AU_KM * KM_TO_WORLD_UNITS;
-const ORRERY_RADIUS = 0.8; // The visual radius of the orrery display table.
-const POSITION_SCALE = ORRERY_RADIUS / NEPTUNE_ORBIT_METERS; // e.g., ~1.7e-13
+// We calculate a scale factor that maps the log of Neptune's orbit to the orrery's edge.
+export const LOG_POSITION_SCALE = ORRERY_RADIUS / Math.log10(NEPTUNE_ORBIT_METERS + 1);
 
-// MODIFIED: This size scale makes Jupiter appear about 1cm in diameter on the orrery.
-const JUPITER_RADIUS_METERS = 69911 * KM_TO_WORLD_UNITS;
-const DESIRED_JUPITER_DISPLAY_RADIUS = 0.005; // 0.5cm
-const SIZE_SCALE = DESIRED_JUPITER_DISPLAY_RADIUS / JUPITER_RADIUS_METERS; // e.g., ~7e-11
+// MODIFIED: This size scale for planets on the orrery is increased for better visibility.
+const SIZE_SCALE = 0.001;
 
 
 export function createOrrery() {
@@ -32,10 +30,8 @@ export function createOrrery() {
 
   bodies.forEach(data => {
     const isSun = data.name === 'Sun';
-    // MODIFIED: The orrery radius calculation now uses the new SIZE_SCALE.
-    // We use the raw planet radius in meters for the calculation.
     const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER * (isSun ? SIZE_SCALE * 20 : SIZE_SCALE);
-    const geometry = new THREE.SphereGeometry(Math.max(radius, 0.002), 16, 16);
+    const geometry = new THREE.SphereGeometry(Math.max(radius, 0.003), 16, 16);
     const color = PALETTE[data.name] || 0xffffff;
     const material = new THREE.MeshBasicMaterial({ color });
     const mesh = new THREE.Mesh(geometry, material);
@@ -49,8 +45,15 @@ export function createOrrery() {
       const points = [];
       for (let i = 0; i <= 360; i += 5) {
         const pos = getOrbitalPosition({ ...data, meanAnomaly0: (i * Math.PI / 180) }, 0);
-        // MODIFIED: The orbit line is scaled using the new POSITION_SCALE.
-        points.push(pos.multiplyScalar(POSITION_SCALE));
+        
+        // MODIFIED: Apply the logarithmic mapping to the orbit lines.
+        const dist = pos.length();
+        if (dist > 0) {
+            // Add 1 to distance to avoid log(0)
+            const logDist = Math.log10(dist + 1);
+            const displayPos = pos.normalize().multiplyScalar(logDist * LOG_POSITION_SCALE);
+            points.push(displayPos);
+        }
       }
       const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
       const lineMat = new THREE.LineBasicMaterial({ color: PALETTE[data.name], transparent: true, opacity: 0.5 });
@@ -79,8 +82,14 @@ export function updateOrrery(orrery, elapsedSec) {
     if (obj.data.orbitalPeriodDays > 0) {
       obj.elapsedDays += deltaDays;
       const pos = getOrbitalPosition(obj.data, obj.elapsedDays);
-      // MODIFIED: The planet's position is scaled using the new POSITION_SCALE.
-      obj.group.position.copy(pos).multiplyScalar(POSITION_SCALE);
+
+      // MODIFIED: Apply the logarithmic mapping to planet positions.
+      const dist = pos.length();
+      if (dist > 0) {
+        const logDist = Math.log10(dist + 1);
+        const displayPos = pos.normalize().multiplyScalar(logDist * LOG_POSITION_SCALE);
+        obj.group.position.copy(displayPos);
+      }
     }
   });
 }
