@@ -13,7 +13,6 @@ export function createUI(bodies, callbacks = {}) {
   const { onWarp = () => {}, onProbeChange = () => {}, onTimeChange = () => {}, onNarrate = () => {} } = callbacks;
 
   let selectedIndex = 0;
-  // --- FIX: Set a higher initial time value to prevent overwriting the timeMultiplier to a low value on startup ---
   let probeMass = 0.5, probeVelocity = 0.5, timeValue = 0.5;
   let hoverState = { panel: null, item: null };
   let needsRedraw = true;
@@ -139,13 +138,15 @@ export function createUI(bodies, callbacks = {}) {
             if (index >= 0 && index < bodies.length) newHover = { panel: 'warp', item: index };
             break;
         case 'probe':
-            // --- FIX: Corrected and expanded hover zones for all three sliders ---
             if (localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
             else if (localPos.x >= -0.1 && localPos.x < 0.25) newHover = { panel: 'probe', item: 'velocity'};
             else if (localPos.x >= 0.25) newHover = { panel: 'probe', item: 'time'};
             break;
         case 'facts':
-            if (localPos.x > 0.3 && localPos.y < -0.15) {
+            // --- FIX: Simplified hover detection for the narrate button ---
+            // The button is in the bottom-right quadrant of the panel.
+            // Panel local X is [-0.6, 0.6], Y is [-0.3, 0.3]
+            if (localPos.x > 0.25 && localPos.y < -0.1) {
                 newHover = { panel: 'facts', item: 'narrate' };
             }
             break;
