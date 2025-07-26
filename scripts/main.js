@@ -6,15 +6,12 @@ import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
 import { createCockpit } from './lecternCockpit.js';
 import { createUI } from './ui.js';
 import { createControls as setupControls } from './controls.js';
-// MODIFIED: Import the new logarithmic scaling constant from the orrery.
 import { createOrrery, updateOrrery, createPlayerMarker, LOG_POSITION_SCALE } from './orrery.js';
 import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
 import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS, MAX_FLIGHT_SPEED } from './constants.js';
 
-// MODIFIED: Starfield generation is now more performant.
 function createProceduralStarfield(radius) {
-    // MODIFIED: Reduced star count for better performance on standalone VR.
     const starCount = 15000;
     const positions = [];
     const colors = [];
@@ -40,9 +37,6 @@ function createProceduralStarfield(radius) {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
     const material = new THREE.PointsMaterial({
-        // MODIFIED: This was the source of the white screen bug.
-        // The size is now a small, constant pixel value, not a calculation
-        // based on the scene's enormous radius.
         size: 1.5,
         vertexColors: true,
         blending: THREE.AdditiveBlending,
@@ -76,6 +70,17 @@ function startExperience(assets) {
   const player = new THREE.Group();
   scene.add(player);
   player.add(camera);
+
+  // NEW: Add a light source back to the scene, parented to the player.
+  // This will illuminate the cockpit, hands, and launcher, which use
+  // MeshStandardMaterial, fixing the issue where they appeared black.
+  // A HemisphereLight provides soft, ambient-like light without harsh shadows.
+  const cockpitLight = new THREE.HemisphereLight(
+      0xffffff, // sky color
+      0x888888, // ground color
+      2.0       // intensity
+  );
+  player.add(cockpitLight);
 
   const starfield = createProceduralStarfield(camera.far * 0.9);
   scene.add(starfield);
@@ -208,11 +213,9 @@ function startExperience(assets) {
     const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
     const playerPosInSolarSystem = playerWorldPos.clone().sub(solarGroup.position);
 
-    // MODIFIED: The player marker on the orrery now uses the same logarithmic
-    // mapping as the planets to ensure it's positioned correctly on the new map.
     const playerDist = playerPosInSolarSystem.length();
-    // Add 1 to avoid log(0) at the origin
-    const logPlayerDist = Math.log10(playerDist + 1);
+    // MODIFIED: Use natural log to match the orrery's new scaling function.
+    const logPlayerDist = Math.log(playerDist + 1);
     const playerMarkerPos = playerPosInSolarSystem.normalize().multiplyScalar(logPlayerDist * LOG_POSITION_SCALE);
     playerMarker.position.copy(playerMarkerPos).multiplyScalar(orrery.group.scale.x);
     
