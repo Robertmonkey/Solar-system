@@ -5,7 +5,7 @@ import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
-// ... (shader code remains the same)
+// ... (shader code for atmosphere remains the same)
 const atmosphereVertexShader = `
   varying vec3 vNormal;
   void main() {
@@ -21,7 +21,6 @@ const atmosphereFragmentShader = `
   }
 `;
 
-// NEW: Create a simple white dot texture for our helper sprites.
 function createDotTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 64;
@@ -50,10 +49,8 @@ export function createSolarSystem(textures) {
       Moon: textures.moon
   };
   
-  // MODIFIED: Removed sunMultiplier, the sun is now its true relative size.
   bodies.forEach(data => {
     const isSun = data.name === 'Sun';
-    // MODIFIED: Radius is now the true radius in meters.
     const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER;
     const group = new THREE.Group();
     group.name = data.name;
@@ -62,22 +59,21 @@ export function createSolarSystem(textures) {
     let material;
     const texture = textureMap[data.name];
     if (texture) {
-      if (isSun) material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
-      else material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.8 });
+      // MODIFIED: All celestial bodies now use MeshBasicMaterial.
+      // This makes them immune to lighting, ensuring their textures are always
+      // fully bright and visible, which is better for this simulation.
+      material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: isSun ? false : true });
     } else {
-      material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.8 });
+      material = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
     }
     const mesh = new THREE.Mesh(geometry, material);
     group.add(mesh);
 
     const label = createLabel(data.name);
-    // MODIFIED: Initial label position is based on the new radius.
     label.position.y = radius * 1.2;
     group.add(label);
     
-    // NEW: Add a helper sprite to ensure the body is visible from extreme distances.
     const sprite = new THREE.Sprite(spriteMaterial);
-    // The sprite for the sun should be much larger and more prominent.
     sprite.scale.setScalar(isSun ? radius * 50 : radius * 500);
     group.add(sprite);
 
@@ -104,9 +100,8 @@ export function createSolarSystem(textures) {
       parentGroup.add(line);
     }
     
-    if (data.name === 'Sun') {
-        group.add(new THREE.PointLight(0xffffff, 2.5, 0, 1.5));
-    } else if (data.name === 'Earth') {
+    // MODIFIED: Removed the PointLight from the sun, as it's no longer needed.
+    if (data.name === 'Earth') {
         const atmMat = new THREE.ShaderMaterial({ vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader, blending: THREE.AdditiveBlending, side: THREE.BackSide });
         group.add(new THREE.Mesh(new THREE.SphereGeometry(obj.group.userData.radius * 1.02, 64, 64), atmMat));
     } else if (data.name === 'Saturn') {
@@ -119,12 +114,13 @@ export function createSolarSystem(textures) {
     group.rotation.z = degToRad(data.axialTiltDeg || 0);
   });
   
-  updateSolarSystem(solarGroup, 0, null); // Calculate initial positions
+  updateSolarSystem(solarGroup, 0, null);
 
   solarGroup.userData.bodies = solarBodies;
   return { solarGroup, bodies: solarBodies };
 }
 
+// ... (updateSolarSystem function remains the same)
 export function updateSolarSystem(solarGroup, elapsedSec, camera) {
   const bodies = solarGroup.userData.bodies || [];
   const timeMult = getTimeMultiplier();
@@ -154,20 +150,16 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       
       const bodyWorldPos = group.getWorldPosition(new THREE.Vector3());
       const distance = cameraWorldPos.distanceTo(bodyWorldPos);
-
-      // NEW: Dynamic scaling and visibility logic.
-      // Make label a constant screen size for readability.
+      
       const labelScale = distance * 0.005; 
       ud.label.scale.set(labelScale, labelScale, 1);
       
-      // Define a distance where the planet mesh becomes "visible".
       const visibilityThreshold = ud.radius * 1500;
       const isVisible = distance < visibilityThreshold;
       
-      // Show the planet mesh when close, otherwise show the helper sprite.
       ud.bodyMesh.visible = isVisible;
       ud.sprite.visible = !isVisible;
-      ud.label.visible = isVisible; // Also hide label when far away
+      ud.label.visible = isVisible;
     }
   });
 }
