@@ -7,7 +7,7 @@ import { createControls as setupControls } from './controls.js';
 import { createOrrery, updateOrrery, createPlayerMarker } from './orrery.js';
 import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
-import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS } from './constants.js';
+import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS, MAX_FLIGHT_SPEED } from './constants.js';
 
 function startExperience(assets) {
   const overlay = document.getElementById('overlay');
@@ -15,7 +15,6 @@ function startExperience(assets) {
   scene.background = new THREE.Color(0x000005);
   scene.add(new THREE.AmbientLight(0x888888));
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 50000);
-  camera.position.set(0, 1.6, 0.5);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -23,13 +22,20 @@ function startExperience(assets) {
   document.body.appendChild(renderer.domElement);
   document.body.style.backgroundImage = 'none';
   renderer.clock = new THREE.Clock();
+  
+  // --- FIX: Create a 'player' group to handle ship orientation ---
+  const player = new THREE.Group();
+  player.position.set(0, 1.6, 0); // Set player eye-level height
+  scene.add(player);
+  player.add(camera); // Add camera to the player group
 
   const { solarGroup, bodies } = createSolarSystem(assets.textures);
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
   scene.add(solarGroup);
 
   const cockpit = createCockpit();
-  scene.add(cockpit.group);
+  cockpit.group.position.y = -1.6; // Position cockpit at the player's feet
+  player.add(cockpit.group);
 
   let audio = { playWarp: () => {}, playBeep: () => {}, speak: () => {} };
   try {
@@ -43,12 +49,12 @@ function startExperience(assets) {
     cockpit.deskMaterial
   );
   orreryPillar.position.set(0, 0.6, -2);
-  scene.add(orreryPillar);
+  cockpit.group.add(orreryPillar); // Add to cockpit so it rotates with the ship
 
   const orrery = createOrrery();
   orrery.group.scale.setScalar(0.1);
   orrery.group.position.set(0, 1.3, -2);
-  scene.add(orrery.group);
+  cockpit.group.add(orrery.group); // Add to cockpit
   const playerMarker = createPlayerMarker();
   orrery.group.add(playerMarker);
   
@@ -59,7 +65,6 @@ function startExperience(assets) {
   const ui = createUI(bodies, {
     onWarp: index => handleWarpSelect(bodies[index]),
     onProbeChange: (settings) => { probeSettings = settings; },
-    // --- FIX: Use a better formula for a wider, more useful range of time speeds ---
     onTimeChange: value => { const m = Math.pow(100, 5 * value); setTimeMultiplier(m); },
     onNarrate: text => audio.speak(text)
   });
@@ -81,7 +86,7 @@ function startExperience(assets) {
   ui.probeMesh.rotation.y = -Math.PI / 6;
   cockpit.group.add(ui.probeMesh);
 
-  let controls = { update: () => null };
+  let controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) };
   renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
        const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
       const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
@@ -91,16 +96,17 @@ function startExperience(assets) {
       launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
       audio.playBeep();
   }); });
-  renderer.xr.addEventListener('sessionend', () => { controls = { update: () => null }; });
+  renderer.xr.addEventListener('sessionend', () => { controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) }; });
   
   function handleWarpSelect(body) {
     if (!body) return;
     const bodyWorldPos = new THREE.Vector3();
     body.group.getWorldPosition(bodyWorldPos);
     const scaledRadius = body.group.userData.radius || 1;
-    // --- FIX: Reduced safe distance multiplier to get closer to planets on warp ---
     const safeDistance = scaledRadius * 2.5;
-    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(renderer.xr.getCamera().quaternion);
+    
+    // Get forward direction from the entire player/ship, not just the head
+    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
     const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
     const shift = desiredPlayerPos.negate();
     solarGroup.position.copy(shift);
@@ -110,21 +116,42 @@ function startExperience(assets) {
     if (fact) audio.speak(fact);
   }
 
+  let shipQuaternion = new THREE.Quaternion();
   renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
     const xrCamera = renderer.xr.getCamera();
-    const movement = controls.update(delta, xrCamera);
-    if (movement) solarGroup.position.sub(movement);
+    
+    // --- FIX: Update controls to handle ship rotation and movement ---
+    const { rotationDelta, throttle } = controls.update(delta);
+    
+    // Apply ship rotation from joystick
+    shipQuaternion.premultiply(rotationDelta);
+    player.quaternion.copy(shipQuaternion);
+    
+    // Apply movement from throttle
+    const power = Math.pow(throttle, 2);
+    const speed = power * MAX_FLIGHT_SPEED;
+    if (speed > 0) {
+        const moveDirection = new THREE.Vector3(0, 0, -1);
+        moveDirection.applyQuaternion(shipQuaternion);
+        const movement = moveDirection.multiplyScalar(speed * delta);
+        solarGroup.position.sub(movement);
+    }
+    
     updateSolarSystem(solarGroup, delta, xrCamera);
     updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
-    const playerPosInOrrery = solarGroup.position.clone().negate();
-    playerMarker.position.copy(playerPosInOrrery).multiplyScalar(orrery.group.scale.x);
+
+    // Calculate player position for the orrery marker
+    const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
+    const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+    const playerPosInSolarSystem = playerWorldPos.clone().sub(solarOrigin);
+    playerMarker.position.copy(playerPosInSolarSystem).multiplyScalar(orrery.group.scale.x);
+    
     ui.update();
     renderer.render(scene, camera);
   });
   
-  // --- FIX: Request the 'hand-tracking' optional feature ---
   const vrButtonOptions = {
     optionalFeatures: ['hand-tracking']
   };
