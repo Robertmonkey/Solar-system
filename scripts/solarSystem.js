@@ -1,11 +1,11 @@
-// This version restores planet labels and orbit lines, and fixes the
-// initial state of the simulation to ensure planets are always in motion.
+// scripts/solarSystem.js
 
 import * as THREE from 'three';
 import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
 import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
+// ... (shader code remains the same)
 const atmosphereVertexShader = `
   varying vec3 vNormal;
   void main() {
@@ -21,6 +21,22 @@ const atmosphereFragmentShader = `
   }
 `;
 
+// NEW: Create a simple white dot texture for our helper sprites.
+function createDotTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.arc(32, 32, 28, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fill();
+    return new THREE.CanvasTexture(canvas);
+}
+const dotTexture = createDotTexture();
+const spriteMaterial = new THREE.SpriteMaterial({ map: dotTexture, blending: THREE.AdditiveBlending, depthTest: false, toneMapped: false });
+
+
 export function createSolarSystem(textures) {
   const solarGroup = new THREE.Group();
   solarGroup.name = 'SolarSystemRoot';
@@ -34,11 +50,11 @@ export function createSolarSystem(textures) {
       Moon: textures.moon
   };
   
-  const sunMultiplier = 150;
-
+  // MODIFIED: Removed sunMultiplier, the sun is now its true relative size.
   bodies.forEach(data => {
     const isSun = data.name === 'Sun';
-    const radius = data.radiusKm * KM_TO_WORLD_UNITS * (isSun ? sunMultiplier : SIZE_MULTIPLIER);
+    // MODIFIED: Radius is now the true radius in meters.
+    const radius = data.radiusKm * KM_TO_WORLD_UNITS * SIZE_MULTIPLIER;
     const group = new THREE.Group();
     group.name = data.name;
     
@@ -46,7 +62,7 @@ export function createSolarSystem(textures) {
     let material;
     const texture = textureMap[data.name];
     if (texture) {
-      if (isSun) material = new THREE.MeshBasicMaterial({ map: texture });
+      if (isSun) material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
       else material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.8 });
     } else {
       material = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.8 });
@@ -55,13 +71,17 @@ export function createSolarSystem(textures) {
     group.add(mesh);
 
     const label = createLabel(data.name);
-    label.position.y = radius * 1.5 + 0.1;
-    label.scale.setScalar(5);
+    // MODIFIED: Initial label position is based on the new radius.
+    label.position.y = radius * 1.2;
     group.add(label);
-    group.userData.label = label;
     
-    // User data is set before orbit line creation
-    group.userData = { ...data, radius, meanAnomaly0: 0, elapsedDays: 0 };
+    // NEW: Add a helper sprite to ensure the body is visible from extreme distances.
+    const sprite = new THREE.Sprite(spriteMaterial);
+    // The sprite for the sun should be much larger and more prominent.
+    sprite.scale.setScalar(isSun ? radius * 50 : radius * 500);
+    group.add(sprite);
+
+    group.userData = { ...data, radius, meanAnomaly0: 0, elapsedDays: 0, label, bodyMesh: mesh, sprite };
     byName[data.name] = group;
     solarBodies.push({ data, group });
   });
@@ -72,30 +92,27 @@ export function createSolarSystem(textures) {
     const parentGroup = parent || solarGroup;
     parentGroup.add(group);
 
-    // --- FIX: Create orbit lines within the correct parent's coordinate system ---
     if (data.orbitalPeriodDays > 0) {
       const points = [];
       for (let i = 0; i <= 360; i += 2) {
-        // Use the same starting data as the planet itself for path calculation
         const pos = getOrbitalPosition({ ...data, meanAnomaly0: (i * Math.PI / 180) }, 0);
         points.push(pos);
       }
       const lineGeom = new THREE.BufferGeometry().setFromPoints(points);
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.4 });
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x666666, transparent: true, opacity: 0.2 });
       const line = new THREE.Line(lineGeom, lineMat);
-      parentGroup.add(line); // Add line to the same parent as the body
+      parentGroup.add(line);
     }
     
-    // Special features like lights and rings are added after parenting
     if (data.name === 'Sun') {
         group.add(new THREE.PointLight(0xffffff, 2.5, 0, 1.5));
     } else if (data.name === 'Earth') {
         const atmMat = new THREE.ShaderMaterial({ vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader, blending: THREE.AdditiveBlending, side: THREE.BackSide });
-        group.add(new THREE.Mesh(new THREE.SphereGeometry(obj.group.userData.radius * 1.05, 64, 64), atmMat));
+        group.add(new THREE.Mesh(new THREE.SphereGeometry(obj.group.userData.radius * 1.02, 64, 64), atmMat));
     } else if (data.name === 'Saturn') {
         const ringMat = new THREE.MeshBasicMaterial({ map: textures.saturnRing, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
-        const ringMesh = new THREE.Mesh(new THREE.RingGeometry(obj.group.userData.radius * 1.5, obj.group.userData.radius * 2.5, 64), ringMat);
-        ringMesh.rotation.x = Math.PI / 2;
+        const ringMesh = new THREE.Mesh(new THREE.RingGeometry(obj.group.userData.radius * 1.2, obj.group.userData.radius * 2.2, 64), ringMat);
+        ringMesh.rotation.x = Math.PI / 2 - degToRad(data.axialTiltDeg);
         group.add(ringMesh);
     }
     
@@ -115,6 +132,8 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
 
   if (isNaN(deltaDays)) return;
 
+  const cameraWorldPos = camera ? camera.getWorldPosition(new THREE.Vector3()) : null;
+
   bodies.forEach(obj => {
     const group = obj.group;
     const ud = group.userData;
@@ -125,15 +144,30 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       group.position.copy(pos);
     }
     if (ud.rotationPeriodHours !== 0) {
-      // --- FIX: Removed dampener for scientifically accurate rotation speed. ---
-      // Note: This will be very fast at high time warp values.
       const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24);
-      if(group.children[0]) {
-        group.children[0].rotation.y += rotationAmount;
+      if(ud.bodyMesh) {
+        ud.bodyMesh.rotation.y += rotationAmount;
       }
     }
     if (ud.label && camera) {
       ud.label.quaternion.copy(camera.quaternion);
+      
+      const bodyWorldPos = group.getWorldPosition(new THREE.Vector3());
+      const distance = cameraWorldPos.distanceTo(bodyWorldPos);
+
+      // NEW: Dynamic scaling and visibility logic.
+      // Make label a constant screen size for readability.
+      const labelScale = distance * 0.005; 
+      ud.label.scale.set(labelScale, labelScale, 1);
+      
+      // Define a distance where the planet mesh becomes "visible".
+      const visibilityThreshold = ud.radius * 1500;
+      const isVisible = distance < visibilityThreshold;
+      
+      // Show the planet mesh when close, otherwise show the helper sprite.
+      ud.bodyMesh.visible = isVisible;
+      ud.sprite.visible = !isVisible;
+      ud.label.visible = isVisible; // Also hide label when far away
     }
   });
 }
