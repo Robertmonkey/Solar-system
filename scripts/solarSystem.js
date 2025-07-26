@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { bodies } from './data.js';
-import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
+import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier, ROTATION_DAMPENER } from './constants.js';
 import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
 const atmosphereVertexShader = `
@@ -34,7 +34,6 @@ export function createSolarSystem(textures) {
       Moon: textures.moon
   };
   
-  // --- FIX: Define a separate multiplier for the sun to fix relative scaling ---
   const sunMultiplier = 150;
 
   bodies.forEach(data => {
@@ -86,7 +85,8 @@ export function createSolarSystem(textures) {
     }
     
     group.rotation.z = degToRad(data.axialTiltDeg || 0);
-    group.userData = { ...data, radius, meanAnomaly0: Math.random() * 2 * Math.PI, elapsedDays: 0 };
+    // --- FIX: Set meanAnomaly to 0 so planets start on their drawn orbit lines ---
+    group.userData = { ...data, radius, meanAnomaly0: 0, elapsedDays: 0 };
     byName[data.name] = group;
     solarBodies.push({ data, group });
   });
@@ -120,7 +120,8 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       group.position.copy(pos);
     }
     if (ud.rotationPeriodHours !== 0) {
-      const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24);
+      // --- FIX: Apply dampener to slow axial rotation to a pleasing rate ---
+      const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24) * ROTATION_DAMPENER;
       if(group.children[0]) {
         group.children[0].rotation.y += rotationAmount;
       }
