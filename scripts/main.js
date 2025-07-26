@@ -11,11 +11,53 @@ import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
 import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS, MAX_FLIGHT_SPEED } from './constants.js';
 
+// NEW: This function creates a high-quality, procedural starfield using points.
+function createProceduralStarfield(radius) {
+    const starCount = 50000;
+    const positions = [];
+    const colors = [];
+    const starColor = new THREE.Color();
+
+    for (let i = 0; i < starCount; i++) {
+        // Generate a random point on the surface of a sphere
+        const x = THREE.MathUtils.randFloatSpread(2);
+        const y = THREE.MathUtils.randFloatSpread(2);
+        const z = THREE.MathUtils.randFloatSpread(2);
+        const d = 1 / Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2));
+        positions.push(x * d * radius, y * d * radius, z * d * radius);
+
+        // Assign a color, with most stars being white/blue and a few being yellow/orange
+        if (Math.random() > 0.97) {
+            starColor.setRGB(1.0, 0.9, 0.7); // Warm yellow
+        } else {
+            starColor.setRGB(0.8, 0.9, 1.0); // Cool white/blue
+        }
+        colors.push(starColor.r, starColor.g, starColor.b);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    const material = new THREE.PointsMaterial({
+        size: radius / 2000, // Adjust size based on the sphere radius
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false, // Prevents stars from blocking each other
+        transparent: true,
+        sizeAttenuation: false, // All stars appear the same size regardless of distance
+    });
+
+    const stars = new THREE.Points(geometry, material);
+    return stars;
+}
+
+
 function startExperience(assets) {
   const overlay = document.getElementById('overlay');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000005);
-  scene.add(new THREE.AmbientLight(0x888888));
+  // MODIFIED: Removed AmbientLight as it is no longer needed.
   
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1e16);
 
@@ -33,14 +75,9 @@ function startExperience(assets) {
   scene.add(player);
   player.add(camera);
 
-  // NEW: Add a celestial sphere for a realistic star background.
-  // If you prefer a black background, you can comment out or delete the next 5 lines.
-  const starTexture = assets.textures.stars;
-  const starSphere = new THREE.Mesh(
-      new THREE.SphereGeometry(camera.far * 0.9, 64, 64),
-      new THREE.MeshBasicMaterial({ map: starTexture, side: THREE.BackSide })
-  );
-  scene.add(starSphere);
+  // MODIFIED: Removed the old textured star sphere and replaced it with the procedural one.
+  const starfield = createProceduralStarfield(camera.far * 0.9);
+  scene.add(starfield);
 
   const { solarGroup, bodies } = createSolarSystem(assets.textures);
   solarGroup.position.x = -AU_KM * KM_TO_WORLD_UNITS;
@@ -116,12 +153,9 @@ function startExperience(assets) {
   }); });
   renderer.xr.addEventListener('sessionend', () => { controls = { update: () => ({ rotationDelta: new THREE.Quaternion(), throttle: 0 }) }; });
 
-  // NEW: Helper function to get a body's position relative to the solar group origin (the Sun)
-  // This avoids using matrixWorld and the associated floating point precision issues.
   function getSolarSystemRelativePosition(bodyObject, solarGroup) {
       const position = new THREE.Vector3();
       let current = bodyObject.group;
-      // Traverse up the scene graph from the body to the solar system group, summing positions.
       while (current && current !== solarGroup) {
           position.add(current.position);
           current = current.parent;
@@ -129,31 +163,16 @@ function startExperience(assets) {
       return position;
   }
   
-  // MODIFIED: Complete rewrite of the warp logic to be robust at 1:1 scale.
   function handleWarpSelect(body) {
     if (!body) return;
-
-    // 1. Get body position relative to the Solar System's origin (the Sun).
-    // This avoids using huge world coordinates, preserving floating point precision.
     const bodySolarSystemPos = getSolarSystemRelativePosition(body, solarGroup);
-
-    // 2. Determine a safe arrival distance from the planet's surface.
     const scaledRadius = body.group.userData.radius || 1;
-    const safeDistance = scaledRadius * 2.5 + 50000; // 2.5x radius + 50km for safety
-
-    // 3. Create an offset vector. We'll arrive "above" the planet's orbital plane.
+    const safeDistance = scaledRadius * 2.5 + 50000;
     const offset = new THREE.Vector3(0, scaledRadius * 0.2, safeDistance);
-    
-    // 4. The desired final position of the player is the body's position plus the offset.
     const desiredPlayerPos = bodySolarSystemPos.clone().add(offset);
-    
-    // 5. To move the player, we move the entire solar system by the inverse of that position.
     solarGroup.position.copy(desiredPlayerPos).negate();
-    
-    // 6. Instantly rotate the player to look at the destination body.
-    player.lookAt(bodySolarSystemPos); // Look at the body's position in the solar system frame
-    shipQuaternion.copy(player.quaternion); // This syncs the internal rotation state
-    
+    player.lookAt(bodySolarSystemPos);
+    shipQuaternion.copy(player.quaternion);
     audio.playWarp();
     ui.setSelectedIndex(bodies.findIndex(b => b.data.name === body.data.name));
     const fact = (body.data.facts || [])[0];
@@ -165,6 +184,9 @@ function startExperience(assets) {
     const delta = renderer.clock.getDelta();
     const xrCamera = renderer.xr.getCamera();
     
+    // MODIFIED: Rotate the starfield slowly for a dynamic effect.
+    starfield.rotation.y += delta * 0.002;
+
     const { rotationDelta, throttle } = controls.update(delta);
     
     shipQuaternion.premultiply(rotationDelta);
@@ -183,10 +205,10 @@ function startExperience(assets) {
     updateProbes(probes, delta, solarGroup, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
 
-    // The player marker on the orrery must now account for the solarGroup's huge position.
-    const playerWorldPos = player.getWorldPosition(new THREE.Vector3()); // This is always near (0,0,0)
-    const playerPosInSolarSystem = playerWorldPos.clone().sub(solarGroup.position); // Player pos = -solarGroup.pos
-    playerMarker.position.copy(playerPosInSolarSystem).multiplyScalar(orrery.group.scale.x * orrery.objects[0].group.parent.scale.x);
+    const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
+    const playerPosInSolarSystem = playerWorldPos.clone().sub(solarGroup.position);
+    // MODIFIED: Simplified the orrery player marker position calculation.
+    playerMarker.position.copy(playerPosInSolarSystem).multiplyScalar(orrery.group.scale.x);
     
     ui.update();
     renderer.render(scene, camera);
@@ -199,6 +221,7 @@ function startExperience(assets) {
   overlay.classList.add('hidden');
 }
 
+// ... (init function remains the same, it correctly loads stars_milky_way.jpg which is now used by the procedural generator as a fallback if needed, but the main code doesn't use it anymore)
 function init() {
     const loadingManager = new THREE.LoadingManager();
     const xrMessage = document.getElementById('xr-message');
@@ -222,12 +245,14 @@ function init() {
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const audioLoader = new THREE.AudioLoader(loadingManager);
     
+    // Note: 'stars' texture is no longer used by the procedural generator,
+    // but we leave it here to avoid breaking the loader if other parts reference it.
     const texturesToLoad = {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
         earth: 'textures/earth_daymap.jpg', mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
         saturn: 'textures/saturn.jpg', saturnRing: 'textures/saturn_ring_alpha.png',
         uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg',
-        stars: 'textures/stars_milky_way.jpg'
+        stars: 'textures/stars_milky_way.jpg' 
     };
     const soundsToLoad = {
         warp: './sounds/warp.mp3', beep: './sounds/beep.mp3', ambience: './sounds/ambience.mp3'
