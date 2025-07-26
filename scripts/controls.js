@@ -13,7 +13,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
   );
 
   const hands = [renderer.xr.getHand(0), renderer.xr.getHand(1)];
-  const touchStates = [ { touching: null, wasTouching: null }, { touching: null, wasTouching: null }];
+  const touchStates = [ { touching: null }, { touching: null }];
   
   hands.forEach(hand => {
     hand.add(handModelFactory.createHandModel(hand));
@@ -36,35 +36,41 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     interactables.forEach((item, i) => interactableBoxes[i].setFromObject(item.mesh));
 
     let activeCamera = xrCamera.cameras.length > 0 ? xrCamera : camera;
+    let isTouchingAnyPanel = false;
 
     hands.forEach((hand, i) => {
       const state = touchStates[i];
-      state.wasTouching = state.touching; // --- FIX: Track previous touch state
+      const wasTouching = state.touching;
       const indexTip = hand.joints['index-finger-tip'];
 
       if (!indexTip) {
-        if (state.touching) state.touching = null;
+        state.touching = null;
         return;
       }
 
       const tipPos = new THREE.Vector3();
       indexTip.getWorldPosition(tipPos);
       
-      let currentTouch = null;
-      
+      let currentTouchItem = null;
       interactables.forEach((item, j) => {
         if (interactableBoxes[j].containsPoint(tipPos)) {
-          currentTouch = item;
+          currentTouchItem = item;
         }
       });
       
-      state.touching = currentTouch ? currentTouch.name : null;
-      const isNewTouch = state.touching && state.touching !== state.wasTouching;
+      state.touching = currentTouchItem ? currentTouchItem.name : null;
+      const isNewTouch = state.touching && state.touching !== wasTouching;
 
-      if (currentTouch) {
-        const localPos = currentTouch.mesh.worldToLocal(tipPos.clone());
+      if (currentTouchItem) {
+        const localPos = currentTouchItem.mesh.worldToLocal(tipPos.clone());
+        const panelName = currentTouchItem.name.includes('Panel') ? currentTouchItem.name.replace('Panel', '').toLowerCase() : null;
+
+        if (panelName) {
+            isTouchingAnyPanel = true;
+            ui.setHover(panelName, localPos);
+        }
         
-        switch (currentTouch.name) {
+        switch (currentTouchItem.name) {
           case 'Throttle':
             throttleValue = THREE.MathUtils.clamp(THREE.MathUtils.mapLinear(localPos.z, 0.15, -0.15, 0, 1), 0, 1);
             cockpit.updateControlVisuals('throttle', localPos);
@@ -77,20 +83,24 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
           case 'FireButton':
             if (isNewTouch) fireCallback();
             break;
+          case 'ProbePanel':
+             // Continuous input for sliders
+             ui.handleTap(panelName, localPos);
+             break;
           case 'WarpPanel':
           case 'FactsPanel':
-            // --- FIX: Handle discrete taps for buttons ---
-            if (isNewTouch) {
-              ui.handleTap(currentTouch.name.replace('Panel','').toLowerCase(), localPos);
-            }
-            break;
-          case 'ProbePanel':
-            // This panel has sliders, so it needs continuous updates.
-            ui.handleTap(currentTouch.name.replace('Panel','').toLowerCase(), localPos);
-            break;
+             // Single tap for buttons
+             if (isNewTouch) {
+                ui.handleTap(panelName, localPos);
+             }
+             break;
         }
       }
     });
+
+    if (!isTouchingAnyPanel) {
+      ui.setHover(null, null);
+    }
 
     if (!touchStates.some(s => s.touching === 'Throttle')) { throttleValue = 0; cockpit.updateControlVisuals('throttle', new THREE.Vector3(0,0,0)); }
     if (!touchStates.some(s => s.touching === 'Joystick')) { joystickX = 0; joystickY = 0; cockpit.updateControlVisuals('joystick', new THREE.Vector3(0,0,0)); }
@@ -98,7 +108,7 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
-        // --- FIX: Corrected joystick Z-axis for intuitive forward movement ---
+        // Joystick only directs thrust; speed is controlled by the throttle.
         const moveVec = new THREE.Vector3(joystickX, 0, joystickY);
         if (moveVec.lengthSq() > 1) moveVec.normalize();
         moveVec.applyQuaternion(activeCamera.quaternion);
