@@ -18,9 +18,9 @@ export function createUI(bodies, callbacks = {}) {
   let needsRedraw = true;
 
   const panels = {
-    warp: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
-    probe: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
-    facts: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null },
+    warp: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null, height: 1.6 },
+    probe: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null, height: 0.8 },
+    facts: { canvas: document.createElement('canvas'), ctx: null, texture: null, mesh: null, height: 0.6 },
   };
 
   function setupPanel(name, w, h, planeW, planeH) {
@@ -33,9 +33,9 @@ export function createUI(bodies, callbacks = {}) {
     p.mesh.name = name;
   }
 
-  setupPanel('warp', 512, 1024, 0.8, 1.6);
-  setupPanel('probe', 512, 512, 0.8, 0.8);
-  setupPanel('facts', 1024, 512, 1.2, 0.6);
+  setupPanel('warp', 512, 1024, 0.8, panels.warp.height);
+  setupPanel('probe', 512, 512, 0.8, panels.probe.height);
+  setupPanel('facts', 1024, 512, 1.2, panels.facts.height);
 
   function drawPanelBackground(ctx, title) {
     const { width, height } = ctx.canvas;
@@ -83,6 +83,8 @@ export function createUI(bodies, callbacks = {}) {
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = COLORS.uiHighlight;
     const knobH = 15;
+    // In canvas coordinates, Y=0 is the top. Higher Y is lower.
+    // So a high `value` (1.0) should result in a low knobY.
     const knobY = y + (1 - value) * (h - knobH);
     ctx.fillRect(x - 5, knobY, w + 10, knobH);
     ctx.fillStyle = COLORS.textPrimary;
@@ -94,9 +96,11 @@ export function createUI(bodies, callbacks = {}) {
   function drawProbe() {
     const { ctx, canvas } = panels.probe;
     drawPanelBackground(ctx, 'CONTROLS');
-    drawSlider(ctx, 'Probe Mass', canvas.width * 0.2, 120, 50, canvas.height - 200, probeMass, 'mass');
-    drawSlider(ctx, 'Probe Velocity', canvas.width * 0.5, 120, 50, canvas.height - 200, probeVelocity, 'velocity');
-    drawSlider(ctx, 'Time Warp', canvas.width * 0.8, 120, 50, canvas.height - 200, timeValue, 'time');
+    const sliderHeight = canvas.height - 200;
+    const sliderY = 120;
+    drawSlider(ctx, 'Probe Mass', canvas.width * 0.2, sliderY, 50, sliderHeight, probeMass, 'mass');
+    drawSlider(ctx, 'Probe Velocity', canvas.width * 0.5, sliderY, 50, sliderHeight, probeVelocity, 'velocity');
+    drawSlider(ctx, 'Time Warp', canvas.width * 0.8, sliderY, 50, sliderHeight, timeValue, 'time');
     panels.probe.texture.needsUpdate = true;
   }
   
@@ -131,7 +135,9 @@ export function createUI(bodies, callbacks = {}) {
   function setHover(panel, localPos) {
     let newHover = { panel: null, item: null };
     if (panel === 'warp' && localPos) {
-      const index = Math.floor((1 - localPos.y / 1.6 - 0.05) * bodies.length);
+      const p = panels.warp;
+      const yNormalized = (localPos.y + p.height / 2) / p.height;
+      const index = Math.floor((1 - yNormalized - 0.05 / p.height) * bodies.length);
       if (index >= 0 && index < bodies.length) newHover = { panel: 'warp', item: index };
     } else if (panel === 'probe' && localPos) {
       if (localPos.x > -0.3 && localPos.x < -0.1) newHover = { panel: 'probe', item: 'mass'};
@@ -148,12 +154,19 @@ export function createUI(bodies, callbacks = {}) {
 
   function handleTap(panel, localPos) {
     if (panel === 'warp') {
-      const index = Math.floor((1 - localPos.y / 1.6 - 0.05) * bodies.length);
+      const p = panels.warp;
+      const yNormalized = (localPos.y + p.height / 2) / p.height;
+      const index = Math.floor((1 - yNormalized - 0.05 / p.height) * bodies.length);
       if (index >= 0 && index < bodies.length) onWarp(index);
     } else if (panel === 'facts') {
-      if (localPos.x > 0.3 && localPos.y < -0.15) onNarrate((bodies[selectedIndex].data.facts || [])[0]);
+      if (hoverState.item === 'narrate') onNarrate((bodies[selectedIndex].data.facts || [])[0]);
     } else if (panel === 'probe') {
-        const val = THREE.MathUtils.clamp(1 - (localPos.y + 0.35) / 0.7, 0, 1);
+        const p = panels.probe;
+        const panelHalfHeight = p.height / 2;
+        // --- FIX: Invert slider logic for intuitive controls ---
+        // Map local Y position [-halfHeight, +halfHeight] to value [0, 1]
+        const val = THREE.MathUtils.clamp((localPos.y + panelHalfHeight) / p.height, 0, 1);
+        
         if (hoverState.item === 'mass') { probeMass = val; }
         if (hoverState.item === 'velocity') { probeVelocity = val; }
         if (hoverState.item === 'time') { timeValue = val; onTimeChange(val); }
