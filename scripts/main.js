@@ -69,8 +69,6 @@ function startExperience(assets) {
   scene.add(player);
   player.add(camera);
 
-  // Add back a light, but ONLY for the cockpit.
-  // This light is dim and local, it will not affect the planets.
   const cockpitLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
   player.add(cockpitLight);
 
@@ -244,11 +242,11 @@ function init() {
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const audioLoader = new THREE.AudioLoader(loadingManager);
     
+    // MODIFIED: Simplified the texture list to only load what's needed by the new shaders.
     const texturesToLoad = {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
         earthDay: 'textures/earth_daymap.jpg', 
         earthNight: 'textures/earth_nightmap.jpg',
-        earthClouds: 'textures/earth_clouds.jpg',
         mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
         saturn: 'textures/saturn.jpg', saturnRing: 'textures/saturn_ring_alpha.png',
         uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg',
