@@ -3,7 +3,6 @@
 
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
-import { MAX_FLIGHT_SPEED } from './constants.js';
 
 export function createControls(renderer, scene, camera, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
@@ -32,37 +31,18 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
 
   let throttleValue = 0, joystickX = 0, joystickY = 0;
 
-  function update(deltaTime, xrCamera) {
-    // --- FIX: Force update world matrices for interactables before collision detection ---
-    // This ensures bounding boxes are in the correct position for the current frame.
+  function update(deltaTime) {
     interactables.forEach(item => item.mesh.updateWorldMatrix(true, false));
-    // Update bounding boxes and slightly expand them to ease interactions.  A small margin is applied
-    // to panels and the fire button so that tapping near the edges still counts as a hit.
     interactables.forEach((item, i) => {
       interactableBoxes[i].setFromObject(item.mesh);
       if (item.name === 'FireButton') {
-        // Expand a bit more around the launch button
         interactableBoxes[i].expandByScalar(0.02);
       } else if (item.name.endsWith('Panel')) {
-        // Expand panels a little to improve tap detection
         interactableBoxes[i].expandByScalar(0.02);
       } else {
-        // Slightly grow throttle and joystick volumes for easier grabbing
         interactableBoxes[i].expandByScalar(0.01);
       }
     });
-
-    // When running in WebXR, xrCamera is an ArrayCamera with child cameras.
-    // Use the first child camera's quaternion for movement direction; otherwise
-    // fall back to the provided camera.  Relying on xrCamera.quaternion alone can
-    // yield an identity orientation on some platforms, causing the movement vector
-    // to always remain in world space (and appear to not move).  Selecting the first
-    // sub‑camera's quaternion ensures we rotate the movement vector with the user's
-    // head orientation.
-    const orientationCamera = (xrCamera && xrCamera.cameras && xrCamera.cameras.length > 0)
-      ? xrCamera.cameras[0]
-      : xrCamera;
-    let activeCamera = orientationCamera || camera;
 
     let isTouchingAnyPanel = false;
 
@@ -111,7 +91,6 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
           case 'FireButton':
             if (isNewTouch) {
               fireCallback();
-              // --- FIX: Add button press animation ---
               cockpit.fireButton.position.y = 1.045;
               cockpit.fireButton.material.emissive.setHex(0xff2222);
             }
@@ -133,61 +112,33 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
       ui.setHover(null, null);
     }
     
-    // --- FIX: Reset fire button visuals when not touched ---
     if (!touchStates.some(s => s.touching === 'FireButton')) {
-        cockpit.fireButton.position.y = 1.055; // Original Y position from lecternCockpit.js
-        cockpit.fireButton.material.emissive.setHex(0x550000); // Original emissive color
+        cockpit.fireButton.position.y = 1.055;
+        cockpit.fireButton.material.emissive.setHex(0x550000);
     }
 
-    // Only recenter the joystick when it is not being touched.  The throttle now retains
-    // its last value instead of snapping back to zero each frame.  This makes it behave
-    // more like a real spacecraft throttle that stays where the pilot leaves it.
     if (!touchStates.some(s => s.touching === 'Joystick')) {
       joystickX = 0;
       joystickY = 0;
       cockpit.updateControlVisuals('joystick', new THREE.Vector3(0,0,0));
     }
 
-    // --- FIX: Changed throttle curve from exponential to linear for more responsive control ---
-    const power = throttleValue;
-    const speed = power * MAX_FLIGHT_SPEED;
-    // Build a movement vector based on joystick deflection.  If the joystick is
-    // centred (zero length) but the throttle is engaged, we still want to move
-    // forward relative to the viewer.  In that case we default to a unit
-    // vector pointing down the negative Z axis (camera forward in local space).
-    let inputVec = new THREE.Vector3(joystickX, 0, joystickY);
-    // Normalise if the joystick deflection is greater than one unit.  Without
-    // this the ship would move faster diagonally when both axes are near their
-    // extremes.
-    if (inputVec.lengthSq() > 1) {
-      inputVec.normalize();
+    // --- FIX: Joystick now controls ship rotation (pitch and yaw) ---
+    const yawRate = -joystickX * 0.8; // Radians per second
+    const pitchRate = -joystickY * 0.8; // Radians per second
+
+    const rotationDelta = new THREE.Quaternion();
+    if (Math.abs(yawRate) > 1e-3) {
+        const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawRate * deltaTime);
+        rotationDelta.multiply(yaw);
     }
-    // If throttle is open but the joystick is centred, push forward.  Use
-    // -Z because local negative Z corresponds to forward on the cockpit.
-    if (speed > 0 && inputVec.lengthSq() < 1e-6) {
-      inputVec.set(0, 0, -1);
+    if (Math.abs(pitchRate) > 1e-3) {
+        const pitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), pitchRate * deltaTime);
+        rotationDelta.multiply(pitch);
     }
-    // Only move if there is some speed or joystick input.  Otherwise return
-    // null to indicate no movement and avoid subtracting an undefined vector.
-    if (speed > 0 || inputVec.lengthSq() > 0) {
-      // Rotate the input vector into world space using the orientation of the
-      // underlying camera.  Use getWorldQuaternion() rather than relying on
-      // .quaternion directly on ArrayCamera, which can be an identity when
-      // running in WebXR.  Falling back to the provided camera ensures we
-      // always derive a valid orientation.
-      const worldQuat = new THREE.Quaternion();
-      if (orientationCamera && typeof orientationCamera.getWorldQuaternion === 'function') {
-        orientationCamera.getWorldQuaternion(worldQuat);
-      } else {
-        worldQuat.copy(orientationCamera.quaternion || new THREE.Quaternion());
-      }
-      inputVec.applyQuaternion(worldQuat);
-      // Multiply by the desired speed and elapsed time to get the movement
-      // delta.  Note: The returned vector will be subtracted from the solar
-      // system position to move the universe relative to the pilot.
-      return inputVec.multiplyScalar(speed * deltaTime);
-    }
-    return null;
+    
+    // Return rotation and throttle state to the main loop
+    return { rotationDelta, throttle: throttleValue };
   }
   return { update };
 }
