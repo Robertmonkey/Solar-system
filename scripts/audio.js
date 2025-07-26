@@ -1,12 +1,12 @@
-// This version receives pre-loaded audio buffers from the main script.
+// This file has been simplified to use non-positional audio, which is more
+// stable and less likely to cause the application to hang on load.
 
 import * as THREE from 'three';
 
 let voices = [];
 function loadVoices() { voices = window.speechSynthesis.getVoices(); }
 
-// --- FIX: Receives a map of pre-loaded audio buffers ---
-export function initAudio(camera, sourceObject, sounds) {
+export function initAudio(camera, sounds) {
   const listener = new THREE.AudioListener();
   camera.add(listener);
 
@@ -15,25 +15,30 @@ export function initAudio(camera, sourceObject, sounds) {
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }
 
-  const warpSound = new THREE.PositionalAudio(listener);
+  // --- FIX: Using simpler, more stable non-positional audio ---
+  const warpSound = new THREE.Audio(listener);
   warpSound.setBuffer(sounds.warp);
-  warpSound.setRefDistance(2);
-  sourceObject.add(warpSound);
 
-  const beepSound = new THREE.PositionalAudio(listener);
+  const beepSound = new THREE.Audio(listener);
   beepSound.setBuffer(sounds.beep);
-  beepSound.setRefDistance(2);
-  sourceObject.add(beepSound);
 
   const ambience = new THREE.Audio(listener);
   ambience.setBuffer(sounds.ambience);
   ambience.setLoop(true);
   ambience.setVolume(0.5);
-  ambience.play();
+  // A user gesture is often required to start audio. We will start it on the first beep.
+  let hasStartedAmbience = false;
 
   return {
     playWarp: () => { if (warpSound.isPlaying) warpSound.stop(); warpSound.play(); },
-    playBeep: () => { if (beepSound.isPlaying) beepSound.stop(); beepSound.play(); },
+    playBeep: () => { 
+        if (!hasStartedAmbience) {
+            ambience.play();
+            hasStartedAmbience = true;
+        }
+        if (beepSound.isPlaying) beepSound.stop(); 
+        beepSound.play(); 
+    },
     speak: (text) => {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
