@@ -33,6 +33,9 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
   let throttleValue = 0, joystickX = 0, joystickY = 0;
   
   function update(deltaTime, xrCamera) {
+    // --- FIX: Force update world matrices for interactables before collision detection ---
+    // This ensures bounding boxes are in the correct position for the current frame.
+    interactables.forEach(item => item.mesh.updateWorldMatrix(true, false));
     interactables.forEach((item, i) => interactableBoxes[i].setFromObject(item.mesh));
 
     let activeCamera = xrCamera.cameras.length > 0 ? xrCamera : camera;
@@ -106,7 +109,6 @@ export function createControls(renderer, scene, camera, cockpit, ui, fireCallbac
     const power = Math.pow(throttleValue, 2);
     const speed = power * MAX_FLIGHT_SPEED;
     if (speed > 0 || joystickX !== 0 || joystickY !== 0) {
-        // --- FIX: Corrected joystick Z-axis. Pushing stick forward (negative Z) should result in forward thrust (negative Z in camera space). ---
         const moveVec = new THREE.Vector3(joystickX, 0, joystickY);
         if (moveVec.lengthSq() > 1) moveVec.normalize();
         moveVec.applyQuaternion(activeCamera.quaternion);
