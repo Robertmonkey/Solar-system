@@ -3,8 +3,7 @@ import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier, PALETTE } from './constants.js';
 import { getOrbitalPosition, createLabel } from './utils.js';
 
-// --- FIX: Dramatically reduced position scale to make orbits very compact ---
-const POSITION_SCALE = 0.004;
+const POSITION_SCALE = 0.0016;
 const SIZE_SCALE = 0.005;
 
 export function createOrrery() {
