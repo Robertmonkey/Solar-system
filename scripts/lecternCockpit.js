@@ -72,10 +72,10 @@ export function createLecternCockpit() {
   joystickGroup.position.set(0.4, 1.04, -0.7);
   cockpitGroup.add(joystickGroup);
 
-  // --- FIX: Increased button radius slightly to make it easier to hit ---
-  const fireButton = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.03, 32), new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0x550000 }));
+  // --- FIX: Increased button size and raised it slightly to make it easier to interact with ---
+  const fireButton = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.05, 32), new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0x550000 }));
   fireButton.name = 'FireButton';
-  fireButton.position.set(0, 1.04, -0.7);
+  fireButton.position.set(0, 1.055, -0.7);
   cockpitGroup.add(fireButton);
 
   const labelY = 1.085;
