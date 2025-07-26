@@ -9,27 +9,23 @@ import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
 import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS, MAX_FLIGHT_SPEED } from './constants.js';
 
-// This function creates a high-quality, procedural starfield using points.
 function createProceduralStarfield(radius) {
-    // Reduced star count for better performance on standalone VR.
     const starCount = 15000;
     const positions = [];
     const colors = [];
     const starColor = new THREE.Color();
 
     for (let i = 0; i < starCount; i++) {
-        // Generate a random point on the surface of a sphere
         const x = THREE.MathUtils.randFloatSpread(2);
         const y = THREE.MathUtils.randFloatSpread(2);
         const z = THREE.MathUtils.randFloatSpread(2);
         const d = 1 / Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2));
         positions.push(x * d * radius, y * d * radius, z * d * radius);
 
-        // Assign a color, with most stars being white/blue and a few being yellow/orange
         if (Math.random() > 0.97) {
-            starColor.setRGB(1.0, 0.9, 0.7); // Warm yellow
+            starColor.setRGB(1.0, 0.9, 0.7);
         } else {
-            starColor.setRGB(0.8, 0.9, 1.0); // Cool white/blue
+            starColor.setRGB(0.8, 0.9, 1.0);
         }
         colors.push(starColor.r, starColor.g, starColor.b);
     }
@@ -39,13 +35,12 @@ function createProceduralStarfield(radius) {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
     const material = new THREE.PointsMaterial({
-        // The size is a small, constant pixel value.
         size: 1.5,
         vertexColors: true,
         blending: THREE.AdditiveBlending,
-        depthWrite: false, // Prevents stars from blocking each other
+        depthWrite: false,
         transparent: true,
-        sizeAttenuation: false, // All stars appear the same size regardless of distance
+        sizeAttenuation: false,
     });
 
     const stars = new THREE.Points(geometry, material);
@@ -74,16 +69,13 @@ function startExperience(assets) {
   scene.add(player);
   player.add(camera);
 
-  // Add a light source parented to the player.
-  // This illuminates the cockpit, hands, and launcher, fixing the issue where they appeared black.
   const cockpitLight = new THREE.HemisphereLight(
-      0xffffff, // sky color
-      0x888888, // ground color
-      2.0       // intensity
+      0xffffff,
+      0x888888,
+      2.0
   );
   player.add(cockpitLight);
 
-  // Create and add the new procedural starfield
   const starfield = createProceduralStarfield(camera.far * 0.9);
   scene.add(starfield);
 
@@ -215,9 +207,7 @@ function startExperience(assets) {
     const playerWorldPos = player.getWorldPosition(new THREE.Vector3());
     const playerPosInSolarSystem = playerWorldPos.clone().sub(solarGroup.position);
 
-    // The player marker on the orrery now uses the same logarithmic mapping as the planets.
     const playerDist = playerPosInSolarSystem.length();
-    // Use natural log to match the orrery's new scaling function.
     const logPlayerDist = Math.log(playerDist + 1);
     const playerMarkerPos = playerPosInSolarSystem.normalize().multiplyScalar(logPlayerDist * LOG_POSITION_SCALE);
     playerMarker.position.copy(playerMarkerPos).multiplyScalar(orrery.group.scale.x);
@@ -256,12 +246,16 @@ function init() {
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const audioLoader = new THREE.AudioLoader(loadingManager);
     
+    // MODIFIED: Add all the textures needed for the realistic Earth model.
     const texturesToLoad = {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
-        earth: 'textures/earth_daymap.jpg', mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
+        earthDay: 'textures/earth_daymap.jpg', 
+        earthNight: 'textures/earth_nightmap.jpg',
+        earthClouds: 'textures/earth_clouds.jpg',
+        earthAtmos: 'textures/earth_atmos.jpg', // Used for specular/atmosphere effects
+        mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
         saturn: 'textures/saturn.jpg', saturnRing: 'textures/saturn_ring_alpha.png',
         uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg',
-        stars: 'textures/stars_milky_way.jpg' 
     };
     const soundsToLoad = {
         warp: './sounds/warp.mp3', beep: './sounds/beep.mp3', ambience: './sounds/ambience.mp3'
