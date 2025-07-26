@@ -37,8 +37,14 @@ export function createLecternCockpit() {
   launcherBarrel.rotation.y = Math.PI;
   launcherBarrel.position.set(0, -0.2, -9);
   cockpitGroup.add(launcherBarrel);
+  
+  // --- FIX: Correctly position and orient the probe launcher's muzzle ---
   const launcherMuzzle = new THREE.Object3D();
-  launcherMuzzle.position.set(0, 0, 10);
+  // Position the muzzle object at the tip of the barrel (length is 20, so tip is at local Y=10)
+  launcherMuzzle.position.set(0, 10, 0);
+  // An object's "direction" points along its local -Z axis. Rotate the muzzle
+  // so its -Z axis points along the barrel's length (the barrel's +Y axis).
+  launcherMuzzle.rotation.x = Math.PI / 2;
   launcherBarrel.add(launcherMuzzle);
 
   const desk = new THREE.Mesh( new THREE.CylinderGeometry(1.2, 1.2, 0.08, 64, 1, false, Math.PI / 2.5, Math.PI * 2 - (Math.PI / 2.5) * 2), darkMetalMat);
@@ -72,7 +78,6 @@ export function createLecternCockpit() {
   joystickGroup.position.set(0.4, 1.04, -0.7);
   cockpitGroup.add(joystickGroup);
 
-  // --- FIX: Increased button size and raised it slightly to make it easier to interact with ---
   const fireButton = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.05, 32), new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0x550000 }));
   fireButton.name = 'FireButton';
   fireButton.position.set(0, 1.055, -0.7);
