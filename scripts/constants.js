@@ -29,7 +29,11 @@ export const C_KMPS = 299_792.458;
 // Maximum ship speed in world units per second.  We use the speed of light
 // converted to the internal scaling so the throttle value maps directly to a
 // meaningful velocity.
-export const MAX_FLIGHT_SPEED = C_KMPS * KM_TO_WORLD_UNITS;
+// --- FIX: Dramatically increased max flight speed for a better user experience ---
+// The original speed was 1c. We multiply by 100 to make travel between
+// planets much faster and more engaging in a VR setting.
+const FLIGHT_SPEED_MULTIPLIER = 100;
+export const MAX_FLIGHT_SPEED = C_KMPS * KM_TO_WORLD_UNITS * FLIGHT_SPEED_MULTIPLIER;
 
 // Conversion from miles per hour to kilometres per second.  The throttle slider
 // uses an exponential mapping between 1 mph and c.
