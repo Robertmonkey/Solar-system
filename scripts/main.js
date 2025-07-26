@@ -110,7 +110,7 @@ function startExperience(assets) {
   const ui = createUI(bodies, {
     onWarp: index => handleWarpSelect(bodies[index]),
     onProbeChange: (settings) => { probeSettings = settings; },
-    onTimeChange: value => { const m = Math.pow(100, 5 * value); setTimeMultiplier(m); },
+    onTimeChange: value => { const m = Math.pow(10, 8 * value); setTimeMultiplier(m); }, // Adjusted time warp scale
     onNarrate: text => audio.speak(text)
   });
 
@@ -137,7 +137,12 @@ function startExperience(assets) {
       solarGroup.updateWorldMatrix(true, false);
 
       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
-      const launchPos = solarGroup.worldToLocal(muzzlePos);
+
+      // This is the fix for the probe launch position.
+      // We calculate the player's position inside the solar system's coordinate frame
+      // and add the muzzle's offset to get the correct launch point for the probe.
+      const playerPosInSystem = new THREE.Vector3().copy(solarGroup.position).negate();
+      const launchPos = playerPosInSystem.add(muzzlePos);
 
       const launchDir = new THREE.Vector3();
       cockpit.launcherMuzzle.getWorldDirection(launchDir);
@@ -242,11 +247,11 @@ function init() {
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const audioLoader = new THREE.AudioLoader(loadingManager);
     
-    // MODIFIED: Simplified the texture list to only load what's needed by the new shaders.
     const texturesToLoad = {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
         earthDay: 'textures/earth_daymap.jpg', 
         earthNight: 'textures/earth_nightmap.jpg',
+        earthClouds: 'textures/earth_clouds.jpg',
         mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
         saturn: 'textures/saturn.jpg', saturnRing: 'textures/saturn_ring_alpha.png',
         uranus: 'textures/uranus.jpg', neptune: 'textures/neptune.jpg', moon: 'textures/moon.jpg',
