@@ -1,5 +1,5 @@
-// This file has been completely restructured to use a LoadingManager,
-// ensuring assets are loaded correctly on all devices before starting.
+// This is the complete and corrected main.js file, featuring a robust
+// LoadingManager that hands off to a fully functional application.
 
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
@@ -12,7 +12,8 @@ import { createProbes, launchProbe, updateProbes } from './probes.js';
 import { initAudio } from './audio.js';
 import { setTimeMultiplier, AU_KM, KM_TO_WORLD_UNITS } from './constants.js';
 
-// --- Main application setup is now in its own function ---
+// This function contains the entire application logic.
+// It is called only after all assets have been successfully loaded.
 function startExperience(assets) {
   const overlay = document.getElementById('overlay');
   const scene = new THREE.Scene();
@@ -35,6 +36,7 @@ function startExperience(assets) {
   scene.add(cockpit.group);
 
   const audio = initAudio(camera, cockpit.group, assets.sounds);
+
   const orrery = createOrrery();
   orrery.group.scale.setScalar(0.1);
   orrery.group.position.set(0, 1.3, -2);
@@ -55,16 +57,52 @@ function startExperience(assets) {
 
   const deskSurfaceY = 1.04;
   const panelScale = { warp: 0.35, facts: 0.6, probe: 0.5 };
-  ui.warpMesh.scale.setScalar(panelScale.warp); ui.factsMesh.scale.setScalar(panelScale.facts); ui.probeMesh.scale.setScalar(panelScale.probe);
-  const warpHeight = 1.6 * panelScale.warp; ui.warpMesh.position.set(-0.9, deskSurfaceY + warpHeight / 2, -0.6); ui.warpMesh.rotation.y = Math.PI / 6; cockpit.group.add(ui.warpMesh);
-  const factsHeight = 0.6 * panelScale.facts; ui.factsMesh.position.set(0, deskSurfaceY + factsHeight / 2, -0.95); cockpit.group.add(ui.factsMesh);
-  const probeHeight = 0.8 * panelScale.probe; ui.probeMesh.position.set(0.9, deskSurfaceY + probeHeight / 2, -0.6); ui.probeMesh.rotation.y = -Math.PI / 6; cockpit.group.add(ui.probeMesh);
+  ui.warpMesh.scale.setScalar(panelScale.warp);
+  ui.factsMesh.scale.setScalar(panelScale.facts);
+  ui.probeMesh.scale.setScalar(panelScale.probe);
+  const warpHeight = 1.6 * panelScale.warp;
+  ui.warpMesh.position.set(-0.9, deskSurfaceY + warpHeight / 2, -0.6);
+  ui.warpMesh.rotation.y = Math.PI / 6;
+  cockpit.group.add(ui.warpMesh);
+  const factsHeight = 0.6 * panelScale.facts;
+  ui.factsMesh.position.set(0, deskSurfaceY + factsHeight / 2, -0.95);
+  cockpit.group.add(ui.factsMesh);
+  const probeHeight = 0.8 * panelScale.probe;
+  ui.probeMesh.position.set(0.9, deskSurfaceY + probeHeight / 2, -0.6);
+  ui.probeMesh.rotation.y = -Math.PI / 6;
+  cockpit.group.add(ui.probeMesh);
 
   let controls = { update: () => null };
-  renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => { /* fire probe */ }); });
-  renderer.xr.addEventListener('sessionend', () => { controls = { update: () => null }; });
+  renderer.xr.addEventListener('sessionstart', () => {
+    controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
+      const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
+      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+      const launchPos = muzzlePos.clone().sub(solarOrigin);
+      const launchDir = new THREE.Vector3();
+      cockpit.launcherMuzzle.getWorldDirection(launchDir);
+      launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
+      audio.playBeep();
+    });
+  });
+  renderer.xr.addEventListener('sessionend', () => {
+    controls = { update: () => null };
+  });
   
-  function handleWarpSelect(body) { /* ... */ }
+  function handleWarpSelect(body) {
+    if (!body) return;
+    const bodyWorldPos = new THREE.Vector3();
+    body.group.getWorldPosition(bodyWorldPos);
+    const scaledRadius = body.group.userData.radius || 1;
+    const safeDistance = scaledRadius * 4;
+    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(renderer.xr.getCamera().quaternion);
+    const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
+    const shift = desiredPlayerPos.negate();
+    solarGroup.position.copy(shift);
+    audio.playWarp();
+    ui.setSelectedIndex(bodies.findIndex(b => b.data.name === body.data.name));
+    const fact = (body.data.facts || [])[0];
+    if (fact) audio.speak(fact);
+  }
 
   renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
@@ -83,7 +121,7 @@ function startExperience(assets) {
   overlay.classList.add('hidden');
 }
 
-// --- NEW: Loading Manager Setup ---
+// This function sets up the LoadingManager and starts the asset loading process.
 function init() {
     const loadingManager = new THREE.LoadingManager();
     const xrMessage = document.getElementById('xr-message');
@@ -94,19 +132,18 @@ function init() {
     };
 
     loadingManager.onError = (url) => {
-        xrMessage.textContent = `Error loading: ${url}`;
+        xrMessage.textContent = `Error loading assets. Please refresh the page.`;
+        console.error(`Error loading ${url}`);
     };
 
+    const loadedAssets = { textures: {}, sounds: {} };
     loadingManager.onLoad = () => {
-        // All assets are loaded, now start the main experience
         startExperience(loadedAssets);
     };
 
     const textureLoader = new THREE.TextureLoader(loadingManager);
     const audioLoader = new THREE.AudioLoader(loadingManager);
-    const loadedAssets = { textures: {}, sounds: {} };
-
-    // List all assets to be loaded
+    
     const texturesToLoad = {
         sun: 'textures/sun.jpg', mercury: 'textures/mercury.jpg', venus: 'textures/venus_surface.jpg',
         earth: 'textures/earth_daymap.jpg', mars: 'textures/mars.jpg', jupiter: 'textures/jupiter.jpg',
