@@ -39,8 +39,10 @@ export const MPH_TO_KMPS = 1.60934 / 3600;
 export const TIME_BASE_SECONDS_PER_DAY = 86_400;
 export const SEC_TO_DAYS = 1 / TIME_BASE_SECONDS_PER_DAY;
 
+// --- FIX: Add a dampener to slow axial rotation to a visually pleasing speed ---
+export const ROTATION_DAMPENER = 0.01;
+
 // Simulation time multiplier (modifiable)
-// --- FIX: Increased initial time multiplier for visible planet motion ---
 let timeMultiplier = 500000;
 export function getTimeMultiplier() {
   return timeMultiplier;
