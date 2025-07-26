@@ -1,10 +1,3 @@
-/*
- * lecternCockpit.js
- *
- * This version includes a small performance and reliability improvement for
- * updating the control visuals.
- */
-
 import * as THREE from 'three';
 import { COLORS } from './constants.js';
 import { createLabel } from './utils.js';
@@ -51,10 +44,9 @@ export function createLecternCockpit() {
   const desk = new THREE.Mesh( new THREE.CylinderGeometry(1.2, 1.2, 0.08, 64, 1, false, Math.PI / 2.5, Math.PI * 2 - (Math.PI / 2.5) * 2), darkMetalMat);
   desk.position.set(0, 1.0, -0.2);
   cockpitGroup.add(desk);
-  const support = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 1.0, 16), darkMetalMat);
-  support.position.set(0, 0.5, 0.24);
-  cockpitGroup.add(support);
 
+  // --- FIX: Removed the desk support pillar ---
+  
   const throttleGroup = new THREE.Group();
   const throttleBase = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.4), darkMetalMat);
   const throttleLever = new THREE.Group();
@@ -103,7 +95,6 @@ export function createLecternCockpit() {
   fireLabel.rotation.x = -Math.PI / 2;
   cockpitGroup.add(fireLabel);
   
-  // --- FIX: Store direct references to the moving parts for efficiency ---
   const stickVisual = stick;
   const throttleLeverVisual = throttleLever;
 
@@ -118,13 +109,8 @@ export function createLecternCockpit() {
   }
 
   return {
-    group: cockpitGroup,
-    throttle: throttleGroup,
-    joystick: joystickGroup,
-    fireButton,
-    launcherMuzzle,
-    launcherBarrel,
-    updateControlVisuals,
+    group: cockpitGroup, throttle: throttleGroup, joystick: joystickGroup, fireButton,
+    launcherMuzzle, launcherBarrel, updateControlVisuals,
   };
 }
 
