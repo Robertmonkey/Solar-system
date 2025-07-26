@@ -31,9 +31,22 @@ export function launchProbe(probes, origin, direction, massValue = 0.5, velocity
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.copy(origin);
   probes.group.add(mesh);
+  
   const speed = PROBE_BASE_SPEED * (0.2 + 1.8 * velocityValue);
-  const velocity = direction.clone().normalize().multiplyScalar(speed);
-  probes.list.push({ mesh, velocity, mass: massValue, age: 0 });
+  
+  // --- FIX: Rework probe launch to use acceleration for a better visual effect ---
+  // The probe will start slow and accelerate to its target speed.
+  const targetVelocity = direction.clone().normalize().multiplyScalar(speed);
+  // Start at a much lower speed so the launch is visible.
+  const initialVelocity = targetVelocity.clone().normalize().multiplyScalar(10);
+
+  probes.list.push({ 
+    mesh, 
+    velocity: initialVelocity, 
+    targetVelocity, // Store target velocity for acceleration
+    mass: massValue, 
+    age: 0 
+  });
 }
 
 export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
@@ -79,6 +92,14 @@ export function updateProbes(probes, deltaTime, solarBodies, launcherMesh) {
 
   probes.list.forEach((probe, index) => {
     probe.age += deltaTime;
+
+    // --- FIX: Accelerate probe to target velocity over time ---
+    if (probe.targetVelocity && probe.velocity.lengthSq() < probe.targetVelocity.lengthSq()) {
+      // Use lerp to smoothly accelerate the probe. A factor of 4 should
+      // reach near-max velocity in about 0.25s.
+      probe.velocity.lerp(probe.targetVelocity, 4 * deltaTime);
+    }
+
     probe.mesh.position.addScaledVector(probe.velocity, deltaTime);
 
     if (probe.age > 0.1) {
