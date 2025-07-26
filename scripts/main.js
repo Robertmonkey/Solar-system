@@ -37,10 +37,9 @@ function startExperience(assets) {
     console.error("Failed to initialize audio:", error);
   }
 
-  // --- FIX: Create and position the pillar for the orrery ---
   const orreryPillar = new THREE.Mesh(
     new THREE.CylinderGeometry(0.15, 0.2, 1.2, 32),
-    new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.5 })
+    cockpit.deskMaterial
   );
   orreryPillar.position.set(0, 0.6, -2);
   scene.add(orreryPillar);
@@ -110,9 +109,10 @@ function startExperience(assets) {
 
   renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
-    const movement = controls.update(delta, renderer.xr.getCamera());
+    const xrCamera = renderer.xr.getCamera();
+    const movement = controls.update(delta, xrCamera);
     if (movement) solarGroup.position.sub(movement);
-    updateSolarSystem(solarGroup, delta);
+    updateSolarSystem(solarGroup, delta, xrCamera);
     updateProbes(probes, delta, bodies, cockpit.launcherBarrel);
     updateOrrery(orrery, delta);
     const playerPosInOrrery = solarGroup.position.clone().negate();
