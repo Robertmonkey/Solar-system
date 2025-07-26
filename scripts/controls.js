@@ -1,5 +1,5 @@
-// A professional, robust control system that loads hand models from a
-// stable, explicit URL to guarantee hand-tracking loads correctly.
+// A stable, professional control system based on the official Three.js
+// XRHandModelFactory and a direct-touch interaction model.
 
 import * as THREE from 'three';
 import { XRHandModelFactory } from 'three/examples/jsm/webxr/XRHandModelFactory.js';
@@ -8,7 +8,6 @@ import { MAX_FLIGHT_SPEED } from './constants.js';
 export function createControls(renderer, scene, camera, cockpit, ui, fireCallback) {
   renderer.clock = new THREE.Clock();
   
-  // Point the factory to a reliable, direct URL for the hand models
   const handModelFactory = new XRHandModelFactory().setPath(
     "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/models/hands/"
   );
