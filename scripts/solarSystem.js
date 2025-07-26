@@ -5,8 +5,6 @@ import { degToRad, getOrbitalPosition, createLabel } from './utils.js';
 
 // --- SHADER DEFINITIONS ---
 
-// A simple and robust shader for standard planets. It calculates a "lit" and "dark" side
-// based on a direction vector to the sun, without needing any Scene lights.
 const planetVertexShader = `
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -34,18 +32,19 @@ const planetFragmentShader = `
   }
 `;
 
-// A simplified, stable shader for Earth that blends day and night textures.
 const earthFragmentShader = `
   uniform sampler2D dayTexture;
   uniform sampler2D nightTexture;
+  uniform sampler2D cloudTexture;
   uniform vec3 sunDirection;
   varying vec2 vUv;
   varying vec3 vNormal;
   
   void main() {
-    // Sample day and night textures
+    // Sample textures
     vec3 dayColor = texture2D(dayTexture, vUv).rgb;
     vec3 nightColor = texture2D(nightTexture, vUv).rgb;
+    vec4 cloudSampler = texture2D(cloudTexture, vUv);
     
     // Calculate how much light this part of the planet receives
     float light = dot(normalize(vNormal), sunDirection);
@@ -54,6 +53,13 @@ const earthFragmentShader = `
     // Mix day and night textures based on the light
     vec3 surfaceColor = mix(nightColor, dayColor, dayNightMix);
     
+    // Add lit clouds with soft shadows on the dark side
+    float cloudAlpha = cloudSampler.r * 0.4; // Make clouds semi-transparent
+    float cloudShadow = smoothstep(0.0, 0.5, light); // Shadows on the dark side
+    vec3 litClouds = vec3(1.0) * cloudAlpha * dayNightMix;
+    surfaceColor = mix(surfaceColor, surfaceColor * (1.0 - cloudAlpha * cloudShadow), dayNightMix); // cast shadow
+    surfaceColor += litClouds;
+
     // Atmospheric Haze (Fresnel effect) to give the planet a glowing edge
     float hazeFactor = 1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0));
     hazeFactor = pow(hazeFactor, 2.0);
@@ -92,6 +98,7 @@ export function createSolarSystem(textures) {
             uniforms: {
                 dayTexture: { value: textures.earthDay },
                 nightTexture: { value: textures.earthNight },
+                cloudTexture: { value: textures.earthClouds },
                 sunDirection: { value: new THREE.Vector3(1, 0, 0) }
             },
             vertexShader: planetVertexShader,
@@ -116,7 +123,6 @@ export function createSolarSystem(textures) {
     label.position.y = radius * 1.2;
     group.add(label);
     
-    // REMOVED: The problematic helper sprites are gone for good.
     const bodyMesh = mesh;
     group.userData = { ...data, radius, meanAnomaly0: 0, elapsedDays: 0, label, bodyMesh };
     
@@ -126,7 +132,7 @@ export function createSolarSystem(textures) {
 
   solarBodies.forEach(obj => {
     const { data, group } = obj;
-    const parent = byName[data.parent];
+    const parent = byName[obj.data.parent];
     const parentGroup = parent || solarGroup;
     parentGroup.add(group);
 
@@ -179,7 +185,8 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       group.position.copy(pos);
     }
 
-    // Update the sunDirection uniform for each planet's custom shader material
+    // This is the critical fix for lighting.
+    // It correctly calculates the direction from the planet to the sun.
     if (group.children[0].material.uniforms && group.children[0].material.uniforms.sunDirection) {
         const planetWorldPos = group.getWorldPosition(new THREE.Vector3());
         // The direction to the sun is the vector from the planet to the sun
@@ -202,8 +209,7 @@ export function updateSolarSystem(solarGroup, elapsedSec, camera) {
       const labelScale = distance * 0.005; 
       ud.label.scale.set(labelScale, labelScale, 1);
       
-      // We no longer need to toggle visibility with sprites, but we can still hide
-      // the labels when they are too far away to be useful.
+      // Hide labels when they are too far away to be useful.
       const labelVisible = distance < (ud.radius * 2500);
       ud.label.visible = labelVisible;
     }
