@@ -1,6 +1,3 @@
-// This file has been updated to handle audio initialization errors gracefully,
-// preventing the entire application from hanging if sounds fail to load.
-
 import * as THREE from 'three';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { createSolarSystem, updateSolarSystem } from './solarSystem.js';
@@ -33,14 +30,20 @@ function startExperience(assets) {
   const cockpit = createCockpit();
   scene.add(cockpit.group);
 
-  // --- FIX: Wrap audio initialization in a try...catch block ---
-  let audio = { playWarp: () => {}, playBeep: () => {}, speak: () => {} }; // Dummy audio object
+  let audio = { playWarp: () => {}, playBeep: () => {}, speak: () => {} };
   try {
     audio = initAudio(camera, assets.sounds);
   } catch (error) {
     console.error("Failed to initialize audio:", error);
-    // The application will continue running with silent audio.
   }
+
+  // --- FIX: Create and position the pillar for the orrery ---
+  const orreryPillar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.2, 1.2, 32),
+    new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.5 })
+  );
+  orreryPillar.position.set(0, 0.6, -2);
+  scene.add(orreryPillar);
 
   const orrery = createOrrery();
   orrery.group.scale.setScalar(0.1);
@@ -78,10 +81,32 @@ function startExperience(assets) {
   cockpit.group.add(ui.probeMesh);
 
   let controls = { update: () => null };
-  renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => {}); });
+  renderer.xr.addEventListener('sessionstart', () => { controls = setupControls(renderer, scene, camera, cockpit, ui, () => {
+       const muzzlePos = cockpit.launcherMuzzle.getWorldPosition(new THREE.Vector3());
+      const solarOrigin = solarGroup.getWorldPosition(new THREE.Vector3());
+      const launchPos = muzzlePos.clone().sub(solarOrigin);
+      const launchDir = new THREE.Vector3();
+      cockpit.launcherMuzzle.getWorldDirection(launchDir);
+      launchProbe(probes, launchPos, launchDir, probeSettings.mass, probeSettings.velocity);
+      audio.playBeep();
+  }); });
   renderer.xr.addEventListener('sessionend', () => { controls = { update: () => null }; });
   
-  function handleWarpSelect(body) {}
+  function handleWarpSelect(body) {
+    if (!body) return;
+    const bodyWorldPos = new THREE.Vector3();
+    body.group.getWorldPosition(bodyWorldPos);
+    const scaledRadius = body.group.userData.radius || 1;
+    const safeDistance = scaledRadius * 4;
+    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(renderer.xr.getCamera().quaternion);
+    const desiredPlayerPos = bodyWorldPos.clone().addScaledVector(camForward, -safeDistance);
+    const shift = desiredPlayerPos.negate();
+    solarGroup.position.copy(shift);
+    audio.playWarp();
+    ui.setSelectedIndex(bodies.findIndex(b => b.data.name === body.data.name));
+    const fact = (body.data.facts || [])[0];
+    if (fact) audio.speak(fact);
+  }
 
   renderer.setAnimationLoop(() => {
     const delta = renderer.clock.getDelta();
