@@ -1,6 +1,3 @@
-// This version receives pre-loaded textures from the main script
-// instead of loading them itself.
-
 import * as THREE from 'three';
 import { bodies } from './data.js';
 import { KM_TO_WORLD_UNITS, SIZE_MULTIPLIER, SEC_TO_DAYS, getTimeMultiplier } from './constants.js';
@@ -15,7 +12,6 @@ const atmosphereFragmentShader = `
   void main() { float i = pow(0.7 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0); gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * i; }
 `;
 
-// --- FIX: Receives a map of pre-loaded textures ---
 export function createSolarSystem(textures) {
   const solarGroup = new THREE.Group();
   solarGroup.name = 'SolarSystemRoot';
@@ -75,5 +71,28 @@ export function createSolarSystem(textures) {
 }
 
 export function updateSolarSystem(solarGroup, elapsedSec) {
-    // ... same as before ...
+  const bodies = solarGroup.userData.bodies || [];
+  const timeMult = getTimeMultiplier() || 0;
+  const deltaDays = elapsedSec * SEC_TO_DAYS * timeMult;
+
+  // --- FIX: Safeguard to ensure calculations don't halt on invalid numbers ---
+  if (!isFinite(deltaDays) || deltaDays === 0) return;
+
+  bodies.forEach(obj => {
+    const group = obj.group;
+    const ud = group.userData;
+    
+    if (ud.orbitalPeriodDays > 0 && ud.semiMajorAxisAU > 0) {
+      ud.elapsedDays = (ud.elapsedDays || 0) + deltaDays;
+      const pos = getOrbitalPosition(ud, ud.elapsedDays);
+      group.position.copy(pos);
+    }
+
+    if (ud.rotationPeriodHours) {
+      const rotationAmount = (2 * Math.PI / ud.rotationPeriodHours) * (deltaDays * 24);
+      if(group.children[0]) {
+        group.children[0].rotation.y += rotationAmount;
+      }
+    }
+  });
 }
