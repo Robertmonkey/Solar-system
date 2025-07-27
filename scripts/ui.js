@@ -106,19 +106,39 @@ export function createUI(bodies, callbacks = {}) {
     const { ctx, canvas } = panels.facts;
     const body = bodies[selectedIndex].data;
     drawPanelBackground(ctx, body.name);
-    const fact = (body.facts || [])[0] || 'No data available.';
-    ctx.font = `32px ${FONT_FAMILY}`;
+    ctx.font = `24px ${FONT_FAMILY}`;
     ctx.fillStyle = COLORS.textSecondary;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    const words = fact.split(' '); let line = ''; let y = 100;
-    for (const word of words) {
+
+    let y = 90;
+    function addLine(label, value) {
+      ctx.fillText(`${label}: ${value}`, 20, y);
+      y += 28;
+    }
+    if (body.radiusKm) addLine('Radius', `${body.radiusKm.toLocaleString()} km`);
+    if (body.massKg) addLine('Mass', `${body.massKg.toExponential(2)} kg`);
+    if (body.semiMajorAxisAU) addLine('Distance', `${body.semiMajorAxisAU} AU`);
+    if (body.orbitalPeriodDays) addLine('Orbital Period', `${body.orbitalPeriodDays.toLocaleString()} days`);
+    if (body.rotationPeriodHours) addLine('Rotation', `${body.rotationPeriodHours.toLocaleString()} h`);
+    if (body.axialTiltDeg !== undefined) addLine('Axial Tilt', `${body.axialTiltDeg}°`);
+
+    y += 10;
+    ctx.font = `20px ${FONT_FAMILY}`;
+    const facts = body.facts && body.facts.length ? body.facts : ['No data available.'];
+    for (const fact of facts) {
+      const words = fact.split(' '); let line = '';
+      for (const word of words) {
         const testLine = line + word + ' ';
         if (ctx.measureText(testLine).width > canvas.width - 40 && line.length > 0) {
-            ctx.fillText(line, 20, y); line = word + ' '; y += 40;
-        } else { line = testLine; }
+          ctx.fillText(line, 20, y); line = word + ' '; y += 24;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, 20, y); y += 34;
     }
-    ctx.fillText(line, 20, y);
+
     const btnX = canvas.width - 270, btnY = canvas.height - 100, btnW = 250, btnH = 80;
     ctx.fillStyle = (hoverState.panel === 'facts' && hoverState.item === 'narrate') ? COLORS.uiRowHighlight : COLORS.uiHighlight;
     ctx.fillRect(btnX, btnY, btnW, btnH);
